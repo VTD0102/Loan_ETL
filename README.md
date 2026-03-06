@@ -16,3 +16,18 @@ Chạy python etl_silver.py
 Kết quả: Bảng silver.prosper_loans_cleansed
 
 File tham khảo: File transform_silver.sql chứa toàn bộ logic SQL chi tiết (ép kiểu ::FLOAT::INT, gộp Rating) dùng để đối chiếu khi cần.
+CSV
+ ↓
+Python ingestion
+ ↓
+PostgreSQL bronze
+ ↓
+dbt transformations
+ ↓
+silver tables
+ ↓
+gold feature tables
+ ↓
+ML model
+ ↓
+Metabase dashboard

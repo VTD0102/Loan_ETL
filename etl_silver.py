@@ -1,9 +1,8 @@
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-# 1. Cấu hình (nhập mật khẩu postgresql)
-DB_URL = "postgresql://postgres:26012005@localhost:5432/postgres_LoanManagement"
-
+#   11. Cấu hình (nhập mật khẩu postgresql)
+DB_URL = "postgresql://ducdeptrai:123456@localhost:5432/loan_management"
 def run_silver_pipeline():
     try:
         engine = create_engine(DB_URL)

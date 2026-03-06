@@ -1,0 +1,21 @@
+project:
+  name: loan_data_platform
+  environment: dev
+
+database:
+  host: localhost
+  port: 5432
+  name: loan_dw
+  user: postgres
+  password: postgres
+
+paths:
+  raw_data: data/raw/prosperLoanData.csv
+
+schemas:
+  bronze: bronze
+  silver: silver
+  gold: gold
+
+tables:
+  raw_loans: loans_raw
