@@ -144,3 +144,17 @@ Dashboard/BI
 
 - Nếu gặp lỗi kết nối DB, kiểm tra lại `config/settings.yaml` và cổng PostgreSQL có đúng `5433` hay không.
 - Với các script đang dùng chuỗi kết nối cứng, nên đồng bộ toàn bộ về config để tránh lệch môi trường.
+
+
+## 7) Vai trò 2 file chính bạn hỏi
+
+- `load_bronze.py`:
+  - Đọc file CSV raw theo `config/settings.yaml` (`paths.raw_data`).
+  - Nạp dữ liệu vào tầng Bronze theo `schemas.bronze` và `tables.raw_loans`.
+  - Đây là điểm vào ingest dữ liệu thô.
+
+- `etl_silver.py`:
+  - Đọc dữ liệu từ Bronze (`bronze.prosper_loans_raw`).
+  - Thực hiện làm sạch/ép kiểu/khử trùng lặp.
+  - Ghi dữ liệu đã chuẩn hoá sang Silver (`silver.prosper_loans_cleansed`) để dùng cho dbt/ML/BI.
+

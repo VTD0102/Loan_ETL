@@ -18,4 +18,4 @@ schemas:
   gold: gold
 
 tables:
-  raw_loans: loans_raw
+  raw_loans: prosper_loans_raw

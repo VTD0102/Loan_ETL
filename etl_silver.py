@@ -1,15 +1,24 @@
-import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-#   11. Cấu hình (nhập mật khẩu postgresql)
-DB_URL = "postgresql://postgres:postgres@localhost:5433/loan_management"
+from utils.db_connection import get_engine
+
+
 def run_silver_pipeline():
+    """Transform data from Bronze to Silver layer.
+
+    Vai trò:
+    - Làm sạch dữ liệu từ bảng bronze.
+    - Ép kiểu dữ liệu cho các cột quan trọng.
+    - Khử trùng lặp theo ListingKey.
+    - Tạo nhãn is_default cho bài toán ML.
+    """
     try:
-        engine = create_engine(DB_URL)
-        # Chúng ta dùng TRUNCATE để làm sạch bảng Silver trước khi nạp lại
-        etl_query = text("""
+        engine = get_engine()
+
+        etl_query = text(
+            """
             TRUNCATE TABLE silver.prosper_loans_cleansed;
-            
+
             INSERT INTO silver.prosper_loans_cleansed (
                 listing_key, listing_creation_date, loan_status, closed_date,
                 borrower_apr, borrower_rate, prosper_rating_alpha, prosper_score,
@@ -42,16 +51,18 @@ def run_silver_pipeline():
                 CASE WHEN "LoanStatus" IN ('Chargedoff', 'Defaulted') THEN 1 ELSE 0 END
             FROM bronze.prosper_loans_raw
             ORDER BY "ListingKey", "ListingCreationDate" DESC;
-        """)
+            """
+        )
 
         with engine.connect() as conn:
-            print("Đang chạy Pipeline tự động Silver...")
+            print("⏳ Đang chạy Silver ETL từ Bronze...")
             conn.execute(etl_query)
             conn.commit()
-            print("Thành công! Pipeline đã cập nhật 113,066 dòng vào Silver.")
+            print("✅ Silver ETL hoàn tất.")
 
     except Exception as e:
-        print(f" Lỗi Pipeline: {e}")
+        print(f"❌ Lỗi Silver ETL: {e}")
+
 
 if __name__ == "__main__":
     run_silver_pipeline()
