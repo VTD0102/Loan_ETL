@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from etl_silver import DB_URL
 
 # 1. Cấu hình thông tin (Thay mật khẩu của bạn vào đây)
-URL = "postgresql://ducdeptrai:123456@localhost:5432/loan_management"
+DB_URL = "postgresql://postgres:26012005@localhost:5432/postgres_LoanManagement"
 CSV_FILE = "prosperLoanData.csv" # Đảm bảo file CSV nằm cùng thư mục với code
 
 def main():
