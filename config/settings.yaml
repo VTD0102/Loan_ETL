@@ -4,10 +4,13 @@ project:
 
 database:
   host: localhost
-  port: 5432
+  port: 5433
   name: loan_dw
   user: postgres
-  password: postgres
+  password: "postgres"
+  pool_size: 5
+  max_overflow: 10
+  pool_recycle: 1800
 
 paths:
   raw_data: data/raw/prosperLoanData.csv
@@ -18,4 +21,7 @@ schemas:
   gold: gold
 
 tables:
-  raw_loans: loans_raw
+  raw_loans: prosper_loans_raw
+
+ingestion:
+  chunk_size: 10000
