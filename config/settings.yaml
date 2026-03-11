@@ -5,7 +5,7 @@ project:
 database:
   host: localhost
   port: 5433
-  name: loan_dw
+  name: postgres_LoanManagement
   user: postgres
   password: "postgres"
   pool_size: 5
