@@ -1,45 +1,197 @@
--- XÓA DỮ LIỆU CŨ TRƯỚC KHI NẠP (Để tránh lỗi trùng lặp khi chạy lại)
+-- Bronze -> Silver ETL cho Prosper loan dataset.
+-- Script này chỉ xử lý dữ liệu từ bronze.prosper_loans_raw sang silver.prosper_loans_cleansed.
+
+-- Bước 1: Xóa dữ liệu Silver cũ để có thể nạp lại toàn bộ theo batch.
 TRUNCATE TABLE silver.prosper_loans_cleansed;
 
----------------------------------------------------------
--- PHẦN 2: NẠP DỮ LIỆU VỚI LOGIC CHỐNG TRÙNG LẶP      --
----------------------------------------------------------
+-- Bước 2: Chuẩn hóa giá trị thô từ Bronze.
+-- - Trim khoảng trắng
+-- - Đồng nhất các giá trị rỗng như '', 'null', 'n/a', 'none' về NULL
+-- - Giữ nguyên raw columns để bước sau ép kiểu an toàn
+WITH normalized_source AS (
+    SELECT
+        CASE
+            WHEN lower(btrim(COALESCE("ListingKey", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("ListingKey")
+        END AS listing_key_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("ListingCreationDate", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("ListingCreationDate")
+        END AS listing_creation_date_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("LoanStatus", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE initcap(lower(btrim("LoanStatus")))
+        END AS loan_status_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("ClosedDate", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("ClosedDate")
+        END AS closed_date_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("BorrowerAPR", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("BorrowerAPR")
+        END AS borrower_apr_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("BorrowerRate", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("BorrowerRate")
+        END AS borrower_rate_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("ProsperRating (Alpha)", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE upper(btrim("ProsperRating (Alpha)"))
+        END AS prosper_rating_alpha_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("CreditGrade", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE upper(btrim("CreditGrade"))
+        END AS credit_grade_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("ProsperScore", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("ProsperScore")
+        END AS prosper_score_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("ListingCategory (numeric)", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("ListingCategory (numeric)")
+        END AS listing_category_numeric_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("Occupation", ''))) IN ('', 'null', 'n/a', 'na', 'none', 'other') THEN NULL
+            ELSE initcap(lower(btrim("Occupation")))
+        END AS occupation_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("EmploymentStatus", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE initcap(lower(btrim("EmploymentStatus")))
+        END AS employment_status_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("IsBorrowerHomeowner", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE lower(btrim("IsBorrowerHomeowner"))
+        END AS is_borrower_homeowner_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("CreditScoreRangeLower", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("CreditScoreRangeLower")
+        END AS credit_score_range_lower_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("CreditScoreRangeUpper", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("CreditScoreRangeUpper")
+        END AS credit_score_range_upper_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("DebtToIncomeRatio", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("DebtToIncomeRatio")
+        END AS debt_to_income_ratio_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("IncomeRange", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("IncomeRange")
+        END AS income_range_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("StatedMonthlyIncome", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("StatedMonthlyIncome")
+        END AS stated_monthly_income_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("LoanOriginalAmount", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("LoanOriginalAmount")
+        END AS loan_original_amount_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("LoanOriginationDate", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("LoanOriginationDate")
+        END AS loan_origination_date_raw,
+        CASE
+            WHEN lower(btrim(COALESCE("Term", ''))) IN ('', 'null', 'n/a', 'na', 'none') THEN NULL
+            ELSE btrim("Term")
+        END AS term_raw
+    FROM bronze.prosper_loans_raw
+),
 
-INSERT INTO silver.prosper_loans_cleansed (
-    listing_key, listing_creation_date, loan_status, closed_date,
-    borrower_apr, borrower_rate, prosper_rating_alpha, prosper_score,
-    listing_category_numeric, occupation, employment_status,
-    is_borrower_homeowner, credit_score_range_lower, credit_score_range_upper,
-    debt_to_income_ratio, income_range, stated_monthly_income,
-    loan_original_amount, loan_origination_date, term, is_default
+-- Bước 3: Ép kiểu dữ liệu và chuẩn hóa format cho ngày, số, boolean, categorical.
+typed_source AS (
+    SELECT
+        listing_key_raw AS listing_key,
+        listing_creation_date_raw::timestamp AS listing_creation_date,
+        loan_status_raw AS loan_status,
+        closed_date_raw::timestamp AS closed_date,
+        borrower_apr_raw::numeric(10, 5) AS borrower_apr,
+        borrower_rate_raw::numeric(10, 5) AS borrower_rate,
+        COALESCE(prosper_rating_alpha_raw, credit_grade_raw) AS prosper_rating_alpha,
+        prosper_score_raw::numeric::integer AS prosper_score,
+        listing_category_numeric_raw::numeric::integer AS listing_category_numeric,
+        occupation_raw AS occupation,
+        employment_status_raw AS employment_status,
+        CASE
+            WHEN is_borrower_homeowner_raw IN ('true', 't', '1', 'yes', 'y') THEN TRUE
+            WHEN is_borrower_homeowner_raw IN ('false', 'f', '0', 'no', 'n') THEN FALSE
+            ELSE NULL
+        END AS is_borrower_homeowner,
+        credit_score_range_lower_raw::numeric::integer AS credit_score_range_lower,
+        credit_score_range_upper_raw::numeric::integer AS credit_score_range_upper,
+        debt_to_income_ratio_raw::numeric(10, 5) AS debt_to_income_ratio,
+        income_range_raw AS income_range,
+        stated_monthly_income_raw::numeric(15, 2) AS stated_monthly_income,
+        loan_original_amount_raw::numeric(15, 2) AS loan_original_amount,
+        loan_origination_date_raw::timestamp AS loan_origination_date,
+        term_raw::numeric::integer AS term,
+        CASE
+            WHEN loan_status_raw IN ('Chargedoff', 'Defaulted') THEN 1
+            ELSE 0
+        END AS is_default
+    FROM normalized_source
+    WHERE listing_key_raw IS NOT NULL
+),
+
+-- Bước 4: Loại duplicate theo listing_key.
+-- Giữ bản ghi mới nhất dựa trên listing_creation_date, sau đó fallback loan_origination_date.
+ranked_source AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY listing_key
+            ORDER BY
+                listing_creation_date DESC NULLS LAST,
+                loan_origination_date DESC NULLS LAST,
+                closed_date DESC NULLS LAST
+        ) AS row_num
+    FROM typed_source
 )
-SELECT DISTINCT ON ("ListingKey") -- CHỈ LẤY DUY NHẤT 1 DÒNG cho mỗi ListingKey
-    "ListingKey",
-    "ListingCreationDate"::TIMESTAMP,
-    "LoanStatus",
-    NULLIF("ClosedDate", '')::TIMESTAMP,
-    NULLIF("BorrowerAPR", '')::DECIMAL,
-    NULLIF("BorrowerRate", '')::DECIMAL,
-    COALESCE(NULLIF("ProsperRating (Alpha)", ''), NULLIF("CreditGrade", '')),
-    NULLIF("ProsperScore", '')::FLOAT::INT,
-    NULLIF("ListingCategory (numeric)", '')::FLOAT::INT,
-    "Occupation",
-    "EmploymentStatus",
-    "IsBorrowerHomeowner"::BOOLEAN,
-    NULLIF("CreditScoreRangeLower", '')::FLOAT::INT,
-    NULLIF("CreditScoreRangeUpper", '')::FLOAT::INT,
-    NULLIF("DebtToIncomeRatio", '')::DECIMAL,
-    "IncomeRange",
-    NULLIF("StatedMonthlyIncome", '')::DECIMAL,
-    NULLIF("LoanOriginalAmount", '')::DECIMAL,
-    "LoanOriginationDate"::TIMESTAMP,
-    NULLIF("Term", '')::FLOAT::INT,
-    CASE WHEN "LoanStatus" IN ('Chargedoff', 'Defaulted') THEN 1 ELSE 0 END
-FROM bronze.prosper_loans_raw
-ORDER BY "ListingKey", "ListingCreationDate" DESC; -- Ưu tiên lấy dòng mới nhất nếu trùng
-COMMENT ON TABLE silver.prosper_loans_cleansed IS 'Bảng dữ liệu đã làm sạch, ép kiểu và loại trùng lặp cho dự án Prosper';
-COMMENT ON COLUMN silver.prosper_loans_cleansed.is_default IS '1: Khoản vay vỡ nợ (Chargedoff/Defaulted), 0: Bình thường';
-COMMENT ON COLUMN silver.prosper_loans_cleansed.prosper_rating_alpha IS 'Hạng tín dụng gộp từ ProsperRating và CreditGrade';
--- Cấp quyền xem cho tất cả mọi người
-GRANT USAGE ON SCHEMA silver TO PUBLIC;
-GRANT SELECT ON ALL TABLES IN SCHEMA silver TO PUBLIC;
+
+-- Bước 5: Nạp dữ liệu sạch vào bảng Silver.
+INSERT INTO silver.prosper_loans_cleansed (
+    listing_key,
+    listing_creation_date,
+    loan_status,
+    closed_date,
+    borrower_apr,
+    borrower_rate,
+    prosper_rating_alpha,
+    prosper_score,
+    listing_category_numeric,
+    occupation,
+    employment_status,
+    is_borrower_homeowner,
+    credit_score_range_lower,
+    credit_score_range_upper,
+    debt_to_income_ratio,
+    income_range,
+    stated_monthly_income,
+    loan_original_amount,
+    loan_origination_date,
+    term,
+    is_default
+)
+SELECT
+    listing_key,
+    listing_creation_date,
+    loan_status,
+    closed_date,
+    borrower_apr,
+    borrower_rate,
+    prosper_rating_alpha,
+    prosper_score,
+    listing_category_numeric,
+    occupation,
+    employment_status,
+    is_borrower_homeowner,
+    credit_score_range_lower,
+    credit_score_range_upper,
+    debt_to_income_ratio,
+    income_range,
+    stated_monthly_income,
+    loan_original_amount,
+    loan_origination_date,
+    term,
+    is_default
+FROM ranked_source
+WHERE row_num = 1;
