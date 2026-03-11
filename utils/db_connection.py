@@ -75,3 +75,9 @@ def get_engine() -> Engine:
         pool_recycle=int(db["pool_recycle"]),
         future=True,
     )
+
+if __name__ == "__main__":
+    engine = get_engine()
+    with engine.connect() as conn:
+        result = conn.execute("SELECT 1")
+        print("Database connected:", result.scalar())
