@@ -7,6 +7,9 @@ CREATE SCHEMA IF NOT EXISTS bronze;
 -- Schema Silver: lưu dữ liệu đã làm sạch và chuẩn hóa để phục vụ downstream.
 CREATE SCHEMA IF NOT EXISTS silver;
 
+-- Schema Gold 
+CREATE SCHEMA IF NOT EXISTS gold;
+
 -- Tạo mới bảng Silver để đảm bảo đúng schema mục tiêu.
 DROP TABLE IF EXISTS silver.prosper_loans_cleansed;
 
