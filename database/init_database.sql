@@ -1,13 +1,13 @@
-CREATE DATABASE "postgres_LoanManagement";
--- Lớp Bronze: Chứa dữ liệu thô, không chỉnh sửa
+-- Khởi tạo schema cho pipeline Bronze -> Silver trên PostgreSQL.
+-- File này chỉ tạo các object cần thiết cho Silver layer, không tạo Gold.
+
+-- Schema Bronze: lưu dữ liệu thô ingest từ source.
 CREATE SCHEMA IF NOT EXISTS bronze;
 
--- Lớp Silver: Dữ liệu đã sạch, chuẩn hóa kiểu dữ liệu cho Người 2 & 3
+-- Schema Silver: lưu dữ liệu đã làm sạch và chuẩn hóa để phục vụ downstream.
 CREATE SCHEMA IF NOT EXISTS silver;
 
--- Lớp Gold: Dữ liệu đã sẵn sàng để train model cho Người 5
-CREATE SCHEMA IF NOT EXISTS gold;
--- Xóa bảng cũ nếu muốn làm lại từ đầu
+-- Tạo mới bảng Silver để đảm bảo đúng schema mục tiêu.
 DROP TABLE IF EXISTS silver.prosper_loans_cleansed;
 
 CREATE TABLE silver.prosper_loans_cleansed (
@@ -15,22 +15,33 @@ CREATE TABLE silver.prosper_loans_cleansed (
     listing_creation_date TIMESTAMP,
     loan_status TEXT,
     closed_date TIMESTAMP,
-    borrower_apr DECIMAL(10, 5),
-    borrower_rate DECIMAL(10, 5),
-    prosper_rating_alpha TEXT, -- Cột quan trọng gộp từ 2 nguồn
-    prosper_score INT,
-    listing_category_numeric INT,
+    borrower_apr NUMERIC(10, 5),
+    borrower_rate NUMERIC(10, 5),
+    prosper_rating_alpha TEXT,
+    prosper_score INTEGER,
+    listing_category_numeric INTEGER,
     occupation TEXT,
     employment_status TEXT,
     is_borrower_homeowner BOOLEAN,
-    credit_score_range_lower INT,
-    credit_score_range_upper INT,
-    debt_to_income_ratio DECIMAL(10, 5),
+    credit_score_range_lower INTEGER,
+    credit_score_range_upper INTEGER,
+    debt_to_income_ratio NUMERIC(10, 5),
     income_range TEXT,
-    stated_monthly_income DECIMAL(15, 2),
-    loan_original_amount DECIMAL(15, 2),
+    stated_monthly_income NUMERIC(15, 2),
+    loan_original_amount NUMERIC(15, 2),
     loan_origination_date TIMESTAMP,
-    term INT,
-    -- Biến Target cho Người 5: 1 là Vỡ nợ, 0 là Bình thường
-    is_default INT
+    term INTEGER,
+    is_default SMALLINT NOT NULL
 );
+
+COMMENT ON TABLE silver.prosper_loans_cleansed IS
+'Silver layer cho Prosper loan dataset: dữ liệu đã làm sạch, ép kiểu, khử trùng lặp và gắn cờ default.';
+
+COMMENT ON COLUMN silver.prosper_loans_cleansed.listing_key IS
+'Khóa duy nhất của listing sau khi loại bỏ duplicate theo listing_key.';
+
+COMMENT ON COLUMN silver.prosper_loans_cleansed.prosper_rating_alpha IS
+'Giá trị rating chuẩn hóa, ưu tiên ProsperRating (Alpha), fallback sang CreditGrade.';
+
+COMMENT ON COLUMN silver.prosper_loans_cleansed.is_default IS
+'Target phục vụ downstream: 1 nếu LoanStatus = Chargedoff/Defaulted, ngược lại = 0.';
