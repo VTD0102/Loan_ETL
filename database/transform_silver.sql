@@ -1,8 +1,7 @@
 -- Bronze -> Silver ETL cho Prosper loan dataset.
 -- Script này chỉ xử lý dữ liệu từ bronze.prosper_loans_raw sang silver.prosper_loans_cleansed.
 
--- Bước 1: Xóa dữ liệu Silver cũ để có thể nạp lại toàn bộ theo batch.
-TRUNCATE TABLE silver.prosper_loans_cleansed;
+-- Bước 1: (Gỡ bỏ TRUNCATE để nạp dữ liệu Incremental bằng UPSERT)
 
 -- Bước 2: Chuẩn hóa giá trị thô từ Bronze.
 -- - Trim khoảng trắng
@@ -194,4 +193,25 @@ SELECT
     term,
     is_default
 FROM ranked_source
-WHERE row_num = 1;
+WHERE row_num = 1
+ON CONFLICT (listing_key) DO UPDATE SET
+    listing_creation_date = EXCLUDED.listing_creation_date,
+    loan_status = EXCLUDED.loan_status,
+    closed_date = EXCLUDED.closed_date,
+    borrower_apr = EXCLUDED.borrower_apr,
+    borrower_rate = EXCLUDED.borrower_rate,
+    prosper_rating_alpha = EXCLUDED.prosper_rating_alpha,
+    prosper_score = EXCLUDED.prosper_score,
+    listing_category_numeric = EXCLUDED.listing_category_numeric,
+    occupation = EXCLUDED.occupation,
+    employment_status = EXCLUDED.employment_status,
+    is_borrower_homeowner = EXCLUDED.is_borrower_homeowner,
+    credit_score_range_lower = EXCLUDED.credit_score_range_lower,
+    credit_score_range_upper = EXCLUDED.credit_score_range_upper,
+    debt_to_income_ratio = EXCLUDED.debt_to_income_ratio,
+    income_range = EXCLUDED.income_range,
+    stated_monthly_income = EXCLUDED.stated_monthly_income,
+    loan_original_amount = EXCLUDED.loan_original_amount,
+    loan_origination_date = EXCLUDED.loan_origination_date,
+    term = EXCLUDED.term,
+    is_default = EXCLUDED.is_default;
