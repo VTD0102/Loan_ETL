@@ -4,10 +4,10 @@ project:
 
 database:
   host: localhost
-  port: 5433
+  port: 5432
   name: postgres_LoanManagement
   user: postgres
-  password: "postgres"
+  password: YOUR_PASSWORD
   pool_size: 5
   max_overflow: 10
   pool_recycle: 1800

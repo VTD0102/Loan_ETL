@@ -160,3 +160,8 @@ cython_debug/
 #.idea/
 
 config/settings.yaml
+.venv/
+__pycache__/
+*.pkl
+config/settings.yaml
+data/raw/*.csv
