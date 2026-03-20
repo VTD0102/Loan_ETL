@@ -3,11 +3,11 @@ project:
   environment: dev
 
 database:
-  host: localhost
-  port: 5432
-  name: postgres_loanmanagement
-  user: postgres
-  password: 17102005
+  host: aws-1-ap-northeast-2.pooler.supabase.com
+  port: 6543
+  name: postgres
+  user: postgres.ujfpsufiirzpaswgnpsx
+  password: "nhungcaubedeptrai"
   pool_size: 5
   max_overflow: 10
   pool_recycle: 1800
