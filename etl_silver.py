@@ -2,18 +2,19 @@ from sqlalchemy import text
 
 from utils.db_connection import get_engine
 
+
 def run_silver_pipeline():
     """Transform data from Bronze to Silver layer.
 
     Vai trò:
     - Làm sạch dữ liệu từ bảng bronze.
-    - Ép kiểu dữ liệu cho các cột quan trọng.
-    - Khử trùng lặp theo ListingKey.
-    - Tạo nhãn is_default cho bài toán ML.
+    - Bổ sung các cột PK/FK để phục vụ hệ thống Core (MemberKey, LoanKey...).
+    - Khử trùng lặp và ép kiểu dữ liệu chuẩn.
     """
     try:
         engine = get_engine()
 
+<<<<<<< HEAD
         etl_query = text(
             """
             WITH normalized_source AS (
@@ -189,6 +190,10 @@ def run_silver_pipeline():
                 is_default = EXCLUDED.is_default;
             """
         )
+=======
+        with open("database/transform_silver.sql", "r", encoding="utf-8") as file:
+            etl_query = text(file.read())
+>>>>>>> origin/phi
 
         with engine.connect() as conn:
             print("⏳ Đang chạy Silver ETL từ Bronze...")
