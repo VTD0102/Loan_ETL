@@ -5,15 +5,9 @@ project:
 database:
   host: localhost
   port: 5432
-<<<<<<< HEAD
   name: postgres_LoanManagement
   user: postgres
   password: 26012005
-=======
-  name: postgres_loanmanagement
-  user: postgres
-  password: 17102005
->>>>>>> origin/phi
   pool_size: 5
   max_overflow: 10
   pool_recycle: 1800
