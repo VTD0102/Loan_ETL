@@ -4,12 +4,12 @@ from utils.db_connection import get_engine
 
 
 def run_gold_pipeline():
-    """Transform data from Silver to Gold layer.
+    """Transform data from Core/Silver to Gold layer.
 
     Vai trò:
-    - Lấy dữ liệu đã làm sạch từ silver.
-    - Loại bỏ các cột có leakage.
-    - Tạo feature engineering cho bài toán ML baseline.
+    - Tạo feature table phục vụ Machine Learning.
+    - Tạo analytical views phục vụ dashboard và báo cáo.
+    - Loại bỏ các cột gây leakage trong mô hình ML.
     """
     try:
         engine = get_engine()
@@ -18,7 +18,7 @@ def run_gold_pipeline():
             etl_query = text(file.read())
 
         with engine.connect() as conn:
-            print("⏳ Đang chạy Gold ETL từ Silver...")
+            print("⏳ Đang chạy Gold ETL từ Core/Silver...")
             conn.execute(etl_query)
             conn.commit()
             print("✅ Gold ETL hoàn tất.")
