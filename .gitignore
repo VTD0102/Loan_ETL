@@ -20,3 +20,4 @@ data/raw/*.csv
 
 # Documentation build
 docs/_build/
+config/
