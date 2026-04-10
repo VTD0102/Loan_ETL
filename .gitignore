@@ -13,13 +13,14 @@ __pycache__/
 data/raw/*.csv
 
 # Database & Sensitive configs
- config/settings.yaml  
+# config/settings.yaml  <-- Bỏ comment nếu bạn MUỐN chặn, nhưng khuyên là nên để lại để người khác có mẫu cấu hình
+
 # ML Models (Bỏ comment dòng dưới nếu bạn muốn CHẶN không cho upload model lên GitHub)
 # *.pkl 
 
 # Documentation build
 docs/_build/
 
-.idea/
+# IDE
 .vscode/
-
+.idea/

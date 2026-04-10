@@ -48,3 +48,8 @@ COMMENT ON COLUMN silver.prosper_loans_cleansed.prosper_rating_alpha IS
 
 COMMENT ON COLUMN silver.prosper_loans_cleansed.is_default IS
 'Target phục vụ downstream: 1 nếu LoanStatus = Chargedoff/Defaulted, ngược lại = 0.';
+
+-- Tạo Index cho loan_status và listing_creation_date để tối ưu query
+CREATE INDEX IF NOT EXISTS idx_silver_loan_status ON silver.prosper_loans_cleansed(loan_status);
+CREATE INDEX IF NOT EXISTS idx_silver_listing_creation_date ON silver.prosper_loans_cleansed(listing_creation_date);
+

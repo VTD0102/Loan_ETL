@@ -1,92 +1,247 @@
-import numpy as np
+"""
+Predict Engine Module
+Loads the trained model artifact, generates a risk assessment for a given loan_number,
+and upserts the result into core.risk_assessment.
 
-def evaluate_risk(credit_score, monthly_income, loan_amount, employment_status, df_gold, model):
-    # --- 1. CỔNG BẢO VỆ (HARD RULES) ---
-    annual_income = monthly_income * 12
-    
-    # Ước tính số tiền phải trả hàng tháng (Vay 36 tháng)
-    estimated_monthly_payment = (loan_amount / 36) * 1.15
-    existing_debt = monthly_income * 0.10 # Giả định nợ cũ 10%
-    
-    dti = (estimated_monthly_payment + existing_debt) / monthly_income if monthly_income > 0 else 10.0
-    lti = loan_amount / annual_income if annual_income > 0 else 10.0
+Schema facts (from init_core.sql + transform_gold.sql):
+- core.loans     PRIMARY KEY = listing_key (VARCHAR)
+                 loan_number = VARCHAR e.g. "65928"
+- gold.loan_features_v1  PRIMARY KEY = listing_key (VARCHAR)
+                          loan_number = VARCHAR (same value)
+- There is NO integer loan_id anywhere — input is loan_number as integer
+  which matches loan_number VARCHAR via CAST
+"""
+import sys
+import joblib
+import pandas as pd
+from pathlib import Path
+from datetime import datetime, timezone
+from sqlalchemy import text
 
-    # Chặn đứng nếu DTI vượt 50% hoặc Vay quá 50% lương năm
-    if dti > 0.50:
-        return True, dti, "DTI (Tỷ lệ Nợ/Lương tháng) vượt quá 50%. Khả năng trả nợ không đảm bảo.", []
-    if lti > 0.50:
-        return True, lti, "Số tiền vay quá lớn so với tổng thu nhập cả năm.", []
+from utils.db_connection import get_engine, load_config
 
-    # --- 2. TẠO KHUÔN MẪU AN TOÀN TUYỆT ĐỐI LÀM GỐC ---
-    # CHỈ lấy những người chưa từng vỡ nợ để làm mồi (Fix lỗi bóng ma)
-    safe_profiles = df_gold[df_gold['is_default'] == 0].drop(columns=['is_default'])
-    input_data = safe_profiles.mode().iloc[[0]].copy()
+# ── Resolve paths & config ───────────────────────────────────────────────────
+BASE_DIR   = Path(__file__).resolve().parents[1]
+config     = load_config()
 
-    # --- 3. GÁN ĐIỂM FICO VÀ HẠNG TÍN DỤNG ---
-    if credit_score >= 760: rating, apr, ordinal, p_score, band = 'AA', 0.05, 7, 10, '720+'
-    elif credit_score >= 720: rating, apr, ordinal, p_score, band = 'A', 0.09, 6, 8, '720+'
-    elif credit_score >= 680: rating, apr, ordinal, p_score, band = 'B', 0.13, 5, 6, '680-719'
-    elif credit_score >= 640: rating, apr, ordinal, p_score, band = 'C', 0.18, 4, 4, '640-679'
-    elif credit_score >= 600: rating, apr, ordinal, p_score, band = 'D', 0.25, 3, 2, '600-639'
-    else: rating, apr, ordinal, p_score, band = 'HR', 0.35, 1, 1, '<600'
+_ml_cfg    = config.get('ml', {})
+MODEL_PATH = BASE_DIR / _ml_cfg.get('model_path', 'ml/models/loan_risk_model.pkl')
 
-    # --- 4. CƠ CHẾ PHẠT RỦI RO ĐỘNG VÀ EXPERT OVERLAY ---
-    credit_score_adjusted = credit_score # Tạo một điểm FICO ảo để gửi cho AI
-    risk_factors = [] # DANH SÁCH LƯU TRỮ LÝ DO PHẠT
-    
-    if dti > 0.35:
-        risk_factors.append(f"High Monthly Debt Burden: Estimated DTI is {dti*100:.1f}%.")
-        p_score = max(1, p_score - 2)
-        ordinal = max(1, ordinal - 2)
-        apr = min(0.35, apr + 0.08) 
-    
-    # TRỊ TẬN GỐC CASE "BẪY THU NHẬP THẤP" (Lương <= 2000 mà LTI > 30%)
-    if monthly_income <= 2000 and lti > 0.30:
-        risk_factors.append(f"Low Income Trap: Requesting a large loan ({loan_amount:,.0f} USD) with low monthly income ({monthly_income:,.0f} USD).")
-        p_score = max(1, p_score - 4)      # Trừ tụt đáy hạng nội bộ
-        ordinal = max(1, ordinal - 3)
-        apr = min(0.35, apr + 0.15)        # Đẩy lãi suất lên kịch trần
-        credit_score_adjusted -= 100       # KỸ THUẬT CHE MẮT: Kéo FICO 750 xuống 650 để AI bớt thiên vị
-        
-    if employment_status in ['Self-employed', 'Not employed']:
-        risk_factors.append(f"Employment Risk: Applicant is {employment_status}, indicating potential income instability.")
-        p_score = max(1, p_score - 1)
-        ordinal = max(1, ordinal - 1)
-        apr = min(0.35, apr + 0.04)
 
-    rating_map = {7:'AA', 6:'A', 5:'B', 4:'C', 3:'D', 2:'E', 1:'HR'}
-    rating = rating_map.get(ordinal, 'HR')
+# ── Business rules ───────────────────────────────────────────────────────────
 
-    # --- 5. ĐỒNG BỘ VÀO BẢNG DỮ LIỆU ---
-    # Nạp điểm FICO ĐÃ BỊ PHẠT cho AI thay vì điểm gốc
-    input_data['credit_score_midpoint'] = credit_score_adjusted 
-    
-    input_data['stated_monthly_income'] = monthly_income
-    input_data['loan_original_amount'] = loan_amount
-    input_data['employment_status'] = employment_status
-    input_data['employment_status_grouped'] = employment_status
-    
-    input_data['debt_to_income_ratio'] = dti
-    input_data['loan_amount_to_income'] = lti
-    input_data['log_monthly_income'] = np.log1p(monthly_income)
-    
-    input_data['prosper_score'] = p_score
-    input_data['prosper_rating_alpha'] = rating
-    input_data['rating_ordinal'] = ordinal
-    input_data['borrower_apr'] = apr
-    input_data['borrower_rate'] = max(0.01, apr - 0.03)
-    input_data['credit_score_band'] = band # Bạn có thể đổi cả band nếu muốn kỹ hơn
-    
-    if annual_income == 0: inc_ord = 0
-    elif annual_income < 25000: inc_ord = 1
-    elif annual_income < 50000: inc_ord = 2
-    elif annual_income < 75000: inc_ord = 3
-    elif annual_income < 100000: inc_ord = 4
-    else: inc_ord = 5
-    input_data['income_range_ordinal'] = inc_ord
+def get_risk_level(pd_val: float, thresholds: dict) -> str:
+    """Map probability of default → risk label using thresholds from artifact."""
+    if pd_val < thresholds['low']:
+        return 'Low'
+    elif pd_val <= thresholds['high']:
+        return 'Medium'
+    else:
+        return 'High'
 
-    # --- 6. GỌI AI ---
-    probability = model.predict_proba(input_data)[0][1]
-    
-    # Trả về thêm mảng risk_factors
-    return False, dti, probability, risk_factors
+
+def recommend_loan(pd_val: float, thresholds: dict) -> dict:
+    """Simulate loan recommendation (amount + term) based on risk level."""
+    if pd_val < thresholds['low']:
+        return {'recommended_amount': 15000, 'recommended_term': 36}
+    elif pd_val <= thresholds['high']:
+        return {'recommended_amount': 8000,  'recommended_term': 24}
+    else:
+        return {'recommended_amount': 3000,  'recommended_term': 12}
+
+
+# ── Core prediction function ─────────────────────────────────────────────────
+
+def predict_and_save(loan_number: int) -> dict | None:
+    """
+    Fetch features for a loan by loan_number, run the trained model,
+    upsert result into core.risk_assessment, and return result dict.
+
+    Args:
+        loan_number: integer matching loan_number VARCHAR in core.loans
+                     e.g. 65928 matches "65928" in the database
+
+    Called by prediction_ui.py for real-time assessments.
+    """
+    print("=" * 55)
+    print(f"  RISK ASSESSMENT  |  loan_number: {loan_number}")
+    print("=" * 55)
+
+    engine = get_engine()
+
+    # ── 1. Validate loan_number exists in core.loans ─────
+    # core.loans PRIMARY KEY = listing_key (VARCHAR)
+    # loan_number is VARCHAR — cast input integer to text for comparison
+    print("\n[1/5] Validating loan_number in core.loans...")
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT listing_key FROM core.loans "
+                     "WHERE loan_number = CAST(:loan_number AS VARCHAR)"),
+                {"loan_number": loan_number}
+            ).fetchone()
+        if row is None:
+            print(f"  ERROR: loan_number {loan_number} not found in core.loans.")
+            return None
+        listing_key = row[0]
+        print(f"  Confirmed. listing_key = {listing_key}")
+    except Exception as e:
+        print(f"  ERROR validating loan_number: {e}")
+        raise
+
+    # ── 2. Load model artifact ───────────────────────────
+    print("\n[2/5] Loading model artifact...")
+    if not MODEL_PATH.exists():
+        print(f"  ERROR: Model not found at {MODEL_PATH}.")
+        print("  Please run train_model.py first.")
+        return None
+
+    artifact = joblib.load(MODEL_PATH)
+
+    if isinstance(artifact, dict) and 'pipeline' in artifact:
+        pipeline     = artifact['pipeline']
+        feature_cols = artifact['feature_cols']
+        thresholds   = artifact.get('thresholds', {'low': 0.2, 'high': 0.4})
+    else:
+        print("  WARNING: Old model format — no feature_cols or thresholds saved.")
+        print("  Re-run train_model.py to fix column alignment.")
+        pipeline     = artifact
+        feature_cols = None
+        thresholds   = {'low': 0.2, 'high': 0.4}
+
+    print(f"  Pipeline loaded. Features: {len(feature_cols) if feature_cols else 'unknown'} | "
+          f"Thresholds: Low<{thresholds['low']} High>{thresholds['high']}")
+
+    # ── 3. Fetch features from gold using listing_key ────
+    # gold.loan_features_v1 PRIMARY KEY = listing_key (VARCHAR)
+    # Use listing_key retrieved in step 1 for exact match
+    print("\n[3/5] Fetching features from gold.loan_features_v1...")
+    try:
+        df = pd.read_sql(
+            "SELECT * FROM gold.loan_features_v1 "
+            "WHERE listing_key = %(listing_key)s",
+            engine,
+            params={'listing_key': listing_key}
+        )
+    except Exception as e:
+        print(f"  ERROR fetching features: {e}")
+        raise
+
+    if df.empty:
+        print(f"  ERROR: No features found for listing_key {listing_key}.")
+        return None
+
+    print(f"  Features fetched for listing_key: {listing_key}")
+
+    # Drop all ID / key / target columns — not used in model
+    drop_cols = [col for col in [
+        'is_default', 'listing_key', 'member_key',
+        'loan_number', 'loan_key'
+    ] if col in df.columns]
+    X = df.drop(columns=drop_cols)
+
+    # Align columns exactly with training — prevents shape mismatch crash
+    if feature_cols is not None:
+        missing = [c for c in feature_cols if c not in X.columns]
+        extra   = [c for c in X.columns    if c not in feature_cols]
+        if missing:
+            print(f"  WARNING: Missing columns (filling with 0): {missing}")
+            for col in missing:
+                X[col] = 0
+        if extra:
+            print(f"  Dropping unseen columns: {extra}")
+        X = X[feature_cols]   # exact column order required by StandardScaler
+
+    # Fill nulls — prevents NaN propagating through StandardScaler
+    null_count = X.isnull().sum().sum()
+    if null_count > 0:
+        print(f"  Filling {null_count} null value(s) with column median.")
+    X = X.fillna(X.median(numeric_only=True))
+
+    # ── 4. Predict ───────────────────────────────────────
+    print("\n[4/5] Running prediction...")
+    probs  = pipeline.predict_proba(X)
+    pd_val = float(probs[0, 1]) if probs.shape[1] > 1 else float(probs[0, 0])
+
+    risk_level          = get_risk_level(pd_val, thresholds)
+    risk_score_internal = int((1 - pd_val) * 100)
+    recommendation      = recommend_loan(pd_val, thresholds)
+    assessment_date     = datetime.now(timezone.utc)
+
+    print(f"\n  Probability of Default : {pd_val:.4f}")
+    print(f"  Risk Level             : {risk_level}")
+    print(f"  Internal Risk Score    : {risk_score_internal}")
+    print(f"  Recommended Amount     : ${recommendation['recommended_amount']:,}")
+    print(f"  Recommended Term       : {recommendation['recommended_term']} months")
+
+    # ── 5. Upsert into core.risk_assessment ──────────────
+    # Uses listing_key (VARCHAR) as the unique identifier
+    # loan_number stored as VARCHAR to match core.loans schema
+    print("\n[5/5] Saving to core.risk_assessment...")
+
+    try:
+        with engine.begin() as conn:
+            deleted = conn.execute(
+                text("DELETE FROM core.risk_assessment "
+                     "WHERE listing_key = :listing_key"),
+                {"listing_key": listing_key}
+            ).rowcount
+        if deleted:
+            print(f"  Replaced {deleted} existing record(s) for listing_key {listing_key}.")
+    except Exception as e:
+        print(f"  WARNING: Could not delete existing records: {e}")
+
+    result_df = pd.DataFrame([{
+        'listing_key'            : listing_key,
+        'loan_number'            : str(loan_number),
+        'probability_of_default' : pd_val,
+        'risk_score_internal'    : risk_score_internal,
+        'risk_level'             : risk_level,
+        'recommended_amount'     : recommendation['recommended_amount'],
+        'recommended_term'       : recommendation['recommended_term'],
+        'assessment_date'        : assessment_date
+    }])
+
+    try:
+        result_df.to_sql(
+            name='risk_assessment',
+            schema='core',
+            con=engine,
+            if_exists='append',
+            index=False
+        )
+        print(f"  Saved successfully for listing_key: {listing_key}")
+    except Exception as e:
+        print(f"  ERROR saving assessment: {e}")
+        raise
+
+    print("\n" + "=" * 55)
+    print("  ASSESSMENT COMPLETE")
+    print("=" * 55)
+
+    return {
+        'listing_key'            : listing_key,
+        'loan_number'            : loan_number,
+        'probability_of_default' : pd_val,
+        'risk_level'             : risk_level,
+        'risk_score_internal'    : risk_score_internal,
+        'recommended_amount'     : recommendation['recommended_amount'],
+        'recommended_term'       : recommendation['recommended_term'],
+        'assessment_date'        : assessment_date.isoformat()
+    }
+
+
+# ── CLI entrypoint ───────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        try:
+            input_loan_number = int(sys.argv[1])
+            predict_and_save(input_loan_number)
+        except ValueError:
+            print("ERROR: Please provide a valid integer loan_number.")
+            print("Usage: python predict_engine.py <loan_number>")
+            print("Example: python predict_engine.py 65928")
+    else:
+        print("Usage: python predict_engine.py <loan_number>")
+        print("Example: python predict_engine.py 65928")

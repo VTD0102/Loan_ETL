@@ -1,128 +1,156 @@
-import sys
-import os
+"""
+Train Model Module
+Trains a RandomForest loan default risk model using features from gold.loan_features_v1.
+Saves the trained pipeline + feature columns to ml/models/loan_risk_model.pkl.
+"""
 import pandas as pd
-import numpy as np
 import joblib
-import yaml
-from sqlalchemy import create_engine
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, roc_auc_score
+from pathlib import Path
 from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, f1_score, classification_report
 
-# 1. Cấu hình hệ thống
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.db_connection import get_engine, load_config
 
-def load_config():
-    config_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'settings.yaml')
-    with open(config_path, "r") as file:
-        return yaml.safe_load(file)
+# ── Resolve paths & config ───────────────────────────────────────────────────
+BASE_DIR   = Path(__file__).resolve().parents[1]
+config     = load_config()
 
-def load_data():
-    config = load_config()
-    db = config["database"]
-    conn_uri = f"postgresql://{db['user']}:{db['password']}@{db['host']}:{db['port']}/{db['name']}"
-    engine = create_engine(conn_uri)
-    
-    query = "SELECT * FROM gold.loan_features_v1;"
-    print("⏳ Đang tải dữ liệu từ gold.loan_features_v1...")
-    df = pd.read_sql(query, engine)
-    return df
+# Model path from settings.yaml ml section — falls back to default if missing
+_ml_cfg    = config.get('ml', {})
+MODEL_PATH = BASE_DIR / _ml_cfg.get('model_path', 'ml/models/loan_risk_model.pkl')
 
-def preprocess_and_clean(df):
-    """Làm sạch dữ liệu và ép kiểu tường minh"""
-    # Loại bỏ các cột không cần thiết cho ML
-    leakage_columns = [
-        'listing_key', 'loan_status', 'closed_date', 
-        'listing_creation_date', 'loan_origination_date'
-    ]
-    cols_to_drop = [col for col in leakage_columns if col in df.columns]
-    df = df.drop(columns=cols_to_drop)
+# Risk thresholds from settings.yaml — centralised so predict_engine stays in sync
+_thresholds    = _ml_cfg.get('risk_thresholds', {})
+LOW_THRESHOLD  = float(_thresholds.get('low',  0.2))
+HIGH_THRESHOLD = float(_thresholds.get('high', 0.4))
 
-    # TÁCH BIỆT: Ép kiểu dữ liệu để tránh lỗi 'float'
-    for col in df.columns:
-        if df[col].dtype == 'object' or df[col].dtype.name == 'category':
-            df[col] = df[col].astype(str) # Ép hết về string thuần túy
-            
-    return df
 
-def build_pipeline(X):
-    # Xác định các nhóm cột
-    numeric_features = X.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_features = X.select_dtypes(include=['object', 'string']).columns.tolist()
+def train_model():
+    print("=" * 55)
+    print("  LOAN RISK MODEL — TRAINING")
+    print("=" * 55)
 
-    print(f"📊 Đặc trưng: {len(numeric_features)} số, {len(categorical_features)} phân loại.")
+    # ── 1. Connect & fetch ───────────────────────────────
+    print("\n[1/6] Connecting to database...")
+    # Uses shared cached engine from db_connection.py — no duplicate connection
+    engine = get_engine()
 
-    # Pipeline cho biến số
-    numeric_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='median')),
-        ('scaler', StandardScaler())
-    ])
+    print("[2/6] Fetching data from gold.loan_features_v1...")
+    try:
+        df = pd.read_sql("SELECT * FROM gold.loan_features_v1", engine)
+    except Exception as e:
+        print(f"  ERROR fetching data: {e}")
+        return
 
-    # Pipeline cho biến phân loại (Sửa lỗi quan trọng ở đây)
-    categorical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')), # Dùng hằng số để an toàn hơn
-        ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
-    ])
+    if df.empty:
+        print("  ERROR: No data found in gold.loan_features_v1.")
+        return
 
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', numeric_transformer, numeric_features),
-            ('cat', categorical_transformer, categorical_features)
-        ])
+    print(f"  Rows fetched: {len(df)}")
 
-    model = Pipeline(steps=[
-        ('preprocessor', preprocessor),
+    # ── 2. Validate target column ────────────────────────
+    target_col = 'is_default'
+    if target_col not in df.columns:
+        print(f"  ERROR: Target column '{target_col}' not found.")
+        print(f"  Available columns: {df.columns.tolist()}")
+        return
+
+    # ── 3. Prepare features ──────────────────────────────
+    print("\n[3/6] Preparing features...")
+
+    # Drop target + ID columns before training
+    drop_cols = [col for col in [target_col, 'loan_id'] if col in df.columns]
+    X = df.drop(columns=drop_cols)
+
+    # Keep only numeric columns — prevents StandardScaler crash on string cols
+    non_numeric = X.select_dtypes(exclude=['number']).columns.tolist()
+    if non_numeric:
+        print(f"  Dropping non-numeric columns: {non_numeric}")
+    X = X.select_dtypes(include=['number'])
+
+    # Fill nulls with column median — prevents NaN propagation through scaler
+    null_cols = X.columns[X.isnull().any()].tolist()
+    if null_cols:
+        print(f"  Filling nulls with median in: {null_cols}")
+    X = X.fillna(X.median(numeric_only=True))
+
+    y = df[target_col]
+
+    print(f"  Features used ({len(X.columns)}): {X.columns.tolist()}")
+    print(f"  Target distribution:\n"
+          f"{y.value_counts(normalize=True).rename('ratio').to_string()}")
+
+    # ── 4. Train / test split ────────────────────────────
+    print("\n[4/6] Splitting data 80/20 (stratified)...")
+    # CRITICAL: split BEFORE fitting — evaluating on training data inflates metrics
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y        # preserve default/non-default ratio in both sets
+    )
+    print(f"  Train: {len(X_train)} rows | Test: {len(X_test)} rows")
+
+    # ── 5. Build & train pipeline ────────────────────────
+    print("\n[5/6] Training pipeline (StandardScaler → RandomForest)...")
+    pipeline = Pipeline([
+        ('scaler', StandardScaler()),
         ('classifier', RandomForestClassifier(
-            n_estimators=100, 
-            random_state=42, 
-            class_weight='balanced', 
-            max_depth=8, # Giảm nhẹ độ sâu để tránh overfitting
-            n_jobs=-1
+            n_estimators=200,       # more trees = more stable predictions
+            max_depth=15,           # prevents overfitting deep trees
+            min_samples_leaf=5,     # each leaf needs at least 5 samples
+            min_samples_split=10,   # need 10 samples to split a node
+            random_state=42,
+            n_jobs=-1,
+            class_weight='balanced'
         ))
     ])
-    
-    return model
+    pipeline.fit(X_train, y_train)
 
-def main():
+    # ── 6. Evaluate on TEST set ──────────────────────────
+    print("\n[6/6] Evaluating on test set...")
+    y_pred = pipeline.predict(X_test)
+    y_prob = pipeline.predict_proba(X_test)[:, 1]
+
+    auc = roc_auc_score(y_test, y_prob)
+    f1  = f1_score(y_test, y_pred)
+
+    print("\n  --- Model Evaluation (Test Set) ---")
+    print(f"  ROC-AUC : {auc:.4f}")
+    print(f"  F1-Score: {f1:.4f}")
+    print(f"\n  Risk thresholds — Low: <{LOW_THRESHOLD} | High: >{HIGH_THRESHOLD}")
+    print("\n  Classification Report:")
+    print(classification_report(y_test, y_pred,target_names=['No Default', 'Default']))
+
+    # ── 7. Save artifact ─────────────────────────────────
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    # Save pipeline + feature_cols + thresholds together
+    # predict_engine.py loads ALL three to guarantee alignment
+    artifact = {
+        'pipeline'    : pipeline,
+        'feature_cols': X.columns.tolist(),
+        'thresholds'  : {
+            'low' : LOW_THRESHOLD,
+            'high': HIGH_THRESHOLD,
+        }
+    }
+
     try:
-        df = load_data()
-        df = preprocess_and_clean(df)
-        
-        if 'is_default' not in df.columns:
-            print("❌ Lỗi: Thiếu cột 'is_default'.")
-            return
-
-        X = df.drop(columns=['is_default'])
-        y = df['is_default'].astype(int)
-        
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
-        
-        print(f"🚀 Đang huấn luyện trên {len(X_train)} hồ sơ...")
-        pipeline = build_pipeline(X_train)
-        pipeline.fit(X_train, y_train)
-        
-        print("\n✅ --- KẾT QUẢ ĐÁNH GIÁ ---")
-        y_pred = pipeline.predict(X_test)
-        y_proba = pipeline.predict_proba(X_test)[:, 1]
-        
-        print(classification_report(y_test, y_pred))
-        print(f"🎯 ROC AUC Score: {roc_auc_score(y_test, y_proba):.4f}")
-        
-        # Lưu mô hình
-        os.makedirs('ml/models', exist_ok=True)
-        joblib.dump(pipeline, 'ml/models/loan_risk_model.pkl')
-        print(f"💾 Đã lưu mô hình thành công!")
-
+        joblib.dump(artifact, MODEL_PATH)
+        print(f"\n  Artifact saved → {MODEL_PATH}")
+        print(f"  Keys: pipeline | feature_cols ({len(X.columns)} cols) | thresholds")
     except Exception as e:
-        print(f"❌ Lỗi thực thi: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"  ERROR saving model: {e}")
+        return
+
+    print("\n" + "=" * 55)
+    print("  TRAINING COMPLETE")
+    print("=" * 55)
+
 
 if __name__ == "__main__":
-    main()
+    train_model()
