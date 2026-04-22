@@ -1,7 +1,13 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILE = Path(__file__).parents[1] / ".env"
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=str(ENV_FILE), env_file_encoding="utf-8")
+
     # Database
     db_host: str
     db_port: int = 5432
@@ -12,7 +18,7 @@ class Settings(BaseSettings):
     # JWT
     secret_key: str
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24  # 1 day
+    access_token_expire_minutes: int = 60 * 24
 
     # OpenRouter
     openrouter_api_key: str
@@ -25,9 +31,6 @@ class Settings(BaseSettings):
     pinecone_index_name: str = "creditintel-kb"
     pinecone_cloud: str = "aws"
     pinecone_region: str = "us-east-1"
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()

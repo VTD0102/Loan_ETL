@@ -28,6 +28,8 @@ def get_chain() -> ConversationalRetrievalChain:
 
 
 def invoke(question: str, user_context: str, chat_history: list) -> dict:
-    # TODO: call get_chain().invoke with question, user_context, chat_history
-    # TODO: return {"answer": str, "source_documents": list}
-    raise NotImplementedError
+    return get_chain().invoke({
+        "question": question,
+        "user_context": user_context,
+        "chat_history": chat_history,
+    })

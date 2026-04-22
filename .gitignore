@@ -16,6 +16,8 @@ venv/
 .venv/
 env/
 .env/
+backend/venv/
+frontend/node_modules/
 
 # ─── Data & Models ────────────────────────────────────────────────────────────
 data/raw/*.csv

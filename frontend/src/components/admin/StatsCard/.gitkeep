@@ -1,0 +1,7 @@
+(venv) PS C:\Users\Admin\OneDrive - ptit.edu.vn\Documents\GitHub\Loan_ETL> python -m backend.rag.ingest
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\Admin\OneDrive - ptit.edu.vn\Documents\GitHub\Loan_ETL\backend\rag\ingest.py", line 7, in <module>
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+ModuleNotFoundError: No module named 'langchain.text_splitter'

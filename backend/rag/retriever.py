@@ -1,4 +1,4 @@
-from langchain_community.vectorstores import Pinecone as PineconeVectorStore
+from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 
 from backend.rag.config import (
