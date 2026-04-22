@@ -1,0 +1,1 @@
+"""CreditIntel application package."""

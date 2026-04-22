@@ -1,26 +1,42 @@
-# --- CUSTOM PROJECT RULES ---
+# ─── Secrets & Credentials ────────────────────────────────────────────────────
+config/settings.yaml
+backend/.env
+frontend/.env
+.env
 
-# Ignore virtual environments
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
 venv/
 .venv/
 env/
+.env/
 
-# Ignore python cache
-__pycache__/
-*.py[cod]
-
-# Data files (Chặn dữ liệu thô vì nó rất nặng)
+# ─── Data & Models ────────────────────────────────────────────────────────────
 data/raw/*.csv
+# *.pkl   # uncomment to exclude trained model artifacts
 
-# Database & Sensitive configs
-# config/settings.yaml  <-- Bỏ comment nếu bạn MUỐN chặn, nhưng khuyên là nên để lại để người khác có mẫu cấu hình
+# ─── Frontend ─────────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env.local
+frontend/.env.production
 
-# ML Models (Bỏ comment dòng dưới nếu bạn muốn CHẶN không cho upload model lên GitHub)
-# *.pkl 
-
-# Documentation build
-docs/_build/
-
-# IDE
+# ─── IDE & OS ─────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+
+# ─── Docs build ───────────────────────────────────────────────────────────────
+docs/_build/
+
+# ─── Claude Code ──────────────────────────────────────────────────────────────
+.claude/
+CLAUDE.md
