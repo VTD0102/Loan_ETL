@@ -41,13 +41,62 @@ VITE_API_URL=http://localhost:8000
 
 ## Khởi động
 
-### Development (hot reload)
+### Development (hot reload) — cần backend chạy
 
 ```bash
 npm run dev
 ```
 
 Ứng dụng chạy tại: **http://localhost:5173**
+
+### Mock Mode — không cần backend hay database
+
+Dùng khi backend hoặc database chưa sẵn sàng. Toàn bộ API call được interceptor trả về dữ liệu giả, không kết nối mạng thật.
+
+```bash
+npm run mock
+```
+
+Ứng dụng chạy tại: **http://localhost:5173** với badge vàng **"MOCK MODE"** ở góc dưới phải màn hình.
+
+#### Tài khoản test (mock mode)
+
+| Field    | Giá trị                    |
+|----------|---------------------------|
+| Email    | bất kỳ (vd: `a@a.com`)    |
+| Password | bất kỳ (vd: `123456`)     |
+
+> Dùng email `wrong@test.com` để test trường hợp đăng nhập sai.
+
+#### Đổi trạng thái đơn vay để test từng state
+
+Mở [src/mocks/mockData.js](src/mocks/mockData.js), sửa dòng `MOCK_APP_STATUS`:
+
+```js
+// src/mocks/mockData.js
+export const MOCK_APP_STATUS = 'AWAITING_INFO'
+```
+
+| Giá trị           | Trạng thái hiển thị                              |
+|-------------------|--------------------------------------------------|
+| `PENDING_REVIEW`  | Đơn đang chờ admin xét duyệt                     |
+| `AUTO_REJECTED`   | AI từ chối tự động (rủi ro cao)                  |
+| `ADMIN_REJECTED`  | Admin từ chối kèm lý do                          |
+| `AWAITING_INFO`   | Được duyệt, cần nộp thông tin cá nhân            |
+| `INFO_SUBMITTED`  | Đã nộp đầy đủ thông tin, chờ xử lý              |
+
+> **Test form nộp đơn:** Nhập `credit_score < 600` hoặc `DTI > 70` → mock trả `AUTO_REJECTED`. Ngược lại → `PENDING_REVIEW`.
+
+#### Tắt mock, chuyển sang backend thật
+
+Khi database đã sẵn sàng và backend đang chạy, chỉ cần đổi lệnh:
+
+```bash
+# Tắt mock
+npm run dev   # thay vì npm run mock
+```
+
+Không cần xóa hay sửa bất kỳ file nào — mock chỉ hoạt động khi `VITE_MOCK_MODE=true` (được set bởi `.env.mock`).
 
 ### Production build
 
