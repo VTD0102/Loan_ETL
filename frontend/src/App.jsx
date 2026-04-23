@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar          from './components/common/Navbar'
 import ProtectedRoute  from './components/ProtectedRoute'
+import { isMock }      from './services/api'
 
 // Pages
 import LandingPage           from './pages/customer/Landing'
@@ -21,6 +22,14 @@ const NotFound = () => (
   </div>
 )
 
+// Mock mode banner
+const MockBanner = () => (
+  <div className="fixed bottom-3 right-3 z-50 flex items-center gap-2 bg-amber-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg select-none">
+    <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+    MOCK MODE — không kết nối backend
+  </div>
+)
+
 // Layout that includes Navbar (used for most pages)
 const WithNav = ({ children }) => (
   <>
@@ -33,6 +42,7 @@ const WithNav = ({ children }) => (
 // so we still include nav but page manages its own header on mobile
 
 const App = () => (
+  <>
   <Routes>
     {/* Public */}
     <Route path="/"          element={<WithNav><LandingPage /></WithNav>} />
@@ -74,6 +84,9 @@ const App = () => (
     {/* Fallback */}
     <Route path="*" element={<NotFound />} />
   </Routes>
+
+  {isMock && <MockBanner />}
+</>
 )
 
 export default App
