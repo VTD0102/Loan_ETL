@@ -2,16 +2,28 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Navbar          from './components/common/Navbar'
 import ProtectedRoute  from './components/ProtectedRoute'
 import { isMock }      from './services/api'
+import useAuthStore    from './store/authStore'
 
-// Pages
-import LandingPage           from './pages/customer/Landing'
-import RegisterPage          from './pages/customer/Register'
-import LoginPage             from './pages/customer/Login'
-import DashboardPage         from './pages/customer/Dashboard'
-import ApplyPage             from './pages/customer/Apply'
-import ApplicationDetailPage from './pages/customer/ApplicationDetail'
+// ── Customer Pages ────────────────────────────────
+import LandingPage            from './pages/customer/Landing'
+import RegisterPage           from './pages/customer/Register'
+import LoginPage              from './pages/customer/Login'
+import DashboardPage          from './pages/customer/Dashboard'
+import ApplyPage              from './pages/customer/Apply'
+import ApplicationDetailPage  from './pages/customer/ApplicationDetail'
 import SubmitPersonalInfoPage from './pages/customer/SubmitInfo'
-import ChatbotPage           from './pages/customer/Chat'
+import ChatbotPage            from './pages/customer/Chat'
+
+// ── Admin Pages ───────────────────────────────────
+import AdminLoginPage              from './pages/admin/Login'
+import AdminDashboardPage          from './pages/admin/Dashboard'
+import PendingApplicationsPage     from './pages/admin/PendingList'
+import AllApplicationsPage         from './pages/admin/ApplicationList'
+import AdminApplicationDetailPage  from './pages/admin/ApplicationDetail'
+import PersonalInfoViewPage        from './pages/admin/PersonalInfoView'
+
+// ── Admin Components ──────────────────────────────
+import AdminLayout from './components/admin/AdminLayout'
 
 const NotFound = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
@@ -38,18 +50,31 @@ const WithNav = ({ children }) => (
   </>
 )
 
-// Chat & Apply use full-screen layouts without the top nav clutter on the chat UI
-// so we still include nav but page manages its own header on mobile
+/**
+ * AdminProtectedRoute — kiểm tra token + role === 'admin'
+ */
+const AdminProtectedRoute = ({ children }) => {
+  const token = useAuthStore((s) => s.token)
+  const user  = useAuthStore((s) => s.user)
+
+  if (!token) {
+    return <Navigate to="/admin/login" replace />
+  }
+  if (user?.role !== 'admin') {
+    return <Navigate to="/admin/login" replace />
+  }
+  return children
+}
 
 const App = () => (
   <>
   <Routes>
-    {/* Public */}
+    {/* ── Public ───────────────────────────────── */}
     <Route path="/"          element={<WithNav><LandingPage /></WithNav>} />
     <Route path="/register"  element={<WithNav><RegisterPage /></WithNav>} />
     <Route path="/login"     element={<WithNav><LoginPage /></WithNav>} />
 
-    {/* Protected — customer */}
+    {/* ── Protected — customer ─────────────────── */}
     <Route path="/dashboard" element={
       <ProtectedRoute>
         <WithNav><DashboardPage /></WithNav>
@@ -81,12 +106,30 @@ const App = () => (
       </ProtectedRoute>
     } />
 
+    {/* ── Admin — public ───────────────────────── */}
+    <Route path="/admin/login" element={<AdminLoginPage />} />
+
+    {/* ── Admin — protected (AdminLayout wraps all) */}
+    <Route path="/admin" element={
+      <AdminProtectedRoute>
+        <AdminLayout />
+      </AdminProtectedRoute>
+    }>
+      {/* Index: redirect to dashboard */}
+      <Route index element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="dashboard"           element={<AdminDashboardPage />} />
+      <Route path="pending"             element={<PendingApplicationsPage />} />
+      <Route path="applications"        element={<AllApplicationsPage />} />
+      <Route path="application/:id"     element={<AdminApplicationDetailPage />} />
+      <Route path="personal-info/:id"   element={<PersonalInfoViewPage />} />
+    </Route>
+
     {/* Fallback */}
     <Route path="*" element={<NotFound />} />
   </Routes>
 
   {isMock && <MockBanner />}
-</>
+  </>
 )
 
 export default App

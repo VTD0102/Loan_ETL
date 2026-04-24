@@ -83,6 +83,12 @@ const LoginPage = () => {
               Đăng ký ngay
             </Link>
           </p>
+
+          <div className="mt-8 border-t border-gray-100 pt-6 text-center">
+            <Link to="/admin/login" className="text-xs text-gray-400 hover:text-primary-600 transition-colors">
+              👉 Nhân viên quản lý? Đăng nhập Admin
+            </Link>
+          </div>
         </div>
       </div>
     </div>
