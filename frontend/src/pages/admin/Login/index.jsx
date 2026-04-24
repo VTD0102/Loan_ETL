@@ -37,7 +37,7 @@ const AdminLoginPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-primary-900/20 to-gray-900 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-white via-primary-50/40 to-white flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -46,22 +46,22 @@ const AdminLoginPage = () => {
               CI
             </span>
             <div className="text-left">
-              <p className="text-white font-bold text-lg leading-tight">CreditIntel</p>
-              <p className="text-gray-400 text-sm leading-tight">Admin Portal</p>
+              <p className="text-gray-900 font-bold text-lg leading-tight">CreditIntel</p>
+              <p className="text-gray-500 text-sm leading-tight">Admin Portal</p>
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-white">Đăng nhập quản trị</h1>
-          <p className="text-gray-400 text-sm mt-1">Chỉ dành cho nhân viên có thẩm quyền</p>
+          <h1 className="text-2xl font-bold text-gray-900">Đăng nhập quản trị</h1>
+          <p className="text-gray-500 text-sm mt-1">Chỉ dành cho nhân viên có thẩm quyền</p>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+        <div className="card p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div>
-              <label className="label text-gray-300">Email</label>
+              <label className="label">Email</label>
               <input
                 type="email"
                 placeholder="admin@creditintel.dev"
-                className={`input bg-white/10 border-white/20 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-primary-500/20 ${errors.email ? 'input-error' : ''}`}
+                className={`input ${errors.email ? 'input-error' : ''}`}
                 {...register('email', {
                   required: 'Email là bắt buộc',
                   pattern: { value: /^\S+@\S+\.\S+$/, message: 'Email không hợp lệ' },
@@ -71,11 +71,11 @@ const AdminLoginPage = () => {
             </div>
 
             <div>
-              <label className="label text-gray-300">Mật khẩu</label>
+              <label className="label">Mật khẩu</label>
               <input
                 type="password"
                 placeholder="••••••••"
-                className={`input bg-white/10 border-white/20 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-primary-500/20 ${errors.password ? 'input-error' : ''}`}
+                className={`input ${errors.password ? 'input-error' : ''}`}
                 {...register('password', { required: 'Mật khẩu là bắt buộc' })}
               />
               {errors.password && <p className="error-msg">{errors.password.message}</p>}
@@ -91,15 +91,15 @@ const AdminLoginPage = () => {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-white/10 text-center">
-            <Link to="/login" className="text-sm text-gray-400 hover:text-primary-400 transition-colors">
+          <div className="mt-6 pt-5 border-t border-gray-100 text-center">
+            <Link to="/login" className="text-sm text-gray-500 hover:text-primary-600 transition-colors">
               ← Về trang đăng nhập khách hàng
             </Link>
           </div>
         </div>
 
         {/* Mock hint */}
-        <p className="text-center text-xs text-gray-600 mt-6">
+        <p className="text-center text-xs text-gray-400 mt-6">
           Mock mode: dùng email có chứa "admin" để đăng nhập với quyền admin
         </p>
       </div>
