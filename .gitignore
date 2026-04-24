@@ -43,4 +43,4 @@ docs/_build/
 .claude/
 CLAUDE.md
 .DS_Store.DS_Store
-ADMIN_GUIDE.md
+AdminRules.md
