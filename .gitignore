@@ -10,7 +10,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-
+TONG_QUAN_VA_TIEN_TRINH.md
 # Virtual environments
 venv/
 .venv/
