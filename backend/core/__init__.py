@@ -1,7 +1,7 @@
 """Core configuration and security exports for CreditIntel."""
 
-from backend.core.config import settings
-from backend.core.security import (
+from .config import settings
+from .security import (
     create_access_token,
     decode_access_token,
     hash_password,

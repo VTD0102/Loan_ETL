@@ -1,10 +1,10 @@
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 
-from backend.rag.config import (
+from rag.config import (
     EMBEDDING_MODEL, OPENROUTER_BASE_URL, PINECONE_INDEX, TOP_K,
 )
-from backend.core.config import settings
+from core.config import settings
 
 _retriever = None
 

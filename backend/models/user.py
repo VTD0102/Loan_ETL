@@ -1,29 +1,32 @@
+import uuid
 from datetime import datetime
-from typing import Literal
+from typing import TYPE_CHECKING, List
 
-from pydantic import BaseModel, EmailStr
+from sqlalchemy import String, DateTime, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .base import Base
 
-class UserRegister(BaseModel):
-    email: EmailStr
-    username: str
-    password: str
+# Sử dụng TYPE_CHECKING để tránh Circular Import
+if TYPE_CHECKING:
+    from .application import LoanApplication
 
+class User(Base):
+    __tablename__ = "users"
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    username: Mapped[str] = mapped_column(String)
+    password_hash: Mapped[str] = mapped_column(String)
+    role: Mapped[str] = mapped_column(String, default="customer")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    chat_history: Mapped[List["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
 
-
-class UserOut(BaseModel):
-    id: int
-    email: str
-    username: str
-    role: Literal["customer", "admin"]
-    created_at: datetime
-
-
-class TokenOut(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    user: UserOut
+    # Relationships
+    # Dùng string "LoanApplication" thay vì class object trực tiếp
+    applications: Mapped[List["LoanApplication"]] = relationship(
+        "LoanApplication", 
+        back_populates="user",
+        foreign_keys="[LoanApplication.user_id]",
+        cascade="all, delete-orphan", # Tùy chọn để xóa application khi user bị xóa
+    )

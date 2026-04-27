@@ -2,36 +2,135 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from backend.models.application import AdminReview
+from models.application import LoanApplication
+from models.personal_info import PersonalInfo
+from sqlalchemy import func, cast, Date
+from datetime import date
 
 
-def list_applications(db: Session, status: Optional[str], risk_level: Optional[str]):
-    # TODO: query loan_applications with optional filters
-    raise NotImplementedError
+def list_applications(
+    db: Session, 
+    status: Optional[str] = None, 
+    risk_level: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
+    page: int = 1,
+    limit: int = 20
+):
+    query = db.query(LoanApplication)
+    if status is not None:
+        query = query.filter(LoanApplication.status == status)
+    if risk_level is not None:
+        query = query.filter(LoanApplication.risk_level == risk_level)
+    if from_date is not None:
+        query = query.filter(cast(LoanApplication.submitted_at, Date) >= from_date)
+    if to_date is not None:
+        query = query.filter(cast(LoanApplication.submitted_at, Date) <= to_date)
+
+    total = query.count()
+    skip = (page - 1) * limit
+    items = query.order_by(LoanApplication.submitted_at.desc()).offset(skip).limit(limit).all()
+    pages = (total + limit - 1) // limit or 1
+
+    return {"items": items, "page": page, "pages": pages, "total": total}
 
 
-def list_pending(db: Session):
-    # TODO: query loan_applications WHERE status = 'PENDING_REVIEW'
-    raise NotImplementedError
+def list_pending(db: Session, page: int = 1, limit: int = 20):
+    query = db.query(LoanApplication).filter(LoanApplication.status == 'PENDING_REVIEW')
+    total = query.count()
+    skip = (page - 1) * limit
+    items = query.order_by(LoanApplication.submitted_at.asc()).offset(skip).limit(limit).all()
+    pages = (total + limit - 1) // limit or 1
+
+    return {"items": items, "page": page, "pages": pages, "total": total}
 
 
-def get_by_id(db: Session, app_id: int):
-    # TODO: fetch application or raise 404
-    raise NotImplementedError
+def get_by_id(db: Session, app_id: str):
+    app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+    return app
 
 
-def review(db: Session, app_id: int, admin_id: int, payload: AdminReview):
-    # TODO: verify status == PENDING_REVIEW
-    # TODO: approve → AWAITING_INFO, reject → ADMIN_REJECTED
-    # TODO: set reviewed_at, reviewed_by, admin_note
-    raise NotImplementedError
+from fastapi import HTTPException
+from models.user import User
+from datetime import datetime
+
+def approve_application(db: Session, app_id: str, admin_email: str):
+    admin_user = db.query(User).filter(User.email == admin_email).first()
+    if not admin_user:
+        raise HTTPException(401, "Admin user not found")
+        
+    app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+        
+    if app.status != 'PENDING_REVIEW':
+        raise HTTPException(400, f"Cannot approve application with status {app.status}")
+        
+    app.status = 'AWAITING_INFO'
+    app.reviewed_at = datetime.now()
+    app.reviewed_by = admin_user.id
+    
+    db.commit()
+    db.refresh(app)
+    return app
+
+def reject_application(db: Session, app_id: str, admin_email: str, note: Optional[str] = None):
+    admin_user = db.query(User).filter(User.email == admin_email).first()
+    if not admin_user:
+        raise HTTPException(401, "Admin user not found")
+        
+    app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
+    if not app:
+        raise HTTPException(404, "Application not found")
+        
+    if app.status != 'PENDING_REVIEW':
+        raise HTTPException(400, f"Cannot reject application with status {app.status}")
+        
+    app.status = 'ADMIN_REJECTED'
+    app.reviewed_at = datetime.now()
+    app.reviewed_by = admin_user.id
+    app.admin_note = note
+    
+    db.commit()
+    db.refresh(app)
+    return app
 
 
-def get_personal_info(db: Session, app_id: int):
-    # TODO: fetch personal_info for application or raise 404
-    raise NotImplementedError
+def get_personal_info(db: Session, app_id: str):
+    info = db.query(PersonalInfo).filter(PersonalInfo.application_id == app_id).first()
+    if not info:
+        raise HTTPException(404, "Khách hàng chưa nộp thông tin")
+    return info
 
 
-def dashboard_stats(db: Session):
-    # TODO: aggregate counts by status, risk_level, date
-    raise NotImplementedError
+def dashboard_summary(db: Session):
+    today = date.today()
+    # base query for today
+    today_apps = db.query(LoanApplication).filter(cast(LoanApplication.submitted_at, Date) == today).all()
+    
+    total = len(today_apps)
+    pending = sum(1 for a in today_apps if a.status == "PENDING_REVIEW")
+    approved = sum(1 for a in today_apps if a.status == "APPROVED")
+    rejected = sum(1 for a in today_apps if a.status == "ADMIN_REJECTED")
+    auto_rejected = sum(1 for a in today_apps if a.status == "AUTO_REJECTED")
+    
+    return {
+        "today_total": total,
+        "pending_review": pending,
+        "approved_today": approved,
+        "rejected_today": rejected,
+        "auto_rejected_today": auto_rejected
+    }
+
+def dashboard_risk_distribution(db: Session):
+    distribution = db.query(
+        LoanApplication.risk_level, 
+        func.count(LoanApplication.id)
+    ).group_by(LoanApplication.risk_level).all()
+    
+    return [
+        {"risk_level": r[0] if r[0] else "UNASSIGNED", "count": r[1]} 
+        for r in distribution
+    ]

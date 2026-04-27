@@ -1,5 +1,3 @@
-"""Database session exports for CreditIntel."""
+from .session import SessionLocal, engine, get_db
 
-from backend.db.session import Base, SessionLocal, engine, get_db
-
-__all__ = ["Base", "SessionLocal", "engine", "get_db"]
+__all__ = ["SessionLocal", "engine", "get_db"]
