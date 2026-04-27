@@ -1,143 +1,62 @@
-import json
-from datetime import datetime
-from uuid import UUID
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
-from backend.models.chat import ChatMessageOut, ChatRequest, ChatResponse, ChatSessionOut, SourceChunk
-from backend.rag import chain as rag_chain
-from backend.rag.context_builder import build_user_context
-from backend.rag.memory import get_or_create_session, load_chat_history
+from models.chat import ChatMessage
+from models.user import User
 
 
-def send(db: Session, user_id: int, payload: ChatRequest) -> ChatResponse:
-    # 1. Get or create chat session
-    session_id = get_or_create_session(db, user_id, payload.session_id)
+def send(db: Session, user_email: str, payload_message: str) -> str:
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+        
+    user_id = user.id
 
-    # 2. Build user context from latest loan application
-    user_context = build_user_context(db, user_id)
+    # 1. Rate Limiting: 20 per minute
+    one_min_ago = datetime.utcnow() - timedelta(minutes=1)
+    query_count = db.query(func.count(ChatMessage.id)).filter(
+        ChatMessage.user_id == user_id,
+        ChatMessage.created_at >= one_min_ago
+    ).scalar()
 
-    # 3. Load chat history from our own chat_messages table
-    chat_history = load_chat_history(db, session_id)
+    if query_count >= 20:
+        raise HTTPException(status_code=429, detail="Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.")
 
-    # 4. Run RAG chain
-    result = rag_chain.invoke(payload.message, user_context, chat_history)
-    answer = result["answer"]
-    source_documents = result["source_documents"]
+    # 2. Extract Logic (Memory Bypass)
+    history_rows = db.query(ChatMessage).filter(ChatMessage.user_id == user_id).order_by(ChatMessage.created_at.desc()).limit(10).all()
+    
+    # 4. Invoke RAG Stateless
+    try:
+        from langchain_core.messages import AIMessage, HumanMessage
+        from rag.chain import invoke
+        from rag.context_builder import build_user_context
+        
+        chat_history = []
+        for row in reversed(history_rows):
+            chat_history.append(HumanMessage(content=row.message))
+            chat_history.append(AIMessage(content=row.response))
 
-    # 5. Persist user message
-    db.execute(
-        text(
-            "INSERT INTO chat_messages (session_id, role, content, sources) "
-            "VALUES (:sid, 'user', :content, NULL)"
-        ),
-        {"sid": str(session_id), "content": payload.message},
+        # 3. Context Builder
+        context = build_user_context(db, user_id)
+        
+        response_payload = invoke(payload_message, context, chat_history)
+        answer = response_payload.get("answer", "Xin lỗi, hiện tại tôi không thể kết nối tới lõi suy luận kiến thức.")
+    except ImportError as ie:
+        answer = f"⚠️ RAG Module chưa sẵn sàng (Chưa cài đặt đủ thư viện Môi trường: {str(ie)}). Xin thử lại sau."
+    except Exception as e:
+        answer = f"Lỗi truy vấn nội bộ RAG/LLM: {str(e)}"
+
+    # 5. Log Database saving mechanism
+    log_entry = ChatMessage(
+        user_id=user_id,
+        message=payload_message,
+        response=answer,
+        is_bot=True
     )
-
-    # 6. Build sources list
-    sources = [
-        {
-            "file": doc.metadata.get("source", ""),
-            "snippet": doc.page_content[:150],
-            "score": 0.0,
-        }
-        for doc in source_documents
-    ]
-
-    # 7. Persist assistant message
-    db.execute(
-        text(
-            "INSERT INTO chat_messages (session_id, role, content, sources) "
-            "VALUES (:sid, 'assistant', :content, :sources)"
-        ),
-        {"sid": str(session_id), "content": answer, "sources": json.dumps(sources)},
-    )
-
-    # 8. Update session updated_at
-    db.execute(
-        text("UPDATE chat_sessions SET updated_at = NOW() WHERE id = :sid"),
-        {"sid": str(session_id)},
-    )
-
-    # 9. Set title if session is new (title is NULL)
-    db.execute(
-        text(
-            "UPDATE chat_sessions SET title = :title "
-            "WHERE id = :sid AND title IS NULL"
-        ),
-        {"sid": str(session_id), "title": payload.message[:50]},
-    )
-
+    db.add(log_entry)
     db.commit()
 
-    # 10. Return ChatResponse
-    return ChatResponse(
-        answer=answer,
-        sources=[SourceChunk(**s) for s in sources],
-        session_id=session_id,
-        created_at=datetime.utcnow(),
-    )
-
-
-def list_sessions(db: Session, user_id: int) -> list[ChatSessionOut]:
-    rows = db.execute(
-        text(
-            "SELECT id, title, created_at, updated_at "
-            "FROM chat_sessions "
-            "WHERE user_id = :uid "
-            "ORDER BY updated_at DESC"
-        ),
-        {"uid": user_id},
-    ).fetchall()
-
-    return [
-        ChatSessionOut(
-            id=row.id,
-            title=row.title,
-            created_at=row.created_at,
-            updated_at=row.updated_at,
-        )
-        for row in rows
-    ]
-
-
-def get_history(db: Session, session_id: UUID, user_id: int) -> list[ChatMessageOut]:
-    # Verify session belongs to user
-    session_row = db.execute(
-        text("SELECT id FROM chat_sessions WHERE id = :sid AND user_id = :uid"),
-        {"sid": str(session_id), "uid": user_id},
-    ).fetchone()
-
-    if session_row is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    rows = db.execute(
-        text(
-            "SELECT id, role, content, sources, created_at "
-            "FROM chat_messages "
-            "WHERE session_id = :sid "
-            "ORDER BY created_at"
-        ),
-        {"sid": str(session_id)},
-    ).fetchall()
-
-    messages = []
-    for row in rows:
-        sources = None
-        if row.sources is not None:
-            raw = row.sources if isinstance(row.sources, list) else json.loads(row.sources)
-            sources = [SourceChunk(**s) for s in raw]
-
-        messages.append(
-            ChatMessageOut(
-                id=row.id,
-                role=row.role,
-                content=row.content,
-                sources=sources,
-                created_at=row.created_at,
-            )
-        )
-
-    return messages
+    return answer

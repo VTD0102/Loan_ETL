@@ -1,77 +1,97 @@
-# CreditIntel
+# 🏦 CreditIntel — Hệ Thống Quản Lý & Đánh Giá Rủi Ro Khoản Vay
 
-He thong ETL va Machine Learning de giam sat danh muc cho vay va du doan rui ro vo no tin dung tren Prosper Loan Dataset.
+> Dự án môn **Hệ Quản Trị CSDL** — Nhóm KH086  
+> ETL Pipeline + Machine Learning + FastAPI Backend + React Frontend + RAG Chatbot
 
-## Cau truc repo
+---
 
-- `ml_service/`: ma nguon cho Streamlit app va cac entrypoint ETL
-- `ml_service/etl/`: cac script ETL Bronze, Silver, Core, Gold
-- `ml/`: training, prediction engine, model artifacts
-- `database/`: SQL schema va transformation scripts
-- `config/`: cau hinh ket noi va tham so he thong
-- `docs/`: tai lieu data dictionary, ML, va ke hoach phat trien
-- `utils/`: helper dung chung, bao gom ket noi database
+## 📂 Cấu Trúc Dự Án
 
-## Cong nghe
-
-- Python 3.x
-- PostgreSQL
-- Streamlit
-- Pandas
-- scikit-learn
-- Plotly
-- SQLAlchemy
-
-## Cai dat
-
-1. Tao virtual environment:
-
-```powershell
-python -m venv venv
-.\venv\Scripts\activate
+```
+Loan_ETL/
+├── backend/          # FastAPI REST API (Auth, CRUD, Admin, Chat)
+├── frontend/         # React + Vite + TailwindCSS (Customer & Admin UI)
+├── ml/               # Machine Learning (Train, Predict, Model artifacts)
+├── etl/              # ETL Pipeline (Bronze → Silver → Core → Gold)
+├── database/         # SQL Scripts khởi tạo & transform
+├── data/             # Raw dataset (Prosper Loan)
+├── docs/             # Tài liệu dự án (Data Dictionary, ML, Planning)
+└── venv/             # Python Virtual Environment
 ```
 
-2. Cai dependencies:
+---
 
-```powershell
+## 🚀 Khởi Chạy Nhanh
+
+### 1. Backend (FastAPI)
+```bash
+cd backend
+source ../venv/bin/activate
 pip install -r requirements.txt
+python init_db.py              # Khởi tạo bảng DB
+uvicorn main:app --reload      # http://localhost:8000
+```
+📖 Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### 2. Frontend (React + Vite)
+```bash
+cd frontend
+npm install
+npm run dev                    # http://localhost:5173
 ```
 
-3. Cap nhat thong tin database trong `config/settings.yaml`.
-
-## Khoi tao database
-
-Chay cac script SQL trong thu tu sau:
-
-1. `database/init_database.sql`
-2. `database/init_core.sql`
-
-## Chay ETL
-
-Chay tu root cua repo:
-
-```powershell
-python -m ml_service.etl.load_bronze
-python -m ml_service.etl.etl_silver
-python -m ml_service.etl.etl_core
-python -m ml_service.etl.etl_gold
+### 3. ETL Pipeline
+```bash
+# Chạy từ root project
+source venv/bin/activate
+python -m etl.load_bronze
+python -m etl.etl_silver
+python -m etl.etl_core
+python -m etl.etl_gold
 ```
 
-## Train va predict model
-
-```powershell
-python ml/train_model.py
-python ml/predict_engine.py 65928
+### 4. Machine Learning
+```bash
+python ml/train_model.py                    # Train model
+python ml/predict_engine.py <member_key>    # Predict cho 1 khách hàng
 ```
 
-## Chay ung dung
+---
 
-```powershell
-streamlit run ml_service/app.py
-```
+## 🛠️ Công Nghệ Sử Dụng
 
-## Tai lieu
+| Layer | Công nghệ |
+|-------|-----------|
+| **Backend API** | Python, FastAPI, SQLAlchemy 2.0, Pydantic V2, JWT (python-jose), bcrypt |
+| **Frontend** | React 18, Vite, TailwindCSS, Axios, Zustand, React Router v6 |
+| **Database** | PostgreSQL (Supabase) |
+| **ML** | scikit-learn, pandas, joblib |
+| **AI Chatbot** | LangChain, RAG (Retrieval-Augmented Generation) |
+| **ETL** | Python, pandas, psycopg2, SQLAlchemy |
 
-- [Data Dictionary](docs/data_dictionary/)
-- [ML Documentation](docs/ml_md/)
-- [Project Planning](docs/overall/)
+---
+
+## 📚 Tài Liệu Chi Tiết
+
+| Tài liệu | Đường dẫn |
+|-----------|-----------|
+| Backend API Spec | [`backend/BACKEND_API_SPEC.md`](backend/BACKEND_API_SPEC.md) |
+| Backend Architecture | [`backend/README.md`](backend/README.md) |
+| ML Integration | [`backend/ML_INTEGRATION_CHECKLIST.md`](backend/ML_INTEGRATION_CHECKLIST.md) |
+| Admin Guide | [`docs/ADMIN_GUIDE.md`](docs/ADMIN_GUIDE.md) |
+| Data Dictionary | [`docs/data_dictionary/`](docs/data_dictionary/) |
+| ML Documentation | [`docs/ml_md/`](docs/ml_md/) |
+| Project Planning | [`docs/overall/`](docs/overall/) |
+| Frontend Guide | [`frontend/README.md`](frontend/README.md) |
+
+---
+
+## 👥 Phân Công Nhóm
+
+| Vai trò | Phạm vi |
+|---------|---------|
+| **Backend Developer** | `backend/` — API, Auth, Admin, DB, Chat Integration |
+| **Frontend Developer** | `frontend/` — React UI, Components, Pages |
+| **ML Engineer** | `ml/` — Model Training, Prediction Engine |
+| **Data Engineer** | `etl/`, `database/` — ETL Pipeline, SQL Transforms |
+| **AI/RAG Engineer** | `backend/rag/` — LangChain Chatbot |

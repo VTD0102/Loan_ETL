@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
-from backend.api.dependencies import require_customer
-from backend.models.application import ApplicationCreate
-from backend.services import ml_service
+from api.dependencies import require_customer
+from schemas.application import ApplicationCreate
+from services import ml_service
 
 router = APIRouter()
 

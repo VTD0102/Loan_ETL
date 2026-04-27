@@ -1,10 +1,10 @@
 from langchain.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
 
-from backend.core.config import settings
-from backend.rag.config import LLM_MODEL, OPENROUTER_BASE_URL
-from backend.rag.prompts import chat_prompt
-from backend.rag.retriever import get_retriever
+from core.config import settings
+from rag.config import LLM_MODEL, OPENROUTER_BASE_URL
+from rag.prompts import chat_prompt
+from rag.retriever import get_retriever
 
 _chain = None
 
