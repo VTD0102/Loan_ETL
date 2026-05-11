@@ -37,7 +37,7 @@ const DashboardPage = () => {
     const fetchApp = async () => {
       try {
         const res = await getMyApplication()
-        setApp(res.data)
+        setApp(res.data?.[0] ?? res.data)
       } catch (err) {
         if (err.response?.status !== 404) setError('Không thể tải dữ liệu.')
       } finally {
@@ -66,7 +66,7 @@ const DashboardPage = () => {
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
           <QuickCard icon="💬" label="Tư vấn AI" desc="Chat với trợ lý AI" onClick={() => navigate('/chat')} />
           <QuickCard icon="📋" label="Nộp đơn vay" desc="Bắt đầu đăng ký khoản vay" onClick={() => navigate('/apply')} />
-          <QuickCard icon="📊" label="Lịch sử đơn" desc="Xem tất cả đơn của bạn" onClick={() => {}} />
+          <QuickCard icon="📊" label="Lịch sử đơn" desc="Xem tất cả đơn của bạn" onClick={() => navigate('/applications')} />
         </div>
 
         {/* Main content */}

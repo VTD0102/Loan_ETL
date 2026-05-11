@@ -48,7 +48,7 @@ const ChatbotPage = () => {
 
     try {
       const res = await sendMessage({ message: content })
-      const reply = res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
+      const reply = res.data?.response || res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
     } catch {
       setMessages((prev) => [...prev, {

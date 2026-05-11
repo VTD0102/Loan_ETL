@@ -234,7 +234,7 @@ const ApplyPage = () => {
           </p>
           <div className="flex gap-3">
             <button onClick={() => navigate('/dashboard')} className="btn-outline flex-1">Về Dashboard</button>
-            <button onClick={() => navigate(`/application/${modal?.app?.id}`)} className="btn-primary flex-1">
+            <button onClick={() => navigate(`/application/${modal?.app?.application_id}`)} className="btn-primary flex-1">
               Xem chi tiết
             </button>
           </div>
