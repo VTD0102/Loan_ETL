@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #04: Silver Layer</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+        --accent:#58a6ff;--green:#7ee787;--yellow:#d29922;--red:#f85149;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;background:var(--bg);
+       color:var(--text);line-height:1.65;font-size:15.5px;max-width:920px;margin:0 auto;padding:48px 24px 80px;}
+  header{border-bottom:2px solid var(--border);padding-bottom:28px;margin-bottom:40px;}
+  .badge{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:4px 10px;
+         border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--muted);}
+  .meta span strong{color:var(--text);font-weight:500}
+  h2{font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;}
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+  p{margin-bottom:14px} ul,ol{margin-left:24px;margin-bottom:14px} li{margin-bottom:6px} li::marker{color:var(--accent)}
+  strong{color:var(--text);font-weight:600} em{color:var(--purple);font-style:normal;font-weight:500}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin:16px 0;}
+  .card.info{border-left:4px solid var(--accent)} .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)} .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--surface);border-radius:8px;
+        overflow:hidden;border:1px solid var(--border);font-size:14.5px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:rgba(88,166,255,.08);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(88,166,255,.04)}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(255,255,255,.06);
+       padding:1px 6px;border-radius:4px;color:var(--accent);}
+  pre{background:#0a0e13;border:1px solid var(--border);border-radius:8px;padding:14px 18px;
+      overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.5;}
+  pre code{background:transparent;padding:0;color:var(--text);}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 24px;margin:28px 0;}
+  .toc h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+  .toc ol{margin-left:18px} .toc a{color:var(--text);text-decoration:none} .toc a:hover{color:var(--accent)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;}
+  .pill.ok{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.todo{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .pill.fail{background:rgba(248,81,73,.12);color:var(--red)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+  .metric .num{font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+  .arch-flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:20px 0;padding:20px;
+             background:var(--surface);border:1px dashed var(--border);border-radius:8px;
+             font-family:'JetBrains Mono',monospace;font-size:13px;justify-content:center;}
+  .arch-flow .node{padding:8px 14px;background:rgba(88,166,255,.1);border:1px solid var(--accent);
+                   border-radius:6px;color:var(--accent);}
+  .arch-flow .node.bronze{background:rgba(210,153,34,.1);border-color:var(--yellow);color:var(--yellow)}
+  .arch-flow .node.silver{background:rgba(189,195,199,.12);border-color:#bdc3c7;color:#bdc3c7}
+  .arch-flow .arrow{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #04</span>
+  <h1>Silver Layer</h1>
+  <p class="subtitle">Lớp làm sạch dữ liệu — chuẩn hoá schema, lọc outlier, expose feature cơ bản</p>
+  <div class="meta">
+    <span><strong>Module:</strong> ETL — Stage 2/3</span>
+    <span><strong>Code:</strong> <code>database/transform_silver_homecredit.sql</code> + <code>etl/etl_silver.py</code></span>
+    <span><strong>Ngày:</strong> 13/05/2026</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#s1">Tóm tắt báo cáo</a></li>
+    <li><a href="#s2">Vai trò của Silver layer</a></li>
+    <li><a href="#s3">Schema output</a></li>
+    <li><a href="#s4">Các transformation chính</a></li>
+    <li><a href="#s5">Quyết định kỹ thuật</a></li>
+    <li><a href="09_van_de_can_giai_quyet.html">→ Xem các vấn đề cần giải quyết (file riêng)</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
+<div class="card info">
+  <p>
+    Silver là <strong>lớp clean</strong> của Medallion. Đầu vào: <code>bronze.home_credit_raw</code> (raw CSV). Đầu ra: <code>silver.home_credit_cleansed</code>
+    — 36 cột với <em>schema chuẩn hoá</em>, <em>type ép đúng</em>, và <em>outlier đã loại</em>.
+  </p>
+  <p>
+    Silver được thiết kế để <strong>tương thích với schema gold tổng quát</strong> (tên cột giống với <code>silver.prosper_loans_cleansed</code> nếu
+    có), giúp ML model có thể dùng cùng query bất kể nguồn data. Filter 2 điều kiện: DTI ∈ [0,5] và monthly_income > 0 — bỏ ~6,500 rows outlier.
+  </p>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="num">301,015</div><div class="lbl">Rows sau filter</div></div>
+  <div class="metric"><div class="num">36</div><div class="lbl">Cột output</div></div>
+  <div class="metric"><div class="num">8.10%</div><div class="lbl">Default rate</div></div>
+  <div class="metric"><div class="num">~10s</div><div class="lbl">Transform time</div></div>
+</div>
+
+<div class="arch-flow">
+  <div class="node bronze">bronze.home_credit_raw</div>
+  <span class="arrow">→</span>
+  <div class="node">SQL transform</div>
+  <span class="arrow">→</span>
+  <div class="node">Filter outliers</div>
+  <span class="arrow">→</span>
+  <div class="node silver">silver.home_credit_cleansed</div>
+</div>
+
+<h2 id="s2"><span class="num">2.</span>Vai trò của Silver layer</h2>
+
+<h3>2.1. Trách nhiệm</h3>
+<ul>
+  <li><strong>Schema standardization</strong> — đổi tên cột HC sang tên CreditIntel (e.g. <code>SK_ID_CURR → listing_key</code>).</li>
+  <li><strong>Type casting</strong> — ép <code>TEXT → NUMERIC/INT/TIMESTAMP</code> rõ ràng để gold không phải xử lý.</li>
+  <li><strong>Outlier removal</strong> — bỏ rows có DTI quá cao, income ≤ 0, target null.</li>
+  <li><strong>Derived columns đơn giản</strong> — DTI, term, income_range — chưa phải feature engineering nâng cao (đó là việc của Gold).</li>
+  <li><strong>NULL handling explicit</strong> — dùng <code>CASE WHEN ... IS NULL</code> rõ ràng, không silent fallback.</li>
+</ul>
+
+<h3>2.2. KHÔNG phải trách nhiệm của Silver</h3>
+<div class="card warn">
+  <ul>
+    <li>Aggregation từ bảng khác (bureau, previous_application) → <strong>thuộc Gold</strong>.</li>
+    <li>Tính ratio/log/flag từ 2+ cột → <strong>thuộc Gold</strong>.</li>
+    <li>Encoding categorical → <strong>thuộc ML pipeline</strong>.</li>
+    <li>Imputation phức tạp (KNN, MICE) → <strong>thuộc ML pipeline</strong>.</li>
+  </ul>
+</div>
+
+<h2 id="s3"><span class="num">3.</span>Schema output</h2>
+
+<h3>3.1. Các nhóm cột chính</h3>
+<table>
+  <thead><tr><th>Nhóm</th><th>Cột</th><th>Số lượng</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Keys</strong></td>
+      <td><code>listing_key</code>, <code>member_key</code>, <code>loan_key</code>, <code>loan_number</code></td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td><strong>Target</strong></td>
+      <td><code>is_default</code></td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td><strong>Loan</strong></td>
+      <td><code>loan_original_amount</code>, <code>term</code>, <code>borrower_apr</code>, <code>borrower_rate</code></td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td><strong>Income</strong></td>
+      <td><code>stated_monthly_income</code>, <code>income_range</code>, <code>debt_to_income_ratio</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Credit</strong></td>
+      <td><code>credit_score_range_lower/upper</code>, <code>prosper_rating_alpha</code>, <code>prosper_score</code>, <code>ext_source_1/3</code></td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td><strong>Employment &amp; Housing</strong></td>
+      <td><code>is_homeowner</code>, <code>is_borrower_homeowner</code>, <code>employment_status</code>, <code>income_verifiable</code></td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td><strong>Demographics (Phase 3)</strong></td>
+      <td><code>age_years</code>, <code>gender</code>, <code>education_type</code>, <code>family_status</code>, <code>cnt_children</code>, <code>cnt_fam_members</code></td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <td><strong>Categorisation</strong></td>
+      <td><code>listing_category_id</code></td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td><strong>Dates &amp; Status</strong></td>
+      <td><code>loan_origination_date</code>, <code>listing_creation_date</code>, <code>date_credit_pulled</code>, <code>closed_date</code>, <code>loan_status</code>, <code>borrower_state</code>, <code>occupation</code></td>
+      <td>7</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s4"><span class="num">4.</span>Các transformation chính</h2>
+
+<h3>4.1. Tính <code>term</code> (số tháng vay)</h3>
+<p>
+  Home Credit không có cột "term" trực tiếp. Tính theo công thức:
+  <code>term ≈ AMT_CREDIT / AMT_ANNUITY</code> (tổng vay / tiền trả tháng). Clamp 12–60 để loại outlier.
+</p>
+<pre><code>CASE
+  WHEN AMT_ANNUITY IS NOT NULL AND AMT_ANNUITY > 0
+  THEN GREATEST(12, LEAST(60, ROUND(AMT_CREDIT / AMT_ANNUITY)::INT))
+  ELSE 36
+END AS term</code></pre>
+
+<h3>4.2. Tính DTI</h3>
+<p>
+  DTI = monthly_payment / monthly_income = <code>AMT_ANNUITY / (AMT_INCOME_TOTAL / 12)</code>. Round 5 chữ số để consistency.
+</p>
+
+<h3>4.3. Credit score 300–850 từ EXT_SOURCE_2</h3>
+<p>
+  <code>EXT_SOURCE_2</code> chuẩn hoá 0.0–1.0 → map sang FICO 300–850 bằng <code>300 + EXT_SOURCE_2 × 643</code>. Multiplier 643 chọn vì
+  giá trị thực max của EXT_SOURCE_2 là 0.855 → <code>0.855 × 643 ≈ 550</code>, đạt đúng 850. Clamp ±25 ra range_lower/range_upper.
+</p>
+
+<h3>4.4. Map <code>NAME_INCOME_TYPE</code> → <code>employment_status</code></h3>
+<table>
+  <thead><tr><th>Home Credit</th><th>CreditIntel</th></tr></thead>
+  <tbody>
+    <tr><td><code>Working</code></td><td>Employed</td></tr>
+    <tr><td><code>Commercial associate</code></td><td>Self-employed</td></tr>
+    <tr><td><code>Pensioner</code></td><td>Retired</td></tr>
+    <tr><td><code>State servant</code></td><td>Employed</td></tr>
+    <tr><td><code>Student</code></td><td>Not employed</td></tr>
+    <tr><td><code>Unemployed</code></td><td>Unemployed</td></tr>
+    <tr><td>(các giá trị khác)</td><td>Other</td></tr>
+  </tbody>
+</table>
+
+<h3>4.5. <code>income_verifiable</code> flag</h3>
+<p>
+  Set TRUE nếu cả 3 điều kiện: <code>FLAG_EMP_PHONE = 1</code>, <code>DAYS_EMPLOYED ≠ 365243</code> (placeholder), và <code>DAYS_EMPLOYED IS NOT NULL</code>.
+</p>
+
+<h3>4.6. Demographic features (Phase 3)</h3>
+<ul>
+  <li><code>age_years = -DAYS_BIRTH / 365.25</code> — convert ngày sinh âm sang tuổi dương.</li>
+  <li><code>gender</code> — pass-through M/F/XNA, Gold sẽ encode về flag 0/1.</li>
+  <li><code>education_type</code>, <code>family_status</code> — pass-through, Gold sẽ ordinal/group.</li>
+</ul>
+
+<h3>4.7. Filter cuối</h3>
+<pre><code>WHERE debt_to_income_ratio IS NOT NULL
+  AND debt_to_income_ratio BETWEEN 0 AND 5    -- loại outlier DTI cực đoan
+  AND stated_monthly_income > 0;</code></pre>
+
+<h2 id="s5"><span class="num">5.</span>Quyết định kỹ thuật</h2>
+
+<h3>5.1. Tại sao quoted column names trong SQL?</h3>
+<div class="card warn">
+  <p>
+    Bronze tables được tạo từ <code>pandas.DataFrame.to_sql()</code> (trước khi đổi sang native DuckDB) — pandas giữ tên cột uppercase từ CSV
+    (<code>SK_ID_CURR</code>). DuckDB SQL nếu unquoted sẽ lowercase tự động (<code>sk_id_curr</code>) → mismatch → error.
+  </p>
+  <p>
+    <strong>Fix:</strong> dùng double-quote trong SQL: <code>"SK_ID_CURR"::TEXT</code> để preserve case.
+  </p>
+</div>
+
+<h3>5.2. Tại sao có cột NULL cố ý (<code>loan_key</code>, <code>occupation</code>...)?</h3>
+<p>
+  Để tương thích schema với <code>silver.prosper_loans_cleansed</code> (nếu có). Các cột này tồn tại nhưng giá trị NULL — gold layer query
+  vẫn chạy được. Sau khi gold transform, các cột vô dụng sẽ bị bỏ.
+</p>
+
+<h3>5.3. EXT_SOURCE_1/3 expose nhưng KHÔNG dùng tính credit_score</h3>
+<p>
+  Chỉ <code>EXT_SOURCE_2</code> được dùng để tính credit_score_range vì có null rate thấp nhất (0.2%). EXT_SOURCE_1 (null 56%) và EXT_SOURCE_3
+  (null 19.8%) được expose riêng làm <strong>feature độc lập</strong> cho ML model — không trộn vào credit_score để tránh leak signal.
+</p>
+
+<footer>CreditIntel · Báo cáo #04 / Silver Layer · Tài liệu nội bộ</footer>
+</body>
+</html>

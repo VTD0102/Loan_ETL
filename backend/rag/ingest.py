@@ -9,11 +9,11 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import Pinecone, ServerlessSpec
 
-from backend.rag.config import (
+from rag.config import (
     EMBEDDING_MODEL, OPENROUTER_BASE_URL,
     PINECONE_API_KEY, PINECONE_CLOUD, PINECONE_INDEX, PINECONE_REGION,
 )
-from backend.core.config import settings
+from core.config import settings
 
 KNOWLEDGE_DIRS = [
     Path(__file__).parent / "knowledge",

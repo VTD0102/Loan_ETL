@@ -1,44 +1,79 @@
 """
-Retrain model using only 8 features available from customer loan application form.
-Saves artifact to ml/models/customer_risk_model.pkl.
+Retrain customer risk model (LightGBM) on Home Credit dataset.
+Source : silver.home_credit_cleansed (DuckDB local)
+Output : ml/models/customer_risk_model.pkl
 
 Run from project root:
     python -m ml.retrain_customer_model
 """
 import sys
-from pathlib import Path
-
-# ── Path fix — allow running from any working directory ─────────────────────
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import joblib
 import pandas as pd
+from pathlib import Path
+from lightgbm import LGBMClassifier
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import OrdinalEncoder
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BASE_DIR))
 from utils.db_connection import get_engine
+from ml.validate_data import validate
 
-# ── Paths ────────────────────────────────────────────────────────────────────
-BASE_DIR   = Path(__file__).resolve().parents[1]
 MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
 
 # ── Risk thresholds — must stay in sync with predict_customer.py ─────────────
 LOW_THRESHOLD  = 0.2
 HIGH_THRESHOLD = 0.4
 
-# ── Feature groups ───────────────────────────────────────────────────────────
-NUMERIC_FEATURES     = [
-    "monthly_income",
-    "loan_amount",
-    "term",
-    "dti",
-    "is_homeowner",
-    "listing_category",
-    "credit_score",
+_QUERY = """
+SELECT
+    -- Original 8 customer-input features
+    stated_monthly_income                                       AS monthly_income,
+    loan_original_amount                                        AS loan_amount,
+    term,
+    employment_status_grouped                                   AS employment_status,
+    debt_to_income_ratio                                        AS dti,
+    is_homeowner_flag                                           AS is_homeowner,
+    1                                                           AS listing_category,
+    credit_score_midpoint                                       AS credit_score,
+
+    -- ── Rich credit / bureau / prev-app features ───────────────────────────
+    ext_source_1, ext_source_3,
+    num_previous_loans, previous_default_rate,
+    num_bureau_records, num_active_credit,
+    total_overdue_amount, max_credit_overdue_days, has_bad_debt,
+    income_verifiable_flag, high_dti_flag, rating_ordinal,
+    log_monthly_income, loan_amount_to_income,
+
+    -- ── Demographics (Phase 3) ────────────────────────────────────────────
+    age_years, gender_male_flag, education_ordinal,
+    cnt_children, cnt_fam_members, is_married_flag,
+
+    is_default
+FROM gold.hc_features_v1
+WHERE credit_score_midpoint   IS NOT NULL
+  AND stated_monthly_income   IS NOT NULL
+  AND loan_original_amount    IS NOT NULL
+  AND debt_to_income_ratio    IS NOT NULL
+"""
+
+NUMERIC_FEATURES = [
+    # Original 8
+    "monthly_income", "loan_amount", "term", "dti",
+    "is_homeowner", "listing_category", "credit_score",
+    # Rich gold features
+    "ext_source_1", "ext_source_3",
+    "num_previous_loans", "previous_default_rate",
+    "num_bureau_records", "num_active_credit",
+    "total_overdue_amount", "max_credit_overdue_days", "has_bad_debt",
+    "income_verifiable_flag", "high_dti_flag", "rating_ordinal",
+    "log_monthly_income", "loan_amount_to_income",
+    # Demographics (Phase 3)
+    "age_years", "gender_male_flag", "education_ordinal",
+    "cnt_children", "cnt_fam_members", "is_married_flag",
 ]
 CATEGORICAL_FEATURES = ["employment_status"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
@@ -77,36 +112,30 @@ WHERE stated_monthly_income    IS NOT NULL
 
 
 def train():
-    print("=" * 55)
-    print("  CUSTOMER RISK MODEL — RETRAIN (8 features)")
+    validate()
+
+    print("\n" + "=" * 55)
+    print("  CUSTOMER RISK MODEL — RETRAIN")
     print("=" * 55)
 
     # ── 1. Connect & fetch ───────────────────────────────
     print("\n[1/6] Connecting to database...")
     engine = get_engine()
 
-    print("[2/6] Fetching data from silver.prosper_loans_cleansed...")
-    try:
-        df = pd.read_sql(SILVER_QUERY, engine)
-    except Exception as e:
-        print(f"  ERROR fetching data: {e}")
-        return
+    print("\n[1/6] Fetching data from gold.hc_features_v1...")
+    df = pd.read_sql(_QUERY, engine)
+    print(f"  Rows: {len(df):,}  |  Features: {len(ALL_FEATURES)}")
 
-    if df.empty:
-        print("  ERROR: No data returned from silver layer.")
-        return
-
-    print(f"  Rows fetched: {len(df)}")
-
-    # ── 2. Clean ─────────────────────────────────────────
-    print("\n[3/6] Cleaning data...")
-    before = len(df)
-    df = df.dropna(subset=ALL_FEATURES + ["is_default"])
-    after = len(df)
-    print(f"  Dropped {before - after} rows with nulls.")
-    print(f"  Rows remaining: {after}")
-    print(f"  Default rate  : {df['is_default'].mean():.2%}")
-    print(f"  Employment status values: {sorted(df['employment_status'].unique().tolist())}")
+    print("\n[2/6] Cleaning data...")
+    # Cột có null nhiều → fill median; LightGBM xử lý OK
+    for col in ["ext_source_1", "ext_source_3",
+                "gender_male_flag", "education_ordinal", "age_years",
+                "cnt_children", "cnt_fam_members", "is_married_flag"]:
+        df[col] = df[col].fillna(df[col].median())
+    df["employment_status"] = df["employment_status"].fillna("Other/Unknown")
+    df = df.dropna(subset=["is_default", "monthly_income", "loan_amount", "credit_score"])
+    print(f"  Rows after dropna: {len(df):,}")
+    print(f"  Default rate: {df['is_default'].mean():.2%}")
 
     X = df[ALL_FEATURES]
     y = df["is_default"]
@@ -121,33 +150,28 @@ def train():
     )
     print(f"  Train: {len(X_train)} rows | Test: {len(X_test)} rows")
 
-    # ── 4. Build pipeline ────────────────────────────────
-    print("\n[5/6] Building pipeline...")
-
-    # FIX: OneHotEncoder instead of OrdinalEncoder
-    # OrdinalEncoder implies ordering (A < B < C) which is wrong for employment_status
-    # OneHotEncoder creates a binary column per category — correct for nominal data
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("num", StandardScaler(), NUMERIC_FEATURES),
-            ("cat", OneHotEncoder(
-                handle_unknown="ignore",   # unseen categories at predict time → all zeros
-                sparse_output=False        # return dense array, easier to work with
-            ), CATEGORICAL_FEATURES),
-        ],
-        remainder="drop"
-    )
+    print("\n[4/6] Building pipeline (LightGBM)...")
+    # LightGBM xử lý numeric trực tiếp; categorical chỉ cần ordinal-encode
+    preprocessor = ColumnTransformer([
+        ("num", "passthrough", NUMERIC_FEATURES),
+        ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
+         CATEGORICAL_FEATURES),
+    ])
 
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
-        ("classifier", RandomForestClassifier(
-            n_estimators=200,
-            max_depth=12,
-            min_samples_leaf=5,
-            min_samples_split=10,
-            class_weight="balanced",    # handles 85/15 imbalance
+        ("classifier", LGBMClassifier(
+            n_estimators=400,
+            learning_rate=0.05,
+            num_leaves=31,
+            max_depth=-1,
+            min_child_samples=50,
+            reg_alpha=0.1,
+            reg_lambda=0.1,
+            is_unbalance=True,
             random_state=42,
             n_jobs=-1,
+            verbose=-1,
         )),
     ])
 
@@ -182,27 +206,12 @@ def train():
     feature_names_out = NUMERIC_FEATURES + ohe_feature_names
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    artifact = {
-        "pipeline"         : pipeline,
-        "feature_cols"     : ALL_FEATURES,        # 8 raw input columns (for form validation)
-        "feature_names_out": feature_names_out,   # expanded columns after preprocessing
-        "thresholds"       : {
-            "low" : LOW_THRESHOLD,
-            "high": HIGH_THRESHOLD,
-        },
-    }
-
-    try:
-        joblib.dump(artifact, MODEL_PATH)
-        print(f"  Artifact saved → {MODEL_PATH}")
-        print(f"  Keys: pipeline | feature_cols ({len(ALL_FEATURES)}) "
-              f"| feature_names_out ({len(feature_names_out)}) | thresholds")
-    except Exception as e:
-        print(f"  ERROR saving artifact: {e}")
-        return
-
-    print("\n" + "=" * 55)
-    print("  RETRAIN COMPLETE")
+    joblib.dump({
+        "pipeline"    : pipeline,
+        "feature_cols": ALL_FEATURES,
+        "thresholds"  : {"low": LOW_THRESHOLD, "high": HIGH_THRESHOLD},
+    }, MODEL_PATH)
+    print(f"\n  Saved → {MODEL_PATH}")
     print("=" * 55)
 
 

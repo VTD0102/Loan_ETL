@@ -1,38 +1,21 @@
+import uuid
 from datetime import datetime
-from typing import Any, Literal, Optional
-from uuid import UUID
+from typing import TYPE_CHECKING
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from .base import Base
 
-from pydantic import BaseModel
+if TYPE_CHECKING:
+    from .user import User
 
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
 
-class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[UUID] = None
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    message: Mapped[str] = mapped_column(Text)
+    response: Mapped[str] = mapped_column(Text)
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-
-class SourceChunk(BaseModel):
-    file: str
-    snippet: str
-    score: float
-
-
-class ChatResponse(BaseModel):
-    answer: str
-    sources: list[SourceChunk]
-    session_id: UUID
-    created_at: datetime
-
-
-class ChatMessageOut(BaseModel):
-    id: int
-    role: Literal["user", "assistant"]
-    content: str
-    sources: Optional[list[SourceChunk]]
-    created_at: datetime
-
-
-class ChatSessionOut(BaseModel):
-    id: UUID
-    title: Optional[str]
-    created_at: datetime
-    updated_at: datetime
+    user: Mapped["User"] = relationship("User", back_populates="chat_history")

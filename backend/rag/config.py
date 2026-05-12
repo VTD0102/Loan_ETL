@@ -1,4 +1,4 @@
-from backend.core.config import settings
+from core.config import settings
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 LLM_MODEL = settings.rag_llm_model

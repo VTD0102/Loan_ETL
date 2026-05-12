@@ -14,8 +14,10 @@ passlib[bcrypt]>=1.7.4
 
 # ML
 scikit-learn>=1.4.0
+lightgbm>=4.6.0
 numpy>=1.26.0
 pandas>=2.2.0
+joblib>=1.4.0
 
 # RAG
 langchain>=0.3.0
@@ -28,3 +30,4 @@ pinecone>=6.0.0
 # Utils
 python-dotenv>=1.0.0
 slowapi>=0.1.9
+kaggle>=1.6.17

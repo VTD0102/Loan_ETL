@@ -1,83 +1,86 @@
-"""Database connection utilities for the loan data platform."""
+"""
+Shared database connection utility for ML and ETL scripts.
 
-from __future__ import annotations
-
+If config/etl_db.env exists and ETL_DB_TYPE=duckdb  → local DuckDB file (no server needed)
+Otherwise                                             → Supabase (backend/.env)
+"""
 import os
-from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
 
-import yaml
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine, URL
+from sqlalchemy import create_engine, Engine
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG_PATH = BASE_DIR / "config" / "settings.yaml"
+BASE_DIR          = Path(__file__).resolve().parents[1]
+_ETL_ENV_FILE     = BASE_DIR / "config" / "etl_db.env"
+_BACKEND_ENV_FILE = BASE_DIR / "backend" / ".env"
 
-
-def load_config(config_path: Path | None = None) -> dict[str, Any]:
-    """Load YAML configuration from disk."""
-    path = config_path or DEFAULT_CONFIG_PATH
-    with path.open("r", encoding="utf-8") as file:
-        return yaml.safe_load(file)
+_engine: Engine | None = None
 
 
-def _resolve_setting(env_name: str, config_value: Any, default: Any | None = None) -> Any:
-    """Return environment variable override if set, else fallback to config/default."""
-    return os.getenv(env_name, config_value if config_value is not None else default)
+def _read_file(path: Path) -> dict[str, str]:
+    env: dict[str, str] = {}
+    if not path.exists():
+        return env
+    with path.open(encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            env[key.strip().lower()] = val.strip().strip('"').strip("'")
+    return env
 
 
-def get_database_settings(config: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """Build database settings with environment-variable overrides.
-
-    Env vars:
-    - LOAN_DB_HOST
-    - LOAN_DB_PORT
-    - LOAN_DB_NAME
-    - LOAN_DB_USER
-    - LOAN_DB_PASSWORD
-    """
-    base = dict((config or load_config()).get("database", {}))
-
-    settings = {
-        "host": _resolve_setting("LOAN_DB_HOST", base.get("host"), "localhost"),
-        "port": int(_resolve_setting("LOAN_DB_PORT", base.get("port"), 5432)),
-        "name": _resolve_setting("LOAN_DB_NAME", base.get("name"), "postgres"),
-        "user": _resolve_setting("LOAN_DB_USER", base.get("user"), "postgres"),
-        "password": _resolve_setting("LOAN_DB_PASSWORD", base.get("password"), ""),
-        "pool_size": int(_resolve_setting("LOAN_DB_POOL_SIZE", base.get("pool_size"), 5)),
-        "max_overflow": int(_resolve_setting("LOAN_DB_MAX_OVERFLOW", base.get("max_overflow"), 10)),
-        "pool_recycle": int(_resolve_setting("LOAN_DB_POOL_RECYCLE", base.get("pool_recycle"), 1800)),
-    }
-
-    return settings
-
-
-@lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    """Create and cache a SQLAlchemy engine with connection pooling enabled."""
-    db = get_database_settings()
+    global _engine
+    if _engine is not None:
+        return _engine
 
-    url = URL.create(
-        drivername="postgresql+psycopg2",
-        username=str(db["user"]),
-        password=str(db["password"]),
-        host=str(db["host"]),
-        port=int(db["port"]),
-        database=str(db["name"]),
-    )
+    etl = _read_file(_ETL_ENV_FILE)
+    db_type = etl.get("etl_db_type", "postgres")
 
-    return create_engine(
-        url,
-        pool_size=int(db["pool_size"]),
-        max_overflow=int(db["max_overflow"]),
-        pool_pre_ping=True,
-        pool_recycle=int(db["pool_recycle"]),
-        future=True,
-    )
+    if db_type == "duckdb":
+        db_path = BASE_DIR / etl.get("etl_db_path", "data/etl.duckdb")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"  [db] DuckDB → {db_path}")
+        _engine = create_engine(f"duckdb:///{db_path}", connect_args={"read_only": False})
+    else:
+        # PostgreSQL: etl_db.env (ETL_DB_*) overrides backend/.env (DB_*)
+        cfg = _read_file(_BACKEND_ENV_FILE)
+        for k, v in etl.items():
+            if k.startswith("etl_db_") and not k == "etl_db_type":
+                cfg[k.replace("etl_db_", "db_", 1)] = v
+        for k in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"):
+            if k in os.environ:
+                cfg[k.lower()] = os.environ[k]
 
-if __name__ == "__main__":
-    engine = get_engine()
-    with engine.connect() as conn:
-        result = conn.execute("SELECT 1")
-        print("Database connected:", result.scalar())
+        host = cfg.get("db_host", "localhost")
+        port = cfg.get("db_port", "5432")
+        name = cfg.get("db_name", "postgres")
+        user = cfg.get("db_user", "postgres")
+        pwd  = cfg.get("db_password", "")
+        source = "local Docker" if _ETL_ENV_FILE.exists() else "Supabase"
+        print(f"  [db] PostgreSQL ({source}) → {host}:{port}/{name}")
+        _engine = create_engine(
+            f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{name}",
+            pool_pre_ping=True, pool_size=2, max_overflow=4,
+        )
+
+    return _engine
+
+
+def reset_engine():
+    """Force re-create engine (e.g. after switching config)."""
+    global _engine
+    _engine = None
+
+
+def load_config() -> dict:
+    try:
+        import yaml
+        yaml_path = BASE_DIR / "config" / "settings.yaml"
+        if yaml_path.exists():
+            with yaml_path.open(encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+    except ImportError:
+        pass
+    return {}

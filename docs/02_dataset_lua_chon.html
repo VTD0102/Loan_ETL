@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #02: Lựa chọn Dataset</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+        --accent:#58a6ff;--green:#7ee787;--yellow:#d29922;--red:#f85149;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;background:var(--bg);
+       color:var(--text);line-height:1.65;font-size:15.5px;max-width:920px;margin:0 auto;padding:48px 24px 80px;}
+  header{border-bottom:2px solid var(--border);padding-bottom:28px;margin-bottom:40px;}
+  .badge{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:4px 10px;
+         border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--muted);}
+  .meta span strong{color:var(--text);font-weight:500}
+  h2{font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;}
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+  p{margin-bottom:14px} ul,ol{margin-left:24px;margin-bottom:14px} li{margin-bottom:6px} li::marker{color:var(--accent)}
+  strong{color:var(--text);font-weight:600} em{color:var(--purple);font-style:normal;font-weight:500}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin:16px 0;}
+  .card.info{border-left:4px solid var(--accent)} .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)} .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--surface);border-radius:8px;
+        overflow:hidden;border:1px solid var(--border);font-size:14.5px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:rgba(88,166,255,.08);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(88,166,255,.04)}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(255,255,255,.06);
+       padding:1px 6px;border-radius:4px;color:var(--accent);}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 24px;margin:28px 0;}
+  .toc h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+  .toc ol{margin-left:18px} .toc a{color:var(--text);text-decoration:none} .toc a:hover{color:var(--accent)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;}
+  .pill.ok{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.todo{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .pill.fail{background:rgba(248,81,73,.12);color:var(--red)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+  .metric .num{font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+  .score{display:inline-block;padding:3px 10px;border-radius:12px;font-weight:600;font-size:13px}
+  .score.high{background:rgba(126,231,135,.15);color:var(--green)}
+  .score.mid{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .score.low{background:rgba(248,81,73,.15);color:var(--red)}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #02</span>
+  <h1>Lựa chọn Dataset</h1>
+  <p class="subtitle">Tại sao chọn Home Credit Default Risk — phân tích alternatives, tiêu chí, và đánh giá phù hợp</p>
+  <div class="meta">
+    <span><strong>Module:</strong> Data Sourcing</span>
+    <span><strong>Phiên bản:</strong> 1.0</span>
+    <span><strong>Ngày:</strong> 13/05/2026</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#s1">Tóm tắt báo cáo</a></li>
+    <li><a href="#s2">Yêu cầu dataset cho project</a></li>
+    <li><a href="#s3">So sánh các dataset alternatives</a></li>
+    <li><a href="#s4">Home Credit Default Risk — chi tiết</a></li>
+    <li><a href="#s5">Đánh giá phù hợp</a></li>
+    <li><a href="09_van_de_can_giai_quyet.html">→ Xem các vấn đề cần giải quyết (file riêng)</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
+<div class="card info">
+  <p>
+    Project chọn dataset <strong>Home Credit Default Risk</strong> (Kaggle 2018) làm nguồn data training duy nhất sau khi đánh giá 4 alternatives.
+    Lý do chính: <em>quy mô lớn nhất</em> (307,511 applications), <em>có sẵn target chuẩn</em> (binary default), và <em>có 2 bảng phụ trợ</em>
+    (bureau, previous_application) cho phép feature engineering nâng cao.
+  </p>
+  <p>
+    Điểm yếu cốt lõi: data từ năm 2018, market Đông Âu — <strong>không phản ánh thị trường Việt Nam hiện tại</strong>. Đây là tradeoff chấp nhận
+    được trong khuôn khổ học thuật, nhưng cần ghi rõ giới hạn này trong các quyết định business.
+  </p>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="num">307,511</div><div class="lbl">Applications</div></div>
+  <div class="metric"><div class="num">8.07%</div><div class="lbl">Default rate</div></div>
+  <div class="metric"><div class="num">7.1/10</div><div class="lbl">Phù hợp score</div></div>
+  <div class="metric"><div class="num">3</div><div class="lbl">Bảng dữ liệu</div></div>
+</div>
+
+<h2 id="s2"><span class="num">2.</span>Yêu cầu dataset cho project</h2>
+
+<h3>2.1. Yêu cầu bắt buộc</h3>
+<ul>
+  <li><strong>Có target rõ ràng</strong> — cột binary "default/no-default" để train supervised model.</li>
+  <li><strong>Quy mô đủ lớn</strong> — tối thiểu 50,000 rows để train được model có generalization.</li>
+  <li><strong>Có thông tin nhân khẩu &amp; tài chính</strong> — income, age, employment, marital status, loan amount.</li>
+  <li><strong>Public domain</strong> — license cho phép dùng học thuật, không cần NDA.</li>
+</ul>
+
+<h3>2.2. Yêu cầu mong muốn (nice-to-have)</h3>
+<ul>
+  <li><strong>Có credit history</strong> — số lần vay trước, lịch sử default, bureau records.</li>
+  <li><strong>Có credit score sẵn</strong> — phục vụ tính FICO transform.</li>
+  <li><strong>Có demographic phong phú</strong> — để build các phân khúc người dùng.</li>
+  <li><strong>Có ground truth dài hạn</strong> — theo dõi default sau 12–24 tháng.</li>
+</ul>
+
+<h2 id="s3"><span class="num">3.</span>So sánh các dataset alternatives</h2>
+
+<table>
+  <thead>
+    <tr><th>Dataset</th><th>Rows</th><th>Target</th><th>Credit History</th><th>Demographic</th><th>Đánh giá</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Home Credit Default Risk</strong> (Kaggle 2018)</td>
+      <td>307,511</td>
+      <td><span class="pill ok">Có</span></td>
+      <td><span class="pill ok">2 bảng phụ</span></td>
+      <td><span class="pill ok">Phong phú</span></td>
+      <td><span class="score high">7.1/10</span></td>
+    </tr>
+    <tr>
+      <td>Prosper Loan Dataset</td>
+      <td>113,937</td>
+      <td><span class="pill ok">Có</span></td>
+      <td><span class="pill todo">Hạn chế</span></td>
+      <td><span class="pill todo">Trung bình</span></td>
+      <td><span class="score mid">5.8/10</span></td>
+    </tr>
+    <tr>
+      <td>LendingClub Loan</td>
+      <td>2.2M</td>
+      <td><span class="pill ok">Có</span></td>
+      <td><span class="pill ok">FICO score</span></td>
+      <td><span class="pill todo">Trung bình</span></td>
+      <td><span class="score mid">6.5/10</span></td>
+    </tr>
+    <tr>
+      <td>German Credit Data (UCI)</td>
+      <td>1,000</td>
+      <td><span class="pill ok">Có</span></td>
+      <td><span class="pill ok">Có</span></td>
+      <td><span class="pill ok">Đầy đủ</span></td>
+      <td><span class="score low">3.2/10</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="card warn">
+  <h4>Tại sao loại 3 dataset còn lại?</h4>
+  <ul>
+    <li><strong>Prosper Loan</strong> — peer-to-peer lending, không đại diện cho ngân hàng truyền thống; thiếu bureau data.</li>
+    <li><strong>LendingClub</strong> — dataset bị Kaggle gỡ năm 2020 do issue về license, khó re-download.</li>
+    <li><strong>German Credit</strong> — chỉ 1,000 rows, quá nhỏ cho deep ML; chỉ phù hợp để demo classifier.</li>
+  </ul>
+</div>
+
+<h2 id="s4"><span class="num">4.</span>Home Credit Default Risk — chi tiết</h2>
+
+<h3>4.1. Bối cảnh dataset</h3>
+<p>
+  Home Credit là tập đoàn cho vay tiêu dùng đa quốc gia (HQ tại Hà Lan, hoạt động tại Czech, Slovakia, Vietnam, China...).
+  Năm 2018 họ public dataset trên Kaggle để tổ chức competition tìm mô hình credit scoring tốt nhất. Competition có 7,198 đội tham gia,
+  giải nhất AUC = <code>0.80570</code>.
+</p>
+
+<h3>4.2. Cấu trúc dataset</h3>
+<table>
+  <thead><tr><th>Bảng</th><th>Rows</th><th>Cột</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>application_train.csv</code></td>
+      <td>307,511</td>
+      <td>122</td>
+      <td>Đơn vay hiện tại + thông tin khách hàng + target <code>TARGET</code></td>
+    </tr>
+    <tr>
+      <td><code>bureau.csv</code></td>
+      <td>1,716,428</td>
+      <td>17</td>
+      <td>Tín dụng tại các ngân hàng khác (báo cáo từ Credit Bureau)</td>
+    </tr>
+    <tr>
+      <td><code>previous_application.csv</code></td>
+      <td>1,670,214</td>
+      <td>37</td>
+      <td>Lịch sử các đơn vay trước đây tại Home Credit</td>
+    </tr>
+    <tr>
+      <td><code>installments_payments.csv</code></td>
+      <td>13,605,401</td>
+      <td>8</td>
+      <td>Chi tiết trả góp từng kỳ <em>(không dùng trong project — quá lớn)</em></td>
+    </tr>
+    <tr>
+      <td><code>credit_card_balance.csv</code></td>
+      <td>3,840,312</td>
+      <td>23</td>
+      <td>Số dư thẻ tín dụng theo tháng <em>(không dùng)</em></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>4.3. Các cột quan trọng nhất</h3>
+<table>
+  <thead><tr><th>Cột</th><th>Kiểu</th><th>Ý nghĩa</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr><td><code>SK_ID_CURR</code></td><td>INT</td><td>Khoá khách hàng</td><td>Join keys</td></tr>
+    <tr><td><code>TARGET</code></td><td>0/1</td><td>1 = default (≥90 ngày)</td><td>Target</td></tr>
+    <tr><td><code>AMT_CREDIT</code></td><td>NUMERIC</td><td>Số tiền vay</td><td>Feature chính</td></tr>
+    <tr><td><code>AMT_INCOME_TOTAL</code></td><td>NUMERIC</td><td>Thu nhập năm</td><td>Feature chính</td></tr>
+    <tr><td><code>AMT_ANNUITY</code></td><td>NUMERIC</td><td>Số tiền trả/tháng</td><td>Tính DTI</td></tr>
+    <tr><td><code>EXT_SOURCE_1/2/3</code></td><td>0.0–1.0</td><td>Score từ 3 nguồn external</td><td>Predictor mạnh nhất</td></tr>
+    <tr><td><code>DAYS_BIRTH</code></td><td>INT (âm)</td><td>Tuổi (ngày)</td><td>Demographic</td></tr>
+    <tr><td><code>DAYS_EMPLOYED</code></td><td>INT (âm)</td><td>Số ngày làm việc</td><td>Employment</td></tr>
+    <tr><td><code>CODE_GENDER</code></td><td>M/F/XNA</td><td>Giới tính</td><td>Demographic</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s5"><span class="num">5.</span>Đánh giá phù hợp với bài toán</h2>
+
+<h3>5.1. Coverage các yếu tố FICO</h3>
+<table>
+  <thead><tr><th>Yếu tố FICO</th><th>Trọng số</th><th>Coverage HC Dataset</th><th>Đánh giá</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Payment history</td><td>35%</td>
+      <td>Có (<code>previous_application</code> + <code>bureau</code>)</td>
+      <td><span class="pill ok">60%</span></td>
+    </tr>
+    <tr>
+      <td>Amounts owed</td><td>30%</td>
+      <td>Có (<code>AMT_CREDIT</code>, <code>bureau</code>)</td>
+      <td><span class="pill ok">80%</span></td>
+    </tr>
+    <tr>
+      <td>Length of credit history</td><td>15%</td>
+      <td>Có (<code>DAYS_FIRST_DUE</code> trong bureau)</td>
+      <td><span class="pill ok">70%</span></td>
+    </tr>
+    <tr>
+      <td>Credit mix</td><td>10%</td>
+      <td>Hạn chế (<code>NAME_CONTRACT_TYPE</code> chỉ 2 giá trị)</td>
+      <td><span class="pill todo">30%</span></td>
+    </tr>
+    <tr>
+      <td>New credit</td><td>10%</td>
+      <td>Có (<code>AMT_REQ_CREDIT_BUREAU_*</code>)</td>
+      <td><span class="pill ok">50%</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>5.2. Điểm mạnh dataset</h3>
+<div class="card success">
+  <ul>
+    <li><strong>Quy mô lớn</strong> — 307k applications đủ để train model phức tạp (LightGBM, XGBoost).</li>
+    <li><strong>Có 3 bảng quan hệ</strong> — cho phép feature engineering aggregate (num_previous_loans, num_bureau_records...).</li>
+    <li><strong>EXT_SOURCE 1/2/3</strong> — credit score chuẩn hoá sẵn, là 3 feature predictor mạnh nhất trên Kaggle leaderboard.</li>
+    <li><strong>Class imbalance hợp lý</strong> — 8% default sát với real-world credit risk (5–15%).</li>
+    <li><strong>Documentation đầy đủ</strong> — Kaggle có data dictionary, nhiều top kernels public để học hỏi.</li>
+  </ul>
+</div>
+
+<h3>5.3. Điểm yếu &amp; tradeoffs</h3>
+<div class="card warn">
+  <ul>
+    <li><strong>Cũ 8 năm</strong> — không phản ánh thị trường tín dụng hậu COVID, hậu Fintech boom 2020–2024.</li>
+    <li><strong>Bias địa lý</strong> — chủ yếu Czech, Slovakia; cấu trúc thu nhập và DTI khác Việt Nam.</li>
+    <li><strong>Currency không rõ</strong> — số tiền không có đơn vị tiền tệ cụ thể, khó so sánh với VND.</li>
+    <li><strong>EXT_SOURCE_1 null 56%</strong> — predictor mạnh nhất thiếu nhiều, phải fill median.</li>
+    <li><strong>Target binary đơn giản</strong> — không có severity (loss given default), không có recovery rate.</li>
+  </ul>
+</div>
+
+<footer>CreditIntel · Báo cáo #02 / Lựa chọn Dataset · Tài liệu nội bộ</footer>
+</body>
+</html>

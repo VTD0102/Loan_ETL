@@ -1,8 +1,10 @@
 # ─── Secrets & Credentials ────────────────────────────────────────────────────
-config/settings.yaml
+.env
 backend/.env
 frontend/.env
-.env
+config/etl_db.env
+frontend/.env.local
+frontend/.env.production
 
 # ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
@@ -10,37 +12,32 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-TONG_QUAN_VA_TIEN_TRINH.md
-# Virtual environments
+
+# ─── Virtual Environments (mỗi máy tự cài, KHÔNG push lên Git) ───────────────
 venv/
 .venv/
 env/
-.env/
-backend/venv/
-frontend/node_modules/
 
-# ─── Data & Models ────────────────────────────────────────────────────────────
+# ─── Data & Models (file lớn, KHÔNG push lên Git) ────────────────────────────
 data/raw/*.csv
-# *.pkl   # uncomment to exclude trained model artifacts
+ml/models/*.pkl
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
 frontend/build/
-frontend/.env.local
-frontend/.env.production
 
 # ─── IDE & OS ─────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
+data/
 # ─── Docs build ───────────────────────────────────────────────────────────────
 docs/_build/
 
-# ─── Claude Code ──────────────────────────────────────────────────────────────
+# ─── AI Tools ─────────────────────────────────────────────────────────────────
 .claude/
-CLAUDE.md
-.DS_Store.DS_Store
-AdminRules.md
+.gemini/
+.codex/
+.uv-python/
