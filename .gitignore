@@ -20,7 +20,7 @@ env/
 
 # ─── Data & Models (file lớn, KHÔNG push lên Git) ────────────────────────────
 data/raw/*.csv
-ml/models/*.pkl
+
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 frontend/node_modules/
