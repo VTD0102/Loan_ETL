@@ -106,10 +106,10 @@ Phần này ghi lại ý nghĩa của các file/thư mục và các cốt lõi c
 - **Data Protection:** Chữ chuẩn hóa Pydantic Schema `PersonalInfoRead` tiếp tục được tái sử dụng để cắt gọt các cột thừa thãi của bảng Database, chỉ hiển thị đúng các trường `full_name, id_card_number, phone, email, date_of_birth, address, submitted_at` theo yêu cầu tuyệt vời của kiến trúc sư trưởng.
 
 ### 🤖 Task 1.11: Tích hợp Trí tuệ nhân tạo (ML Model) vào Submit Application
-- **Bảo hiểm rủi ro (Fault-Tolerant Mocking):** Mình phát hiện ra file model của Team ML `loan_risk_model.pkl` nhận vào một bộ cột (Features) hoàn toàn lệch pha so với Schema Backend gốc (VD: Frontend gửi `credit_score`, thì ML đòi `annual_income_est`, `borrower_apr`). Thay vì để hệ thống Crash mỗi khi User nộp đơn, mình đã bọc hàm `joblib` vào trong kén `try...except`. Bất cứ khi nào mô hình ML chưa kịp update chuẩn hoá Schema, Backend sẽ tự động nảy số (Fallback) sinh ra bộ Mock `default_probability` ước tính dựa trên điểm tín dụng thô. Server sống sót an toàn đến khi Team ML fix xong!
-- **Auto-Reject Mechanism (Máy chém tự động):** Khi User bấm `POST /applications/submit`, Backend gọi ngầm Service ML. Nhận lại kết quả tỉ lệ bùng nợ `prob`. 
-  - Nếu `prob > 0.4`, Backend gắn luôn cái nhãn `AUTO_REJECTED` đỏ chót lên đơn và khóa thẳng hồ sơ vĩnh viễn không thương tiếc.
-  - Ngược lại nó được phép len lỏi vào quy trình `PENDING_REVIEW` cho Admin xử lý. Toàn bộ `risk_level`, `risk_score` sinh ra từ AI đã được chép thẳng đứng vào CSDL trong cùng vòng đời khởi tạo đó!
+- **Bảo hiểm rủi ro (Fault-Tolerant Mocking):** Backend bọc ML prediction vào `try...except`. Khi Model chưa sẵn sàng hoặc feature không khớp, hệ thống tự động sinh Mock data dựa trên credit_score để giữ server ổn định, chờ Team ML hoàn thiện integration.
+- **Auto-Reject Mechanism (Máy chém tự động):** Khi User bấm `POST /applications/submit`, Backend gọi ngầm Service ML (từ `ml_service.py`). Nhận lại kết quả tỉ lệ mặc định `prob`. 
+  - Nếu `prob > 0.4`, Backend gắn nhãn `AUTO_REJECTED` lên đơn và khóa vĩnh viễn.
+  - Ngược lại nó được phép vào quy trình `PENDING_REVIEW` cho Admin xử lý. Toàn bộ `risk_level`, `risk_score` từ AI được ghi vào DB trong cùng transaction.
 
 ### 🌐 Task 1.12: Bảo vệ tài nguyên CORS & API Specification
 - **Xóa bỏ dớp CORS:** Thêm `localhost:3000` và `localhost:5173` vào WhiteList middleware của FastAPI. React/Vite dev giờ đây có thể tự do Fetch API mà không bị chặn cửa từ vòng ngoài.

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from schemas.application import ApplicationCreate
 
-MODEL_PATH = Path(__file__).parents[2] / "ml" / "models" / "loan_risk_model.pkl"
+MODEL_PATH = Path(__file__).parents[2] / "ml" / "models" / "customer_risk_model.pkl"
 
 _artifact = None
 
