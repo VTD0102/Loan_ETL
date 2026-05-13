@@ -20,9 +20,15 @@ const LoginPage = () => {
     setLoading(true)
     try {
       const res = await apiLogin({ email: data.email, password: data.password })
-      setAuth(res.data.access_token, res.data.user)
-      toast.success(`Chào mừng, ${res.data.user.username}!`)
-      navigate(from, { replace: true })
+      const { access_token, user } = res.data
+      setAuth(access_token, user)
+      toast.success(`Chào mừng, ${user.username}!`)
+      
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard', { replace: true })
+      } else {
+        navigate(from, { replace: true })
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || 'Sai email hoặc mật khẩu.'
       toast.error(msg)
@@ -85,9 +91,9 @@ const LoginPage = () => {
           </p>
 
           <div className="mt-8 border-t border-gray-100 pt-6 text-center">
-            <Link to="/admin/login" className="text-xs text-gray-400 hover:text-primary-600 transition-colors">
-              👉 Nhân viên quản lý? Đăng nhập Admin
-            </Link>
+            <p className="text-center text-xs text-gray-400 mt-6">
+              Mock mode: dùng email có chứa "admin" để đăng nhập với quyền admin
+            </p>
           </div>
         </div>
       </div>
