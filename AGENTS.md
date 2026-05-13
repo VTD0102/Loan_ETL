@@ -11,10 +11,16 @@
 ## Build, Test, and Development Commands
 
 Backend:
+Backend:
+> **Lưu ý:** Tất cả lệnh cài đặt dưới đây phải được chạy từ thư mục gốc của dự án (`Loan_ETL/`).
 
 ```bash
-cd backend
+# Từ root project
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+
+cd backend
 python init_db.py
 uvicorn main:app --reload
 ```

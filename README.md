@@ -24,10 +24,18 @@ Loan_ETL/
 ## 🚀 Khởi Chạy Nhanh
 
 ### 1. Backend (FastAPI)
+> **Lưu ý:** Chạy các lệnh dưới đây từ thư mục gốc của project (`Loan_ETL/`).
+
 ```bash
-cd backend
-source ../venv/bin/activate
+# Khởi tạo virtual environment nếu chưa có
+python -m venv .venv
+source .venv/bin/activate
+
+# Cài đặt dependencies (file này nằm ở thư mục gốc)
 pip install -r requirements.txt
+
+# Chạy Backend
+cd backend
 python init_db.py              # Khởi tạo bảng DB
 uvicorn main:app --reload      # http://localhost:8000
 ```
@@ -43,7 +51,7 @@ npm run dev                    # http://localhost:5173
 ### 3. ETL Pipeline
 ```bash
 # Chạy từ root project
-source venv/bin/activate
+source .venv/bin/activate
 python -m etl.load_bronze
 python -m etl.etl_silver
 python -m etl.etl_core

@@ -12,16 +12,22 @@ Tài liệu này đóng vai trò là hướng dẫn khởi chạy dự án, đ�
 - Python 3.10 trở lên
 - Hệ điều hành: Ubuntu/Linux (Khuyên dùng) hoặc WSL trên Windows
 
+> **Lưu ý:** Tất cả lệnh cài đặt dưới đây phải được chạy từ thư mục gốc của dự án (`Loan_ETL/`).
+
 ### 2. Khởi tạo môi trường ảo (Virtual Environment)
-Luôn cách ly môi trường cài đặt để không ảnh hưởng đến máy tính gốc. Di chuyển vào thư mục dự án và tạo môi trường:
+Luôn cách ly môi trường cài đặt để không ảnh hưởng đến máy tính gốc. Di chuyển ra thư mục gốc để tạo môi trường dùng chung:
 ```bash
-cd Loan_ETL/backend
-python3 -m venv venv
-source venv/bin/activate
+# Nếu đang ở trong thư mục backend, hãy quay ra root
+cd .. 
+
+# Tạo và kích hoạt venv
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
 ### 3. Cài đặt thư viện (Dependencies)
 ```bash
+# Cài đặt từ file requirements.txt ở thư mục gốc
 pip install -r requirements.txt
 ```
 
