@@ -32,6 +32,6 @@ class User(Base):
     applications: Mapped[List["LoanApplication"]] = relationship(
         "LoanApplication", 
         back_populates="user",
-        foreign_keys="[LoanApplication.user_id]",
+        foreign_keys="LoanApplication.user_id",
         cascade="all, delete-orphan", # Tùy chọn để xóa application khi user bị xóa
     )

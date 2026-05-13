@@ -6,15 +6,17 @@ from api.routers import auth, applications, admin, chat, credit_score
 app = FastAPI(title="CreditIntel API", version="1.0.0")
 
 origins = [
-    "http://localhost:3000",   # React default
-    "http://localhost:5173",   # Vite default
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://your-production-domain.com"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
