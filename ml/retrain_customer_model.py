@@ -3,7 +3,8 @@ Retrain customer risk model (LightGBM) on Home Credit dataset.
 Source : silver.home_credit_cleansed (DuckDB local)
 Output : ml/models/customer_risk_model.pkl
 
-Run: python ml/retrain_customer_model.py
+Run from project root:
+    python -m ml.retrain_customer_model
 """
 import sys
 import joblib
@@ -23,7 +24,7 @@ from ml.validate_data import validate
 
 MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
 
-# Thresholds — must stay in sync with ml_service.py
+# ── Risk thresholds — must stay in sync with predict_customer.py ─────────────
 LOW_THRESHOLD  = 0.2
 HIGH_THRESHOLD = 0.4
 
@@ -77,6 +78,38 @@ NUMERIC_FEATURES = [
 CATEGORICAL_FEATURES = ["employment_status"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
+# ── Query from silver layer ───────────────────────────────────────────────────
+# FIX: correct column names from transform_silver.sql:
+#   is_borrower_homeowner  BOOLEAN  (not is_homeowner / not 'Yes' string)
+#   listing_category_numeric INTEGER (not listing_category_id)
+#   employment_status      VARCHAR  ✅
+SILVER_QUERY = """
+SELECT
+    stated_monthly_income
+        AS monthly_income,
+    loan_original_amount
+        AS loan_amount,
+    term,
+    COALESCE(employment_status, 'Other')
+        AS employment_status,
+    debt_to_income_ratio
+        AS dti,
+    CASE WHEN is_borrower_homeowner IS TRUE THEN 1 ELSE 0 END
+        AS is_homeowner,
+    listing_category_numeric
+        AS listing_category,
+    (credit_score_range_upper + credit_score_range_lower) / 2.0
+        AS credit_score,
+    is_default
+FROM silver.prosper_loans_cleansed
+WHERE stated_monthly_income    IS NOT NULL
+  AND loan_original_amount     IS NOT NULL
+  AND debt_to_income_ratio     IS NOT NULL
+  AND credit_score_range_upper IS NOT NULL
+  AND credit_score_range_lower IS NOT NULL
+  AND term                     IS NOT NULL
+"""
+
 
 def train():
     validate()
@@ -85,6 +118,8 @@ def train():
     print("  CUSTOMER RISK MODEL — RETRAIN")
     print("=" * 55)
 
+    # ── 1. Connect & fetch ───────────────────────────────
+    print("\n[1/6] Connecting to database...")
     engine = get_engine()
 
     print("\n[1/6] Fetching data from gold.hc_features_v1...")
@@ -105,10 +140,15 @@ def train():
     X = df[ALL_FEATURES]
     y = df["is_default"]
 
-    print("\n[3/6] Splitting 80/20 (stratified)...")
+    # ── 3. Split ─────────────────────────────────────────
+    print("\n[4/6] Splitting 80/20 (stratified by is_default)...")
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
     )
+    print(f"  Train: {len(X_train)} rows | Test: {len(X_test)} rows")
 
     print("\n[4/6] Building pipeline (LightGBM)...")
     # LightGBM xử lý numeric trực tiếp; categorical chỉ cần ordinal-encode
@@ -135,16 +175,35 @@ def train():
         )),
     ])
 
-    print("\n[5/6] Training...")
+    print("  Pipeline: StandardScaler + OneHotEncoder → RandomForest(200 trees)")
+
+    # ── 5. Train ─────────────────────────────────────────
+    print("\n[6/6] Training...")
     pipeline.fit(X_train, y_train)
 
-    print("\n[6/6] Evaluating on test set...")
+    # ── 6. Evaluate ──────────────────────────────────────
     y_pred = pipeline.predict(X_test)
     y_prob = pipeline.predict_proba(X_test)[:, 1]
     auc    = roc_auc_score(y_test, y_prob)
 
+    print(f"\n  --- Model Evaluation (Test Set) ---")
     print(f"  ROC-AUC : {auc:.4f}")
-    print(classification_report(y_test, y_pred, target_names=["No Default", "Default"]))
+    print(classification_report(
+        y_test, y_pred,
+        target_names=["No Default", "Default"]
+    ))
+
+    # ── 7. Save artifact ─────────────────────────────────
+    # FIX: save feature_names_out (expanded after OneHotEncoder)
+    # so predict_customer.py can align columns correctly at inference time
+    ohe_feature_names = (
+        pipeline
+        .named_steps["preprocessor"]
+        .named_transformers_["cat"]
+        .get_feature_names_out(CATEGORICAL_FEATURES)
+        .tolist()
+    )
+    feature_names_out = NUMERIC_FEATURES + ohe_feature_names
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({
