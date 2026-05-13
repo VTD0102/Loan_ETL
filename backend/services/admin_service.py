@@ -8,6 +8,37 @@ from sqlalchemy import func, cast, Date
 from datetime import date
 
 
+def _application_payload(app: LoanApplication) -> dict:
+    data = {
+        "id": app.id,
+        "user_id": app.user_id,
+        "status": app.status,
+        "monthly_income": app.monthly_income,
+        "loan_amount": app.loan_amount,
+        "term": app.term,
+        "employment_status": app.employment_status,
+        "dti": app.dti,
+        "is_homeowner": app.is_homeowner,
+        "listing_category": app.listing_category,
+        "credit_score": app.credit_score,
+        "default_probability": app.default_probability,
+        "risk_level": app.risk_level,
+        "risk_score": app.risk_score,
+        "recommended_amount": app.recommended_amount,
+        "recommended_term": app.recommended_term,
+        "submitted_at": app.submitted_at,
+        "reviewed_at": app.reviewed_at,
+        "reviewed_by": app.reviewed_by,
+        "admin_note": app.admin_note,
+        "user_email": None,
+        "user_username": None,
+    }
+    if app.user:
+        data["user_email"] = app.user.email
+        data["user_username"] = app.user.username
+    return data
+
+
 def list_applications(
     db: Session, 
     status: Optional[str] = None, 
@@ -32,7 +63,7 @@ def list_applications(
     items = query.order_by(LoanApplication.submitted_at.desc()).offset(skip).limit(limit).all()
     pages = (total + limit - 1) // limit or 1
 
-    return {"items": items, "page": page, "pages": pages, "total": total}
+    return {"items": [_application_payload(app) for app in items], "page": page, "pages": pages, "total": total}
 
 
 def list_pending(db: Session, page: int = 1, limit: int = 20):
@@ -42,14 +73,14 @@ def list_pending(db: Session, page: int = 1, limit: int = 20):
     items = query.order_by(LoanApplication.submitted_at.asc()).offset(skip).limit(limit).all()
     pages = (total + limit - 1) // limit or 1
 
-    return {"items": items, "page": page, "pages": pages, "total": total}
+    return {"items": [_application_payload(app) for app in items], "page": page, "pages": pages, "total": total}
 
 
 def get_by_id(db: Session, app_id: str):
     app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
     if not app:
         raise HTTPException(404, "Application not found")
-    return app
+    return _application_payload(app)
 
 
 from fastapi import HTTPException

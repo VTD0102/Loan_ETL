@@ -16,7 +16,7 @@ class ApplicationBase(BaseModel):
     employment_status: str
     dti: Decimal
     is_homeowner: bool
-    listing_category: str
+    listing_category: str | int
     credit_score: int
 
 class ApplicationCreate(ApplicationBase):
@@ -28,6 +28,8 @@ class AdminReject(BaseModel):
 class ApplicationRead(ApplicationBase):
     id: UUID
     user_id: UUID
+    user_email: Optional[str] = None
+    user_username: Optional[str] = None
     status: str
     
     default_probability: Optional[Decimal] = None
@@ -61,6 +63,8 @@ class ApplicationSummary(BaseModel):
 class ApplicationPendingSummary(BaseModel):
     id: UUID
     user_id: UUID
+    user_email: Optional[str] = None
+    user_username: Optional[str] = None
     loan_amount: Decimal
     term: int
     monthly_income: Decimal
