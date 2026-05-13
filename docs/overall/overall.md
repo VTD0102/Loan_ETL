@@ -1,131 +1,468 @@
 # TÀI LIỆU TỔNG QUAN HỆ THỐNG CREDITINTEL (OVERALL DOCUMENTATION)
 
+> *Cập nhật lần cuối: 2026-05-13 — phản ánh hiện trạng thực tế của codebase.*
+
+---
+
 ## 1. Giới thiệu dự án (Project Overview)
-**CreditIntel** là một hệ thống toàn diện kết hợp giữa Data Engineering (Kỹ thuật dữ liệu), Machine Learning (Học máy) và Web Application (Ứng dụng Web) phục vụ mục đích quản lý rủi ro danh mục cho vay và dự đoán rủi ro vỡ nợ tín dụng. Hệ thống được xây dựng ban đầu dựa trên tập dữ liệu Prosper Loan Dataset (~113K khoản vay, 2005-2014) và đang được phát triển thành một nền tảng Web cho phép khách hàng đăng ký vay và Admin quản lý/xét duyệt.
+
+**CreditIntel** là hệ thống toàn diện kết hợp **Data Engineering**, **Machine Learning** và **Web Application** phục vụ quản lý rủi ro danh mục cho vay và dự đoán rủi ro vỡ nợ tín dụng.
+
+**Hai nguồn dữ liệu song song:**
+- **Prosper Loan Dataset** (~113K khoản vay, 2005-2014): xây dựng luồng Core DB (PostgreSQL/Supabase).
+- **Home Credit Default Risk dataset** (Kaggle): dùng để train mô hình rủi ro `customer_risk_model.pkl` (LightGBM) và LR Scorecard `scorecard_model.pkl` (Logistic Regression).
 
 **Mục tiêu cốt lõi:**
-- Chuẩn hóa quy trình xử lý dữ liệu từ dạng thô đến phân tích.
-- Cung cấp mô hình Học máy để đánh giá rủi ro (Risk Assessment) và tự động hóa các quyết định cho vay.
-- Giao diện người dùng cho cả Khách hàng (Customer) và Quản trị viên (Admin) để thực hiện quy trình xét duyệt khoản vay.
-- Tích hợp Chatbot RAG (Retrieval-Augmented Generation) để hỗ trợ và tư vấn tài chính cho khách hàng một cách thông minh.
+- Chuẩn hóa quy trình xử lý dữ liệu từ thô đến phân tích (Data Lakehouse).
+- Cung cấp mô hình ML đánh giá rủi ro và tự động hóa quyết định cho vay.
+- Giao diện Web đầy đủ cho **Customer** (đăng ký, nộp đơn, chat) và **Admin** (quản lý, xét duyệt, dashboard).
+- Tích hợp **RAG Chatbot** (LangChain + Pinecone) hỗ trợ tư vấn tài chính cá nhân hóa.
 
 ---
 
 ## 2. Kiến trúc hệ thống (System Architecture)
 
-Kiến trúc hệ thống bao gồm 4 thành phần chính: **Data Lakehouse Pipeline**, **Machine Learning Engine**, **Backend API**, và **Frontend Web App**.
+Hệ thống gồm 4 thành phần chính:
 
-### 2.1. Cấu trúc cơ sở dữ liệu & Data Pipeline (Data Lakehouse)
-Hệ thống sử dụng **PostgreSQL** (Supabase) và kiến trúc 4 lớp dữ liệu:
-*   **Bronze Layer (`bronze.raw_loans`):** Lưu trữ dữ liệu thô (raw data) được load trực tiếp từ file CSV (Prosper Loan Data) vào database thông qua pandas & SQLAlchemy.
-*   **Silver Layer (`silver.prosper_loans_cleansed`):** Dữ liệu đã được làm sạch, xử lý missing values, chuẩn hóa các định dạng, khử trùng lặp và tạo trường target `is_default` (phục vụ cho downstream).
-*   **Core Layer (`core.*`):** Cấu trúc schema chuẩn hóa nghiệp vụ (Business Normalized), bao gồm các bảng: `loans`, `borrowers`, `credit_profiles`, `risk_assessment` và các bảng dimensions (ví dụ: `dim_employment_status`, `dim_listing_category`). Đây là lõi lưu trữ dữ liệu chính thức.
-*   **Gold Layer (`gold.loan_features_v1` & Analytical Views):** Lớp dữ liệu phục vụ phân tích. Chứa các tính năng (feature engineering) đã được chế biến chuyên sâu để đưa vào mô hình Machine Learning và các View (như `vw_default_rate_by_term`, `vw_risk_by_employment`) dùng để hiển thị trên Admin Dashboard.
+```
+┌─────────────────────────────────────────────────────────┐
+│  Frontend (React 18 + Vite + Tailwind CSS)              │
+│  Customer Portal  |  Admin Portal                       │
+└───────────────────────┬─────────────────────────────────┘
+                        │ REST API (HTTP/JSON)
+┌───────────────────────▼─────────────────────────────────┐
+│  Backend (FastAPI)                                       │
+│  /auth  /applications  /admin  /chat  /credit-score     │
+└──────┬──────────────┬──────────────┬────────────────────┘
+       │              │              │
+┌──────▼───┐  ┌───────▼──────┐  ┌───▼──────────────────┐
+│PostgreSQL│  │ ML Models    │  │ RAG (LangChain +     │
+│(Supabase)│  │(pkl files)   │  │  Pinecone)           │
+└──────────┘  └──────────────┘  └──────────────────────┘
+       ▲
+┌──────┴───────────────────────────────────────────────────┐
+│  ETL Pipeline (DuckDB local → PostgreSQL)                │
+│  Home Credit: Bronze → Silver → Gold                     │
+│  Prosper: database/ SQL scripts                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 2.1. Data Pipeline — Hai nhánh song song
+
+#### Nhánh A: Home Credit (ETL Python + DuckDB)
+Xử lý dataset Kaggle Home Credit thông qua pipeline Python thuần:
+- **Bronze** (`bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw`): Load CSV thô vào DuckDB local.
+- **Silver** (`silver.home_credit_cleansed`): Làm sạch, xử lý missing, tính `is_default`.
+- **Gold** (`gold.hc_features_v1`): Feature engineering đầy đủ (~25 features) phục vụ train LR Scorecard.
+
+#### Nhánh B: Prosper (SQL Scripts + PostgreSQL)
+Xử lý Prosper Loan Data thông qua script SQL chạy trên Supabase:
+- **Bronze** (`bronze.raw_loans`): Dữ liệu thô từ CSV.
+- **Silver** (`silver.prosper_loans_cleansed`): Làm sạch, chuẩn hóa, tạo `is_default`.
+- **Core** (`core.*`): Schema chuẩn hóa nghiệp vụ: `loans`, `borrowers`, `credit_profiles`, `risk_assessment`, `dim_*`.
+- **Gold** (`gold.loan_features_v1`): Feature engineering từ dữ liệu Prosper cũ.
 
 ### 2.2. Backend API (FastAPI)
-Được thiết kế theo kiến trúc RESTful API.
-*   **Authentication & Authorization:** Hệ thống phân quyền JWT (Customer & Admin).
-*   **Routers:** `/auth`, `/applications` (xử lý đơn vay của khách), `/admin` (quản lý, dashboard stats, xét duyệt đơn), `/predict`, `/chat`.
-*   **Database ORM:** Tương tác với PostgreSQL thông qua SQLAlchemy.
 
-### 2.3. Trí tuệ nhân tạo (Machine Learning & RAG)
-*   **Machine Learning (Dự đoán vỡ nợ):** Sử dụng `RandomForestClassifier` của scikit-learn để dự đoán xác suất vỡ nợ (`probability_of_default`). Phân loại thành 3 mức rủi ro:
-    *   `Low` (Thấp): Xác suất < 0.2 (Đề xuất vay lên tới 15,000$ / 36 tháng).
-    *   `Medium` (Trung bình): 0.2 - 0.4 (Đề xuất 8,000$ / 24 tháng).
-    *   `High` (Cao): > 0.4 (Từ chối tự động - Auto Rejected, hoặc chỉ vay tối đa 3,000$ / 12 tháng).
-*   **RAG Chatbot:** Xây dựng bằng `LangChain`, nhúng tài liệu (Embeddings) lưu trong vector database `Pinecone` (dùng data dictionary và các chính sách của CreditIntel). Sử dụng LLM (OpenAI/Gemini qua OpenRouter) để sinh câu trả lời tư vấn cho khách hàng dựa trên lịch sử khoản vay (user context) và tài liệu nội bộ.
+- **Entry point:** `backend/main.py` — FastAPI app với CORS middleware.
+- **Routers đang active:** `/auth`, `/applications`, `/admin`, `/chat`, `/credit-score`.
+- **Router tạm disabled:** `/predict` (comment trong code, logic đã tích hợp vào `application_service`).
+- **ORM:** SQLAlchemy 2.x tương tác PostgreSQL (Supabase).
+- **Auth:** JWT (python-jose) + Bcrypt (passlib).
+- **Rate limiting:** slowapi.
 
-### 2.4. Frontend Web App (React + Vite)
-*   Sử dụng ReactJS, Vite, Tailwind CSS.
-*   Tách biệt rõ ràng các luồng trang của **Customer** (`/apply`, `/dashboard`, `/submit-info`, `/chat`) và **Admin** (`/admin/dashboard`, `/admin/pending`, chi tiết đơn, thông tin cá nhân).
+### 2.3. Machine Learning — Hai Model Song Song
+
+| Model | File | Thuật toán | Mục đích |
+|---|---|---|---|
+| Customer Risk Model | `ml/models/customer_risk_model.pkl` | LightGBM | Dự đoán P(default) để xét duyệt đơn |
+| Scorecard Model | `ml/models/scorecard_model.pkl` | Logistic Regression (FICO PDO) | Tính điểm tín dụng 300–850 cho khách hàng |
+
+**Thresholds chung:** Low < 0.20 ≤ Medium ≤ 0.40 < High
+
+### 2.4. RAG Chatbot (LangChain + Pinecone)
+
+- Nhúng tài liệu từ `backend/rag/knowledge/` lên Pinecone index.
+- `ConversationalRetrievalChain` dùng OpenAI/OpenRouter LLM.
+- Lịch sử chat lưu vào PostgreSQL (`chat_messages`, `chat_sessions`).
+- Context builder tổng hợp thông tin đơn vay hiện tại của user vào prompt.
+
+### 2.5. Frontend Web App (React 18 + Vite + Tailwind CSS)
+
+- Phân tách rõ **Customer Portal** và **Admin Portal** với `ProtectedRoute`.
+- State management: Zustand (`authStore.js`).
+- API client: axios wrapper tại `frontend/src/services/`.
+- Mock mode: `npm run mock` dùng `mockHandlers.js` + `mockData.js`.
 
 ---
 
 ## 3. Cấu trúc thư mục dự án (Directory Structure)
 
-*   `backend/`: Source code của FastAPI, bao gồm `api/routers`, `core/config`, `db/session`, `models/` (Pydantic schemas), `services/` (Business logic), và thư mục `rag/` (cho logic Chatbot).
-*   `config/`: Chứa file `settings.yaml` (Cấu hình kết nối DB, API keys, đường dẫn raw data...).
-*   `data/`: Chứa dữ liệu thô (ví dụ: `raw/prosperLoanData.csv`).
-*   `database/`: Các file script SQL thiết lập cơ sở dữ liệu (`init_database.sql`, `init_core.sql`, `transform_silver.sql`, `transform_core.sql`, `transform_gold.sql`).
-*   `docs/`: Chứa tài liệu dự án, bao gồm `data_dictionary/` (Giải thích các schema), `ml_md/`, và `overall/` (chứa các kế hoạch phát triển).
-*   `frontend/`: Source code của React application (`src/components/`, `src/pages/`, `src/services/`...).
-*   `ml/`: Các script train model (`train_model.py`, `retrain_customer_model.py`), engine dự đoán (`predict_engine.py`, `predict_customer.py`), và thư mục `models/` chứa file pickle của model.
-*   `ml_service/`: Thư mục chứa các luồng ETL pipeline (`etl/load_bronze.py`, `etl/etl_silver.py`, `etl/etl_core.py`, `etl/etl_gold.py`) và phiên bản app cũ bằng Streamlit (`app.py`, `dashboard.py`).
-*   `utils/`: Thư mục tiện ích chung (vd: `db_connection.py`).
+```
+Loan_ETL/
+├── backend/                    # FastAPI application
+│   ├── main.py                 # App entry point, router registration
+│   ├── init_db.py              # Khởi tạo bảng PostgreSQL
+│   ├── requirements.txt
+│   ├── api/
+│   │   ├── dependencies.py     # get_current_user, get_db
+│   │   └── routers/
+│   │       ├── auth.py         # POST /auth/register, /auth/login
+│   │       ├── applications.py # POST /applications/submit, GET list/detail
+│   │       ├── admin.py        # GET /admin/dashboard, pending, approve/reject
+│   │       ├── chat.py         # POST /chat/send, GET /chat/history
+│   │       ├── credit_score.py # GET /credit-score/me
+│   │       └── predict.py      # (disabled) POST /predict
+│   ├── core/
+│   │   ├── config.py           # Settings từ .env (Pydantic Settings)
+│   │   ├── security.py         # JWT encode/decode
+│   │   └── scoring.py          # pd_to_credit_score(), score_to_band()
+│   ├── db/
+│   │   └── session.py          # SQLAlchemy engine & SessionLocal
+│   ├── models/                 # SQLAlchemy ORM models
+│   │   ├── user.py             # User table
+│   │   ├── application.py      # LoanApplication table
+│   │   ├── personal_info.py    # PersonalInfo table
+│   │   └── chat.py             # ChatSession, ChatMessage tables
+│   ├── schemas/                # Pydantic request/response schemas
+│   │   ├── user.py
+│   │   ├── application.py
+│   │   ├── personal_info.py
+│   │   ├── credit_score.py
+│   │   └── chat.py
+│   ├── services/               # Business logic layer
+│   │   ├── auth_service.py
+│   │   ├── application_service.py
+│   │   ├── admin_service.py
+│   │   ├── chat_service.py
+│   │   ├── ml_service.py       # Wrapper gọi model inference (load pkl files)
+│   │   └── credit_score_service.py  # FICO scorecard inference + SHAP
+│   ├── rag/                    # RAG Chatbot module
+│   │   ├── ingest.py           # Embed docs lên Pinecone
+│   │   ├── chain.py            # ConversationalRetrievalChain
+│   │   ├── retriever.py        # Pinecone retriever setup
+│   │   ├── memory.py           # Chat history management
+│   │   ├── context_builder.py  # Build user context từ DB
+│   │   ├── prompts.py          # System/user prompt templates
+│   │   ├── config.py           # RAG config (model, index name...)
+│   │   └── knowledge/          # Tài liệu embed (markdown files)
+│   └── tests_local/            # Local integration/smoke tests
+│       ├── test_db.py
+│       ├── test_ml.py
+│       ├── test_task_1_3.py through test_task_1_11.py
+│       └── test_task_5_3.py
+│
+├── frontend/                   # React 18 + Vite app
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── tailwind.config.js
+│   └── src/
+│       ├── App.jsx             # Router config (React Router v6)
+│       ├── main.jsx
+│       ├── index.css
+│       ├── store/
+│       │   └── authStore.js    # Zustand auth state
+│       ├── services/           # API client helpers (axios)
+│       │   ├── api.js          # Axios instance + interceptors
+│       │   ├── auth.js
+│       │   ├── applications.js
+│       │   ├── admin.js
+│       │   └── chat.js
+│       ├── mocks/              # MSW mock handlers
+│       │   ├── mockHandlers.js
+│       │   └── mockData.js
+│       ├── components/
+│       │   ├── ProtectedRoute.jsx
+│       │   ├── common/         # Badge, LoadingSpinner, Modal, Navbar
+│       │   ├── customer/       # ApplicationCard, ApplicationTimeline,
+│       │   │                   # ChatMessage, LoanStatusCard, RiskGauge
+│       │   └── admin/          # AdminLayout, ApplicationTable, ApplicationsTable,
+│       │                       # ApproveRejectButtons, FilterBar, MLResultsDisplay,
+│       │                       # ReviewModal, RiskChart, StatsCard, SummaryCard
+│       └── pages/
+│           ├── customer/       # Landing, Login, Register, Apply, Dashboard,
+│           │                   # ApplicationDetail, Chat, SubmitInfo
+│           └── admin/          # Login, Dashboard, PendingList,
+│                               # ApplicationList, ApplicationDetail, PersonalInfoView
+│
+├── etl/                        # Home Credit ETL pipeline (DuckDB)
+│   ├── __init__.py
+│   ├── pipeline.py             # Orchestrator: bronze → silver → gold
+│   ├── load_bronze.py          # Load CSV → bronze.home_credit_raw + prev + bureau
+│   ├── etl_silver.py           # Bronze → silver.home_credit_cleansed
+│   └── etl_gold.py             # Silver → gold.hc_features_v1
+│
+├── ml/                         # Machine Learning scripts
+│   ├── __init__.py
+│   ├── ML_INTEGRATION_CHECKLIST.md # Checklist tích hợp ML
+│   ├── retrain_customer_model.py   # Train LightGBM trên Home Credit features
+│   ├── train_scorecard.py          # Train LR Scorecard trên HC features (~25)
+│   ├── validate_data.py            # Kiểm tra data trước khi train
+│   ├── models/
+│   │   ├── customer_risk_model.pkl # LightGBM artifact (27MB)
+│   │   └── scorecard_model.pkl     # LR Scorecard artifact (6KB)
+│   └── requirements.txt            # ML dependencies
+│
+├── config/
+│   └── etl_db.env              # Cấu hình đường dẫn cho ETL DuckDB
+│
+├── data/
+│   ├── etl.duckdb              # Database DuckDB local cho Home Credit
+│   └── home_credit/            # Chứa các file CSV của Home Credit (application_train.csv, previous_application.csv, bureau.csv, ...)
+│
+├── database/                   # SQL scripts cho Prosper/PostgreSQL
+│   ├── init_database.sql       # Tạo Bronze schema
+│   ├── init_core.sql           # Tạo Core schema & tables
+│   ├── transform_silver.sql    # Bronze → Silver (Prosper)
+│   ├── transform_core.sql      # Silver → Core (Prosper)
+│   ├── transform_gold.sql      # Core → Gold (Prosper, loan_features_v1)
+│   ├── transform_silver_homecredit.sql  # Silver HC (PostgreSQL version)
+│   └── transform_gold_homecredit.sql    # Gold HC (hc_features_v1 PostgreSQL)
+│
+├── notebooks/
+│   └── home_credit_eda.ipynb   # EDA notebook
+│
+├── docs/
+│   ├── ADMIN_GUIDE.md
+│   ├── 01_muc_tieu_project.html → 09_van_de_can_giai_quyet.html
+│   ├── data_dictionary/
+│   ├── ml_md/
+│   ├── overall/                # File tài liệu tổng quan (thư mục này)
+│   ├── superpowers/
+│   └── task/
+│
+├── utils/
+│   └── db_connection.py        # get_engine(), load_config(), _ETL_ENV_FILE
+│
+├── AGENTS.md                   # Project coding guidelines
+├── AdminRules.md               # Quy tắc nghiệp vụ Admin
+├── CLAUDE.md                   # Claude agent instructions
+└── README.md
+```
 
 ---
 
-## 4. Các Module cốt lõi và Chức năng (Modules & Functions)
+## 4. Các Module Cốt Lõi & Chức Năng
 
-### 4.1. Module ETL (Kéo, Biến đổi & Nạp dữ liệu)
-- **`load_bronze.py`:** Đọc dữ liệu từ file CSV, nạp toàn bộ vào bảng `bronze.raw_loans`.
-- **`etl_silver.py`:** Loại bỏ giá trị Null/Duplicate, chuẩn hóa format (ngày tháng, boolean), tính toán các field cơ bản và nạp vào `silver.prosper_loans_cleansed`.
-- **`etl_core.py`:** Transform từ dữ liệu dạng phẳng (flat) ở Silver thành các bảng chuẩn hóa (Normalization) trong Schema `core`.
-- **`etl_gold.py`:** Thực hiện Feature Engineering (Tạo các feature mới như phân cụm điểm tín dụng, tỉ lệ nợ/thu nhập, tính toán biến ngụy tạo (dummy) từ Categorical) để đẩy vào `gold.loan_features_v1`.
+### 4.1. ETL Pipeline — Home Credit (DuckDB)
 
-### 4.2. Module Machine Learning (Dự đoán)
-Hệ thống sử dụng hai Model Artifacts để phục vụ hai mục đích khác nhau:
-1.  **`loan_risk_model.pkl` (Training bởi `train_model.py`):** Train trên toàn bộ tập feature (Gold layer) của data Prosper cũ.
-2.  **`customer_risk_model.pkl` (Training bởi `retrain_customer_model.py`):** Chỉ train trên **8 features** mà khách hàng thực sự có thể cung cấp từ form đăng ký trên web (Monthly Income, Loan Amount, Term, DTI, Is Homeowner, Listing Category, Credit Score, Employment Status). Pipeline bao gồm `StandardScaler` và `OneHotEncoder`.
-- **`predict_customer.py`:** Engine dự đoán online. Cung cấp API nội bộ cho backend (`predict_from_form()`). Nhận 8 input -> tính ra xác suất (Probability) -> Trả về mốc Risk Level, điểm nội bộ và Auto Decision.
+| Script | Input | Output | Mô tả |
+|---|---|---|---|
+| `etl/load_bronze.py` | CSV files (Kaggle `data/home_credit/`) | `bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw` | Load dữ liệu thô, chọn lọc cột cần thiết |
+| `etl/etl_silver.py` | bronze tables | `silver.home_credit_cleansed` | Làm sạch, tính `is_default`, xử lý missing |
+| `etl/etl_gold.py` | silver table | `gold.hc_features_v1` | Feature engineering ~25 features cho Scorecard |
+| `etl/pipeline.py` | — | — | Orchestrator chạy load_bronze→etl_silver→etl_gold tuần tự |
 
-### 4.3. Module RAG Chatbot (Hỗ trợ Khách hàng)
-- **`rag/ingest.py`:** Chạy 1 lần để nhúng (embed) các tài liệu markdown (`docs/data_dictionary/`) thành Vector và lưu lên Pinecone.
-- **`rag/chain.py`:** Định nghĩa `ConversationalRetrievalChain` của Langchain, sử dụng LLM model (`gemini-flash-1.5` hoặc `OpenAI`) để truy xuất ngữ cảnh (retriever).
-- **`services/chat_service.py`:** Lưu trữ lịch sử hội thoại vào PostgreSQL (bảng `chat_messages` và `chat_sessions`), tổng hợp thông tin khoản vay hiện tại của khách hàng (user_context) đưa vào prompt để Chatbot đưa ra những lời khuyên cá nhân hóa nhất.
+**Chạy pipeline:**
+```bash
+python -m etl.pipeline
+# Hoặc từng bước:
+python -m etl.load_bronze
+python -m etl.etl_silver
+python -m etl.etl_gold
+```
 
-### 4.4. Module Quản lý Luồng đơn vay (Application Service)
-Quy trình trạng thái (State machine) của một đơn vay:
-1.  **Submit Form:** Khách hàng nộp đơn. Model ML chạy dự đoán ngay lập tức.
-2.  **ML Quyết định:**
-    *   Nếu P(Default) > 0.4: Chuyển trạng thái `AUTO_REJECTED` (Hệ thống tự động từ chối).
-    *   Nếu P(Default) <= 0.4: Chuyển trạng thái `PENDING_REVIEW` (Chờ Admin duyệt).
-3.  **Admin Xét duyệt:** Admin xem đơn, xem các điểm rủi ro và quyết định:
-    *   Từ chối: `ADMIN_REJECTED`.
-    *   Đồng ý: `AWAITING_INFO` (Chờ khách hàng bổ sung thông tin định danh: CCCD, SĐT).
-4.  **Hoàn thành:** Khách hàng nộp thông tin định danh -> `INFO_SUBMITTED`.
+### 4.2. Machine Learning
+
+#### Model 1: Customer Risk Model (LightGBM)
+- **Train:** `ml/retrain_customer_model.py` — Train trên dữ liệu Home Credit (`gold.hc_features_v1`), lưu vào `ml/models/customer_risk_model.pkl`.
+- **Inference:** `backend/services/ml_service.py::predict(payload: ApplicationCreate)` — Nhận input từ form, kết hợp với các feature khác từ schema, load pkl → prediction dict.
+- **Input features (từ ApplicationCreate schema):**
+
+| Feature | Type | Mô tả |
+|---|---|---|
+| `monthly_income` | float | Thu nhập hàng tháng (USD) |
+| `loan_amount` | float | Số tiền muốn vay (USD) |
+| `term` | int | Kỳ hạn: 12, 36 hoặc 60 tháng |
+| `employment_status` | str | Employed / Self-employed / Retired / Not employed / Other |
+| `dti` | float | Debt-to-income ratio |
+| `is_homeowner` | bool | Sở hữu nhà |
+| `listing_category` | int | Mục đích vay (0–20) |
+| `credit_score` | float | Điểm tín dụng tự khai (300–850) |
+
+- **Output dict:**
+
+| Field | Mô tả |
+|---|---|
+| `probability_of_default` | Xác suất vỡ nợ (0.0–1.0) |
+| `risk_level` | Low / Medium / High |
+| `risk_score_internal` | Điểm nội bộ 0–100 (= (1 - PD) × 100) |
+| `auto_decision` | AUTO_REJECTED hoặc PENDING_REVIEW (nếu P(default) > 0.4 → AUTO_REJECTED) |
+| `recommended_amount` | Khuyến nghị số tiền vay |
+| `recommended_term` | Khuyến nghị kỳ hạn |
+
+#### Model 2: LR Scorecard (FICO-style)
+- **Train:** `ml/train_scorecard.py` — Logistic Regression trên `gold.hc_features_v1` (~25 features).
+- **FICO PDO params:** `base_score=600`, `base_odds_good=50`, `PDO=20`.
+- **Output score:** 300–850. Bands: Poor (<580) / Fair (580–669) / Good (670–739) / Excellent (≥740).
+- **Inference:** `backend/services/credit_score_service.py::get_credit_score()` — Load `ml/models/scorecard_model.pkl` + SHAP.
+- **SHAP:** Dùng `LinearExplainer` để trả về top 3 factors ảnh hưởng điểm.
+
+### 4.3. Backend Services
+
+| Service | Chức năng chính |
+|---|---|
+| `auth_service.py` | Đăng ký, đăng nhập, hash/verify password |
+| `application_service.py` | Nộp đơn (gọi ML), lấy danh sách, nộp thông tin định danh |
+| `admin_service.py` | Dashboard stats, danh sách pending, approve/reject |
+| `ml_service.py` | Load model pkl, predict P(default), fallback mock nếu pkl lỗi |
+| `chat_service.py` | Lưu/load lịch sử chat, gọi RAG chain |
+| `credit_score_service.py` | Tính FICO score từ scorecard + SHAP top factors |
+
+### 4.4. Luồng Trạng Thái Đơn Vay (Application State Machine)
+
+```
+[Customer submit form]
+        │
+        ▼
+[ML predict P(default)]
+        │
+   P > 0.4 ──────────► AUTO_REJECTED
+        │
+   P ≤ 0.4
+        │
+        ▼
+  PENDING_REVIEW
+        │
+   [Admin review]
+        ├── Reject ──► ADMIN_REJECTED
+        │
+        └── Approve ► AWAITING_INFO
+                            │
+                   [Customer nộp CCCD, SĐT...]
+                            │
+                            ▼
+                      INFO_SUBMITTED
+```
+
+### 4.5. RAG Chatbot
+
+| Module | Chức năng |
+|---|---|
+| `rag/ingest.py` | Embed tài liệu markdown → Pinecone index |
+| `rag/chain.py` | ConversationalRetrievalChain setup |
+| `rag/retriever.py` | Kết nối Pinecone retriever |
+| `rag/memory.py` | Quản lý lịch sử hội thoại |
+| `rag/context_builder.py` | Tổng hợp context từ đơn vay hiện tại của user |
+| `rag/prompts.py` | System prompt, user prompt templates |
 
 ---
 
-## 5. Danh sách Công nghệ & Thư viện (Tech Stack & Libraries)
+## 5. Tech Stack & Libraries
 
-*   **Ngôn ngữ lập trình:** Python 3.x, JavaScript (React)
-*   **Data Processing & ETL:** `pandas`, `numpy`, `SQLAlchemy`, `psycopg2-binary`.
-*   **Machine Learning:** `scikit-learn` (RandomForest, StandardScaler, OneHotEncoder, Metrics), `joblib` (Lưu mô hình).
-*   **Backend Framework:** `FastAPI`, `pydantic` (Data Validation), `uvicorn`, `python-jose` (JWT), `passlib` (Bcrypt Hash).
-*   **LLM & RAG:** `langchain`, `langchain-openai`, `langchain-pinecone`, `pinecone-client`.
-*   **Database:** `PostgreSQL` (hosted trên Supabase).
-*   **Frontend:** `React` (v18), `Vite`, `Tailwind CSS`, `React Router`, React Hooks.
-*   **Công cụ khác:** `PyYAML` (Đọc config), Git.
-
----
-
-## 6. Thông số Input/Output (I/O Specifications)
-
-### 6.1. Input (Dữ liệu đầu vào từ Khách hàng nộp đơn)
-- `monthly_income` (Thu nhập hàng tháng - Numeric)
-- `loan_amount` (Số tiền muốn vay - Numeric)
-- `term` (Kỳ hạn - 12, 36, hoặc 60 tháng)
-- `employment_status` (Tình trạng việc làm - Employed, Self-employed, Retired, Not employed, Other)
-- `dti` (Tỉ lệ nợ trên thu nhập - Numeric)
-- `is_homeowner` (Sở hữu nhà - Boolean)
-- `listing_category` (Mục đích vay - Categorical/Numeric ID)
-- `credit_score` (Điểm tín dụng tự khai báo - Numeric)
-
-### 6.2. Output (Kết quả từ Machine Learning)
-- `probability_of_default` (Xác suất vỡ nợ: 0.0 -> 1.0)
-- `risk_level` (Mức độ rủi ro: Low, Medium, High)
-- `risk_score_internal` (Điểm tín dụng nội bộ: 0 - 100, quy đổi từ xác suất)
-- `auto_decision` (Quyết định tự động: `AUTO_REJECTED` hoặc `PENDING_REVIEW`)
-- `recommended_amount` & `recommended_term` (Khuyến nghị vay thông minh).
+| Category | Technologies |
+|---|---|
+| **Language** | Python 3.10+, JavaScript (ES2022) |
+| **Backend** | FastAPI ≥0.115, Uvicorn, Pydantic v2, python-jose, passlib, slowapi |
+| **Database** | PostgreSQL (Supabase), SQLAlchemy 2.x, psycopg2-binary |
+| **ETL (HC)** | DuckDB, pandas, duckdb Python client |
+| **ML** | scikit-learn ≥1.4, LightGBM ≥4.6, numpy, pandas, joblib, shap |
+| **RAG** | LangChain ≥0.3, langchain-openai, langchain-pinecone, pinecone ≥6.0 |
+| **Frontend** | React 18, Vite, Tailwind CSS, React Router v6, Zustand, Axios |
+| **Dev Tools** | python-dotenv, PyYAML, kaggle CLI, Git |
 
 ---
 
-## 7. Kết quả & Đánh giá hiệu năng Model (Results)
-Mô hình `RandomForestClassifier` (với tính năng class_weight='balanced') đạt được những chỉ số đánh giá khả quan trên tập kiểm thử (Test Set) của dữ liệu Prosper (Historical Data):
-*   **ROC-AUC Score:** Khoảng 0.864 (Rất tốt trong việc phân tách hồ sơ vỡ nợ và không vỡ nợ).
-*   **Tỉ lệ bao phủ (Recall cho Default class):** Lên tới ~76%, có nghĩa là hệ thống nhận diện được phần lớn hồ sơ thực sự có rủi ro vỡ nợ.
-*   **Khả năng mở rộng (Scalability):** Với việc triển khai FastAPI và PostgreSQL (Supabase), hệ thống có khả năng đáp ứng tải tốt cho hàng nghìn đơn vay song song. RAG Chatbot hỗ trợ phản hồi trong <2s với Pinecone index.
+## 6. Cấu hình & Biến môi trường
+
+### Backend (`backend/.env`)
+```env
+DATABASE_URL=postgresql://...          # Supabase connection string
+SECRET_KEY=...                         # JWT signing key
+OPENAI_API_KEY=...                     # Hoặc OpenRouter key
+PINECONE_API_KEY=...
+PINECONE_INDEX_NAME=...
+```
+
+### ETL (`etl/.env` hoặc file được `_ETL_ENV_FILE` trỏ tới)
+```env
+etl_db_path=data/etl.duckdb           # Đường dẫn DuckDB file local
+```
+
+### Frontend (`frontend/.env.mock`)
+```env
+VITE_USE_MOCK=true                     # Bật mock API mode
+```
 
 ---
-*(Tài liệu này đóng vai trò là "Sổ tay" kiến trúc kỹ thuật dành cho toàn bộ dự án CreditIntel)*
+
+## 7. Hướng dẫn Chạy & Phát triển
+
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+python init_db.py          # Tạo bảng PostgreSQL lần đầu
+uvicorn main:app --reload  # Dev server: http://localhost:8000
+# Swagger UI: http://localhost:8000/docs
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev      # Vite dev server: http://localhost:5173 (real API)
+npm run mock     # Dev với mock API (không cần backend)
+npm run build    # Production bundle
+```
+
+### ETL (Home Credit)
+```bash
+# Đặt CSV files vào data/home_credit/ (download từ Kaggle)
+python -m etl.pipeline     # Chạy toàn bộ bronze→silver→gold
+```
+
+### Train ML Models
+```bash
+# Customer Risk Model (Home Credit - LightGBM)
+python -m ml.retrain_customer_model
+
+# LR Scorecard (Home Credit)
+python ml/train_scorecard.py
+
+# Validate data trước khi train
+python ml/validate_data.py
+```
+
+### Tests Backend
+```bash
+cd backend
+python tests_local/test_db.py
+python tests_local/test_ml.py
+python tests_local/test_task_1_3.py
+# ... test_task_1_4.py đến test_task_1_11.py
+python tests_local/test_task_5_3.py
+```
+
+---
+
+## 8. Hiệu năng Model (Kết quả đánh giá)
+
+### Customer Risk Model (LightGBM — Home Credit data)
+- **ROC-AUC:** ~0.75 trên test set.
+- **Đặc điểm:** Xử lý class imbalance (tỉ lệ 11:1) bằng `is_unbalance=True`. Top features: `credit_score_midpoint`, `ext_source_3`, `num_bureau_records`, `age_years`.
+- **Pipeline:** OrdinalEncoder + LGBMClassifier.
+
+### LR Scorecard (Home Credit data)
+- **ROC-AUC:** ~0.73 trên test set.
+- **Algorithm:** Logistic Regression (C=0.1) — không dùng class_weight để giữ calibration tự nhiên.
+- **FICO PDO:** Score range 300–850, base=600, mean~trung bình của tập test.
+- **SHAP:** LinearExplainer cung cấp top-3 factors giải thích điểm cho từng user.
+
+---
+
+## 9. Điểm Khác Biệt So Với Phiên Bản Cũ (PROJECT_OVERVIEW.md)
+
+| Điểm | Phiên bản cũ | Hiện tại |
+|---|---|---|
+| Frontend | Streamlit | React 18 + Vite + Tailwind |
+| ETL engine | pandas + SQLAlchemy (Prosper) | DuckDB (Home Credit) song song với SQL scripts (Prosper) |
+| ML Models | 1 model (loan_risk_model.pkl) | 2 models: customer_risk_model.pkl (LightGBM) + scorecard_model.pkl (LR) |
+| Credit Score | Không có | FICO-style scorecard (300–850) với SHAP explanation |
+| Chatbot | Không có | RAG (LangChain + Pinecone) đầy đủ |
+| Dataset | Chỉ Prosper | Prosper + Home Credit Default Risk (Kaggle) |
+| API | Không có | FastAPI với 5 routers đang active |
+
+---
+
+*(Tài liệu này là nguồn sự thật duy nhất — "single source of truth" — cho kiến trúc kỹ thuật của toàn bộ dự án CreditIntel)*
