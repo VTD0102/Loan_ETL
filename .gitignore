@@ -41,4 +41,5 @@ docs/_build/
 .gemini/
 .codex/
 .uv-python/
-home-credit-default-risk/
+
+.python-version
