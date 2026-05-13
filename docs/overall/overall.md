@@ -25,11 +25,11 @@ Hệ thống sử dụng **PostgreSQL** (Supabase) và kiến trúc 4 lớp dữ
 ### 2.2. Backend API (FastAPI)
 Được thiết kế theo kiến trúc RESTful API.
 *   **Authentication & Authorization:** Hệ thống phân quyền JWT (Customer & Admin).
-*   **Routers:** `/auth`, `/applications` (xử lý đơn vay của khách), `/admin` (quản lý, dashboard stats, xét duyệt đơn), `/predict`, `/chat`.
+*   **Routers:** `/auth`, `/applications` (xử lý đơn vay của khách), `/admin` (quản lý, dashboard stats, xét duyệt đơn), `/credit-score`, `/chat`.
 *   **Database ORM:** Tương tác với PostgreSQL thông qua SQLAlchemy.
 
 ### 2.3. Trí tuệ nhân tạo (Machine Learning & RAG)
-*   **Machine Learning (Dự đoán vỡ nợ):** Sử dụng `RandomForestClassifier` của scikit-learn để dự đoán xác suất vỡ nợ (`probability_of_default`). Phân loại thành 3 mức rủi ro:
+*   **Machine Learning (Dự đoán vỡ nợ):** Sử dụng LightGBM từ `ml/retrain_customer_model.py` để dự đoán xác suất vỡ nợ (`probability_of_default`). Phân loại thành 3 mức rủi ro:
     *   `Low` (Thấp): Xác suất < 0.2 (Đề xuất vay lên tới 15,000$ / 36 tháng).
     *   `Medium` (Trung bình): 0.2 - 0.4 (Đề xuất 8,000$ / 24 tháng).
     *   `High` (Cao): > 0.4 (Từ chối tự động - Auto Rejected, hoặc chỉ vay tối đa 3,000$ / 12 tháng).
@@ -49,7 +49,7 @@ Hệ thống sử dụng **PostgreSQL** (Supabase) và kiến trúc 4 lớp dữ
 *   `database/`: Các file script SQL thiết lập cơ sở dữ liệu (`init_database.sql`, `init_core.sql`, `transform_silver.sql`, `transform_core.sql`, `transform_gold.sql`).
 *   `docs/`: Chứa tài liệu dự án, bao gồm `data_dictionary/` (Giải thích các schema), `ml_md/`, và `overall/` (chứa các kế hoạch phát triển).
 *   `frontend/`: Source code của React application (`src/components/`, `src/pages/`, `src/services/`...).
-*   `ml/`: Các script train model (`train_model.py`, `retrain_customer_model.py`), engine dự đoán (`predict_engine.py`, `predict_customer.py`), và thư mục `models/` chứa file pickle của model.
+*   `ml/`: Hai script model được hỗ trợ: `retrain_customer_model.py` cho risk prediction và `train_scorecard.py` cho credit scorecard; artifacts nằm trong `models/`.
 *   `ml_service/`: Thư mục chứa các luồng ETL pipeline (`etl/load_bronze.py`, `etl/etl_silver.py`, `etl/etl_core.py`, `etl/etl_gold.py`) và phiên bản app cũ bằng Streamlit (`app.py`, `dashboard.py`).
 *   `utils/`: Thư mục tiện ích chung (vd: `db_connection.py`).
 
@@ -65,9 +65,8 @@ Hệ thống sử dụng **PostgreSQL** (Supabase) và kiến trúc 4 lớp dữ
 
 ### 4.2. Module Machine Learning (Dự đoán)
 Hệ thống sử dụng hai Model Artifacts để phục vụ hai mục đích khác nhau:
-1.  **`loan_risk_model.pkl` (Training bởi `train_model.py`):** Train trên toàn bộ tập feature (Gold layer) của data Prosper cũ.
-2.  **`customer_risk_model.pkl` (Training bởi `retrain_customer_model.py`):** Chỉ train trên **8 features** mà khách hàng thực sự có thể cung cấp từ form đăng ký trên web (Monthly Income, Loan Amount, Term, DTI, Is Homeowner, Listing Category, Credit Score, Employment Status). Pipeline bao gồm `StandardScaler` và `OneHotEncoder`.
-- **`predict_customer.py`:** Engine dự đoán online. Cung cấp API nội bộ cho backend (`predict_from_form()`). Nhận 8 input -> tính ra xác suất (Probability) -> Trả về mốc Risk Level, điểm nội bộ và Auto Decision.
+1.  **`customer_risk_model.pkl` (Training bởi `retrain_customer_model.py`):** LightGBM risk model dùng cho quyết định rủi ro khi khách nộp đơn. Backend gọi qua `backend/services/ml_service.py`.
+2.  **`scorecard_model.pkl` (Training bởi `train_scorecard.py`):** Logistic Regression scorecard dùng cho API `/credit-score`. Backend gọi qua `backend/services/credit_score_service.py`.
 
 ### 4.3. Module RAG Chatbot (Hỗ trợ Khách hàng)
 - **`rag/ingest.py`:** Chạy 1 lần để nhúng (embed) các tài liệu markdown (`docs/data_dictionary/`) thành Vector và lưu lên Pinecone.
@@ -91,7 +90,7 @@ Quy trình trạng thái (State machine) của một đơn vay:
 
 *   **Ngôn ngữ lập trình:** Python 3.x, JavaScript (React)
 *   **Data Processing & ETL:** `pandas`, `numpy`, `SQLAlchemy`, `psycopg2-binary`.
-*   **Machine Learning:** `scikit-learn` (RandomForest, StandardScaler, OneHotEncoder, Metrics), `joblib` (Lưu mô hình).
+*   **Machine Learning:** `LightGBM`, `scikit-learn` (LogisticRegression, StandardScaler, OrdinalEncoder, Metrics), `joblib` (Lưu mô hình).
 *   **Backend Framework:** `FastAPI`, `pydantic` (Data Validation), `uvicorn`, `python-jose` (JWT), `passlib` (Bcrypt Hash).
 *   **LLM & RAG:** `langchain`, `langchain-openai`, `langchain-pinecone`, `pinecone-client`.
 *   **Database:** `PostgreSQL` (hosted trên Supabase).

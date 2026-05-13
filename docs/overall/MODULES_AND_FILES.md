@@ -57,11 +57,11 @@ Dự án được tổ chức theo kiến trúc modular với các thư mục ch
 - **Cách hoạt động:** Đọc prosperLoanData.csv và insert vào bảng bronze.
 - **Dependencies:** Pandas, SQLAlchemy.
 
-### prediction_ui.py
-- **Chức năng:** Giao diện dự đoán rủi ro.
-- **Mục đích:** Cho phép người dùng nhập thông tin vay và nhận kết quả dự đoán.
-- **Cách hoạt động:** Gọi predict_engine.py, hiển thị kết quả với XAI.
-- **Dependencies:** Streamlit, các module ML.
+### frontend/src/pages/customer/Apply/index.jsx
+- **Chức năng:** Giao diện nộp đơn vay trên React.
+- **Mục đích:** Cho phép người dùng nhập thông tin vay, bao gồm phần thông tin bổ sung optional cho mô hình.
+- **Cách hoạt động:** Gửi payload đến backend `/applications/submit`; backend gọi `services/ml_service.py` để chạy artifact từ `retrain_customer_model.py`.
+- **Dependencies:** React, react-hook-form, FastAPI backend.
 
 ### README.md
 - **Chức năng:** Tài liệu giới thiệu dự án.
@@ -145,22 +145,25 @@ Dự án được tổ chức theo kiến trúc modular với các thư mục ch
 
 ## Thư mục ml/
 
-### predict_engine.py
-- **Chức năng:** Engine dự đoán rủi ro.
-- **Mục đích:** Chạy prediction cho một khoản vay và lưu kết quả.
-- **Cách hoạt động:** Load model, preprocess input, predict, insert vào core.risk_assessment.
-- **Dependencies:** Scikit-learn, SQLAlchemy.
+### retrain_customer_model.py
+- **Chức năng:** Train LightGBM risk model.
+- **Mục đích:** Sinh artifact `ml/models/customer_risk_model.pkl` cho backend xét rủi ro khi khách nộp đơn.
+- **Cách hoạt động:** Đọc `gold.hc_features_v1`, train pipeline LightGBM, lưu metadata contract (`feature_cols`, defaults, thresholds, model_version).
+- **Dependencies:** LightGBM, scikit-learn, pandas, joblib.
 
-### train_model.py
-- **Chức năng:** Training ML model.
-- **Mục đích:** Train Random Forest trên dữ liệu Gold.
-- **Cách hoạt động:** Load data, preprocess, train, save model.pkl.
-- **Dependencies:** Scikit-learn, Pandas.
+### train_scorecard.py
+- **Chức năng:** Train Logistic Regression scorecard.
+- **Mục đích:** Sinh artifact `ml/models/scorecard_model.pkl` cho API credit score.
+- **Cách hoạt động:** Đọc `gold.hc_features_v1`, train scorecard, lưu FICO params và contribution table.
+- **Dependencies:** scikit-learn, pandas, joblib.
 
-### models/loan_risk_model.pkl
-- **Chức năng:** Model artifact.
-- **Mục đích:** Lưu trữ trained model.
-- **Cách hoạt động:** Pickle file, load bởi predict_engine.py.
+### models/customer_risk_model.pkl
+- **Chức năng:** Artifact LightGBM risk prediction.
+- **Mục đích:** Được load bởi `backend/services/ml_service.py`.
+
+### models/scorecard_model.pkl
+- **Chức năng:** Artifact LR scorecard.
+- **Mục đích:** Được load bởi `backend/services/credit_score_service.py`.
 
 ## Thư mục utils/
 
@@ -173,7 +176,7 @@ Dự án được tổ chức theo kiến trúc modular với các thư mục ch
 ## Luồng Hoạt động Tổng thể
 
 1. **ETL Flow:** ml_service/etl/load_bronze.py → ml_service/etl/etl_silver.py → ml_service/etl/etl_core.py → ml_service/etl/etl_gold.py
-2. **ML Flow:** train_model.py (training) → predict_engine.py (prediction)
+2. **ML Flow:** `retrain_customer_model.py` → backend risk inference; `train_scorecard.py` → backend credit score inference
 3. **UI Flow:** app.py → dashboard.py + prediction_ui.py
 4. **Config:** settings.yaml cho tất cả connections
 5. **Docs:** docs/ cho reference

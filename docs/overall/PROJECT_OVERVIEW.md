@@ -16,10 +16,10 @@ CreditIntel là một dự án Data Engineering và Machine Learning toàn diệ
 - **Phân tích thời gian thực:** Cập nhật dữ liệu từ database để cung cấp insights kịp thời cho người dùng.
 
 ### 3. AI Dự đoán Rủi ro
-- **Mô hình Machine Learning:** Random Forest để dự đoán xác suất vỡ nợ dựa trên các đặc trưng từ dữ liệu.
-- **Business Rule Engine:** Áp dụng các quy tắc nghiệp vụ để tinh chỉnh kết quả dự đoán.
-- **Explainable AI (XAI):** Giải thích lý do đằng sau mỗi dự đoán để tăng tính minh bạch.
-- **Đánh giá thời gian thực:** Xử lý đơn xin vay mới và đưa ra khuyến nghị về số tiền và kỳ hạn cho vay.
+- **Risk model:** LightGBM train bởi `ml/retrain_customer_model.py`, artifact `customer_risk_model.pkl`.
+- **Scorecard:** Logistic Regression train bởi `ml/train_scorecard.py`, artifact `scorecard_model.pkl`.
+- **Business Rule Engine:** Áp dụng ngưỡng risk để quyết định `AUTO_REJECTED` hoặc `PENDING_REVIEW`.
+- **Đánh giá thời gian thực:** Backend service load artifact bằng joblib, xử lý đơn vay mới và đưa ra khuyến nghị về số tiền/kỳ hạn.
 
 ### 4. Quản lý Cơ sở Dữ liệu
 - **Schema thiết kế:** Bao gồm các bảng dimension (employment_status, occupation, v.v.) và fact tables (borrowers, loans, credit_profiles).
@@ -40,8 +40,8 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 - `dashboard.py`: Module trực quan hóa dữ liệu.
 - `data_handler.py`: Xử lý dữ liệu chung.
 - `ml_service/etl/`: Scripts ETL cho từng lớp (load_bronze.py, etl_silver.py, etl_gold.py, etl_core.py).
-- `prediction_ui.py`: Giao diện dự đoán rủi ro.
-- `ml/`: Thư mục chứa train_model.py, predict_engine.py và models/.
+- `frontend/src/pages/customer/Apply/`: Giao diện nộp đơn vay.
+- `ml/`: Thư mục chứa hai script model được hỗ trợ: `retrain_customer_model.py`, `train_scorecard.py`, và artifacts trong `models/`.
 - `database/`: Scripts SQL khởi tạo database và schema.
 - `config/`: File cấu hình settings.yaml.
 - `data/`: Thư mục dữ liệu thô và xử lý.
@@ -57,8 +57,9 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 - Feature engineering cho Gold.
 
 ### 2. Training Mô hình ML
-- Sử dụng dữ liệu từ Gold để train Random Forest model.
-- Lưu model vào file pickle (loan_risk_model.pkl).
+- Sử dụng dữ liệu từ Gold để train LightGBM risk model.
+- Sử dụng dữ liệu từ Gold để train Logistic Regression scorecard.
+- Lưu artifacts vào `customer_risk_model.pkl` và `scorecard_model.pkl`.
 
 ### 3. Dự đoán và Đánh giá
 - Nhận input từ người dùng qua UI.
@@ -103,7 +104,7 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 1. **Chuẩn bị môi trường:** Clone repo, tạo venv, cài dependencies.
 2. **Thiết lập DB:** Chạy scripts SQL để tạo schema.
 3. **Chạy ETL:** Load và transform dữ liệu qua các lớp.
-4. **Train Model:** Chạy train_model.py để tạo model.
-5. **Khởi chạy App:** Sử dụng `streamlit run ml_service/app.py` để launch hệ thống.
+4. **Train Model:** Chạy `python -m ml.retrain_customer_model` và `python ml/train_scorecard.py`.
+5. **Khởi chạy App:** Chạy FastAPI backend và React frontend.
 
 Dự án này không chỉ là một sản phẩm kỹ thuật mà còn là minh chứng cho việc áp dụng Data Engineering và ML vào bài toán thực tế trong lĩnh vực tài chính.

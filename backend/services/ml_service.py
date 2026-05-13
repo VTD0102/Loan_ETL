@@ -1,37 +1,40 @@
 import joblib
 import pandas as pd
 from pathlib import Path
+from typing import Any
 
 from schemas.application import ApplicationCreate
+from services.model_feature_builder import build_model_input, fetch_previous_applications
 
 MODEL_PATH = Path(__file__).parents[2] / "ml" / "models" / "customer_risk_model.pkl"
 
 _artifact = None
 
 
+class ModelPredictionError(RuntimeError):
+    pass
+
+
 def _load():
     global _artifact
     if _artifact is None:
-        _artifact = joblib.load(MODEL_PATH)
+        try:
+            _artifact = joblib.load(MODEL_PATH)
+        except Exception as exc:
+            raise ModelPredictionError(f"Cannot load model artifact at {MODEL_PATH}: {exc}") from exc
     return _artifact
 
 
-def predict(payload: ApplicationCreate) -> dict:
+def predict(payload: ApplicationCreate, db: Any = None, user_id: Any = None) -> dict:
     try:
         artifact  = _load()
+        _validate_artifact(artifact)
         pipeline  = artifact["pipeline"]
         threshold = artifact["thresholds"]
 
-        row = pd.DataFrame([{
-            "monthly_income"  : payload.monthly_income,
-            "loan_amount"     : payload.loan_amount,
-            "term"            : payload.term,
-            "employment_status": payload.employment_status,
-            "dti"             : payload.dti,
-            "is_homeowner"    : int(payload.is_homeowner),
-            "listing_category": payload.listing_category,
-            "credit_score"    : payload.credit_score,
-        }])
+        previous = fetch_previous_applications(db, user_id)
+        built = build_model_input(payload, artifact, previous_applications=previous)
+        row = pd.DataFrame([built.features], columns=artifact["feature_cols"])
 
         prob = float(pipeline.predict_proba(row)[0, 1])
 
@@ -54,19 +57,18 @@ def predict(payload: ApplicationCreate) -> dict:
             "risk_score"         : round((1 - prob) * 100),
             "recommended_amount" : recommended_amount,
             "recommended_term"   : recommended_term,
+            "model_version"      : artifact.get("model_version"),
+            "feature_snapshot"   : built.features,
+            "imputed_features"   : built.imputed_features,
         }
     except Exception as e:
-        # TODO(TEAM ML): LƯU Ý KHI TÍCH HỢP!
-        # Khi team ML hoàn thiện file `loan_risk_model.pkl` map chuẩn 8 tính năng từ Backend 
-        # (như liệt kê trong file ML_INTEGRATION_CHECKLIST.md), sự cố mismatch sẽ tự mất.
-        # Khi luồng Catch Exception này không còn kích hoạt nữa, hãy cấu hình hoàn lại Model Prediction
-        # Hiện tại Backend đang bảo vệ Server khỏi bị Crash bằng cách giả định/Mock Logic Random.
-        print(f"ML Warning: using Mock values until ML matches Backend schema. ({e})")
-        mock_prob = 0.5 if payload.credit_score < 650 else 0.15
-        return {
-            "default_probability": mock_prob,
-            "risk_level"         : "High" if mock_prob > 0.4 else "Low",
-            "risk_score"         : round((1 - mock_prob) * 100),
-            "recommended_amount" : float(payload.loan_amount) * 0.8,
-            "recommended_term"   : payload.term,
-        }
+        if isinstance(e, ModelPredictionError):
+            raise
+        raise ModelPredictionError(f"Model prediction failed: {e}") from e
+
+
+def _validate_artifact(artifact: dict) -> None:
+    required = {"pipeline", "feature_cols", "feature_defaults", "thresholds", "model_version"}
+    missing = sorted(required - set(artifact))
+    if missing:
+        raise ModelPredictionError(f"Model artifact missing required keys: {', '.join(missing)}")

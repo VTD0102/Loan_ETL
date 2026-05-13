@@ -29,6 +29,7 @@ const ChatbotPage = () => {
   ])
   const [input,     setInput]     = useState('')
   const [loading,   setLoading]   = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
 
@@ -47,7 +48,8 @@ const ChatbotPage = () => {
     setLoading(true)
 
     try {
-      const res = await sendMessage({ message: content })
+      const res = await sendMessage({ message: content, session_id: sessionId })
+      if (res.data?.session_id) setSessionId(res.data.session_id)
       const reply = res.data?.response || res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
     } catch {

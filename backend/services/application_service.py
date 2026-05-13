@@ -8,6 +8,7 @@ from models.personal_info import PersonalInfo
 from schemas.application import ApplicationCreate
 from schemas.personal_info import PersonalInfoCreate
 from services import ml_service
+from services.model_feature_builder import optional_application_values
 
 def submit(db: Session, user_email: str, payload: ApplicationCreate):
     user = db.query(User).filter(User.email == user_email).first()
@@ -26,8 +27,13 @@ def submit(db: Session, user_email: str, payload: ApplicationCreate):
             detail="Bạn đã có đơn đang xử lý"
         )
 
-    # Gọi service ML (Mô hình sẽ fallback logic Mock nếu pkl chưa đồng bộ Schema)
-    prediction = ml_service.predict(payload)
+    try:
+        prediction = ml_service.predict(payload, db=db, user_id=user.id)
+    except ml_service.ModelPredictionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ML model is not available or has an invalid contract: {exc}",
+        ) from exc
     prob = prediction.get("default_probability", 0.0)
     
     # Auto-reject nếu tỉ lệ bùng nợ > 0.4
@@ -42,13 +48,17 @@ def submit(db: Session, user_email: str, payload: ApplicationCreate):
         employment_status=payload.employment_status,
         dti=payload.dti,
         is_homeowner=payload.is_homeowner,
-        listing_category=payload.listing_category,
+        listing_category=str(payload.listing_category),
         credit_score=payload.credit_score,
+        **optional_application_values(payload),
         default_probability=prob,
         risk_level=prediction.get("risk_level"),
         risk_score=prediction.get("risk_score"),
         recommended_amount=prediction.get("recommended_amount"),
-        recommended_term=prediction.get("recommended_term")
+        recommended_term=prediction.get("recommended_term"),
+        model_version=prediction.get("model_version"),
+        feature_snapshot=prediction.get("feature_snapshot"),
+        imputed_features=prediction.get("imputed_features"),
     )
 
     db.add(new_app)

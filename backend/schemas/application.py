@@ -1,6 +1,6 @@
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Optional, Literal, Any, Union
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 from .personal_info import PersonalInfoRead
@@ -16,8 +16,22 @@ class ApplicationBase(BaseModel):
     employment_status: str
     dti: Decimal
     is_homeowner: bool
-    listing_category: str
+    listing_category: Union[str, int]
     credit_score: int
+    ext_source_1: Optional[Decimal] = None
+    ext_source_3: Optional[Decimal] = None
+    num_bureau_records: Optional[int] = None
+    num_active_credit: Optional[int] = None
+    total_overdue_amount: Optional[Decimal] = None
+    max_credit_overdue_days: Optional[int] = None
+    has_bad_debt: Optional[bool] = None
+    income_verifiable_flag: Optional[bool] = None
+    age_years: Optional[int] = None
+    gender_male_flag: Optional[bool] = None
+    education_ordinal: Optional[int] = None
+    cnt_children: Optional[int] = None
+    cnt_fam_members: Optional[int] = None
+    is_married_flag: Optional[bool] = None
 
 class ApplicationCreate(ApplicationBase):
     pass
@@ -35,6 +49,9 @@ class ApplicationRead(ApplicationBase):
     risk_score: Optional[int] = None
     recommended_amount: Optional[Decimal] = None
     recommended_term: Optional[int] = None
+    model_version: Optional[str] = None
+    feature_snapshot: Optional[dict[str, Any]] = None
+    imputed_features: Optional[list[str]] = None
     
     submitted_at: datetime
     reviewed_at: Optional[datetime] = None

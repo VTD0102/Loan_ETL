@@ -20,5 +20,5 @@ def send_message(
     - Translates DB context dynamically.
     - Saves transcript to DB seamlessly.
     """
-    answer = chat_service.send(db, current_user["sub"], payload.message)
-    return ChatResponse(response=answer)
+    result = chat_service.send(db, current_user["sub"], payload.message, payload.session_id)
+    return ChatResponse(**result)

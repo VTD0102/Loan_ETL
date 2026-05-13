@@ -12,6 +12,13 @@ const CATEGORY_OPTIONS   = [
   'Debt Consolidation', 'Home Improvement', 'Business', 'Personal Loan',
   'Auto/Vehicle', 'Medical/Dental', 'Education', 'Other',
 ]
+const EDUCATION_OPTIONS = [
+  { value: 1, label: 'Dưới THPT' },
+  { value: 2, label: 'THPT' },
+  { value: 3, label: 'Cao đẳng' },
+  { value: 4, label: 'Đại học' },
+  { value: 5, label: 'Sau đại học' },
+]
 
 const FieldRow = ({ label, hint, error, children }) => (
   <div>
@@ -38,6 +45,7 @@ const ApplyPage = () => {
   const navigate  = useNavigate()
   const [loading, setLoading]   = useState(false)
   const [modal, setModal]       = useState(null) // { type: 'rejected'|'success', app }
+  const [optionalOpen, setOptionalOpen] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: { term: 36, employment_status: 'Employed', listing_category: 'Debt Consolidation' },
@@ -56,6 +64,20 @@ const ApplyPage = () => {
         listing_category:  data.listing_category,
         credit_score:      parseFloat(data.credit_score),
       }
+      appendOptional(payload, data, 'ext_source_1', parseOptionalNumber)
+      appendOptional(payload, data, 'ext_source_3', parseOptionalNumber)
+      appendOptional(payload, data, 'num_bureau_records', parseOptionalInt)
+      appendOptional(payload, data, 'num_active_credit', parseOptionalInt)
+      appendOptional(payload, data, 'total_overdue_amount', parseOptionalNumber)
+      appendOptional(payload, data, 'max_credit_overdue_days', parseOptionalInt)
+      appendOptional(payload, data, 'has_bad_debt', parseOptionalBool)
+      appendOptional(payload, data, 'income_verifiable_flag', parseOptionalBool)
+      appendOptional(payload, data, 'age_years', parseOptionalInt)
+      appendOptional(payload, data, 'gender_male_flag', parseOptionalBool)
+      appendOptional(payload, data, 'education_ordinal', parseOptionalInt)
+      appendOptional(payload, data, 'cnt_children', parseOptionalInt)
+      appendOptional(payload, data, 'cnt_fam_members', parseOptionalInt)
+      appendOptional(payload, data, 'is_married_flag', parseOptionalBool)
       const res = await submitApplication(payload)
       setModal({ type: res.data.status === 'AUTO_REJECTED' ? 'rejected' : 'success', app: res.data })
 
@@ -179,6 +201,107 @@ const ApplyPage = () => {
               </FieldRow>
             </div>
 
+            <div className="border border-gray-200 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setOptionalOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <span className="text-sm font-semibold text-gray-700">Thông tin bổ sung cho mô hình</span>
+                <svg className={`w-4 h-4 text-gray-500 transition-transform ${optionalOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {optionalOpen && (
+                <div className="px-4 pb-4 border-t border-gray-100 space-y-5">
+                  <div className="grid sm:grid-cols-2 gap-5 pt-4">
+                    <FieldRow label="EXT source 1">
+                      <input type="number" step="0.0001" min="0" max="1" placeholder="0.42" className="input" {...register('ext_source_1')} />
+                    </FieldRow>
+                    <FieldRow label="EXT source 3">
+                      <input type="number" step="0.0001" min="0" max="1" placeholder="0.51" className="input" {...register('ext_source_3')} />
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Số hồ sơ tín dụng">
+                      <input type="number" step="1" min="0" className="input" {...register('num_bureau_records')} />
+                    </FieldRow>
+                    <FieldRow label="Khoản tín dụng đang hoạt động">
+                      <input type="number" step="1" min="0" className="input" {...register('num_active_credit')} />
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Tổng tiền quá hạn (USD)">
+                      <input type="number" step="0.01" min="0" className="input" {...register('total_overdue_amount')} />
+                    </FieldRow>
+                    <FieldRow label="Số ngày quá hạn cao nhất">
+                      <input type="number" step="1" min="0" className="input" {...register('max_credit_overdue_days')} />
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Có nợ xấu?">
+                      <select className="input" defaultValue="" {...register('has_bad_debt')}>
+                        <option value="">Không cung cấp</option>
+                        <option value="false">Không</option>
+                        <option value="true">Có</option>
+                      </select>
+                    </FieldRow>
+                    <FieldRow label="Thu nhập xác minh được?">
+                      <select className="input" defaultValue="" {...register('income_verifiable_flag')}>
+                        <option value="">Không cung cấp</option>
+                        <option value="false">Không</option>
+                        <option value="true">Có</option>
+                      </select>
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Tuổi">
+                      <input type="number" step="1" min="18" max="100" className="input" {...register('age_years')} />
+                    </FieldRow>
+                    <FieldRow label="Giới tính nam?">
+                      <select className="input" defaultValue="" {...register('gender_male_flag')}>
+                        <option value="">Không cung cấp</option>
+                        <option value="false">Không</option>
+                        <option value="true">Có</option>
+                      </select>
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Trình độ học vấn">
+                      <select className="input" defaultValue="" {...register('education_ordinal')}>
+                        <option value="">Không cung cấp</option>
+                        {EDUCATION_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </FieldRow>
+                    <FieldRow label="Đã kết hôn?">
+                      <select className="input" defaultValue="" {...register('is_married_flag')}>
+                        <option value="">Không cung cấp</option>
+                        <option value="false">Không</option>
+                        <option value="true">Có</option>
+                      </select>
+                    </FieldRow>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    <FieldRow label="Số con">
+                      <input type="number" step="1" min="0" className="input" {...register('cnt_children')} />
+                    </FieldRow>
+                    <FieldRow label="Số thành viên gia đình">
+                      <input type="number" step="1" min="1" className="input" {...register('cnt_fam_members')} />
+                    </FieldRow>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="pt-2">
               <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
                 {loading && <LoadingSpinner size="sm" className="mr-2" />}
@@ -250,5 +373,14 @@ const SectionTitle = ({ title }) => (
     <div className="flex-1 h-px bg-gray-100" />
   </div>
 )
+
+const appendOptional = (payload, data, key, parser) => {
+  if (data[key] === undefined || data[key] === null || data[key] === '') return
+  payload[key] = parser(data[key])
+}
+
+const parseOptionalNumber = (value) => parseFloat(value)
+const parseOptionalInt = (value) => parseInt(value, 10)
+const parseOptionalBool = (value) => value === true || value === 'true'
 
 export default ApplyPage

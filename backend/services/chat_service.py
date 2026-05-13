@@ -1,62 +1,172 @@
 from datetime import datetime, timedelta
+from typing import Any
 
-from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from fastapi import HTTPException, status
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from models.chat import ChatMessage
+from models.application import LoanApplication
+from models.chat import ChatMessage, ChatSession
 from models.user import User
+from schemas.application import ApplicationCreate
+from services import ml_service
 
 
-def send(db: Session, user_email: str, payload_message: str) -> str:
+def send(db: Session, user_email: str, payload_message: str, session_id: Any = None) -> dict:
     user = db.query(User).filter(User.email == user_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-        
-    user_id = user.id
 
-    # 1. Rate Limiting: 20 per minute
-    one_min_ago = datetime.utcnow() - timedelta(minutes=1)
-    query_count = db.query(func.count(ChatMessage.id)).filter(
-        ChatMessage.user_id == user_id,
-        ChatMessage.created_at >= one_min_ago
-    ).scalar()
+    _enforce_rate_limit(db, user.id)
+    _ensure_latest_application_has_prediction(db, user.id)
+    session = _get_or_create_session(db, user.id, session_id)
+    history_rows = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(10)
+        .all()
+    )
 
-    if query_count >= 20:
-        raise HTTPException(status_code=429, detail="Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.")
-
-    # 2. Extract Logic (Memory Bypass)
-    history_rows = db.query(ChatMessage).filter(ChatMessage.user_id == user_id).order_by(ChatMessage.created_at.desc()).limit(10).all()
-    
-    # 4. Invoke RAG Stateless
     try:
         from langchain_core.messages import AIMessage, HumanMessage
         from rag.chain import invoke
         from rag.context_builder import build_user_context
-        
+
         chat_history = []
         for row in reversed(history_rows):
-            chat_history.append(HumanMessage(content=row.message))
-            chat_history.append(AIMessage(content=row.response))
+            if row.role == "user":
+                chat_history.append(HumanMessage(content=row.content))
+            elif row.role == "assistant":
+                chat_history.append(AIMessage(content=row.content))
 
-        # 3. Context Builder
-        context = build_user_context(db, user_id)
-        
+        context = build_user_context(db, user.id)
         response_payload = invoke(payload_message, context, chat_history)
         answer = response_payload.get("answer", "Xin lỗi, hiện tại tôi không thể kết nối tới lõi suy luận kiến thức.")
+        sources = _extract_sources(response_payload.get("source_documents", []))
     except ImportError as ie:
-        answer = f"⚠️ RAG Module chưa sẵn sàng (Chưa cài đặt đủ thư viện Môi trường: {str(ie)}). Xin thử lại sau."
+        answer = f"RAG Module chưa sẵn sàng: {str(ie)}. Xin thử lại sau."
+        sources = []
     except Exception as e:
         answer = f"Lỗi truy vấn nội bộ RAG/LLM: {str(e)}"
+        sources = []
 
-    # 5. Log Database saving mechanism
-    log_entry = ChatMessage(
-        user_id=user_id,
-        message=payload_message,
-        response=answer,
-        is_bot=True
-    )
-    db.add(log_entry)
+    db.add(ChatMessage(session_id=session.id, role="user", content=payload_message))
+    db.add(ChatMessage(session_id=session.id, role="assistant", content=answer, sources=sources))
     db.commit()
 
-    return answer
+    return {
+        "response": answer,
+        "session_id": session.id,
+        "sources": sources,
+    }
+
+
+def _enforce_rate_limit(db: Session, user_id: Any) -> None:
+    one_min_ago = datetime.utcnow() - timedelta(minutes=1)
+    query_count = (
+        db.query(func.count(ChatMessage.id))
+        .join(ChatSession, ChatMessage.session_id == ChatSession.id)
+        .filter(
+            ChatSession.user_id == user_id,
+            ChatMessage.role == "user",
+            ChatMessage.created_at >= one_min_ago,
+        )
+        .scalar()
+    )
+
+    if query_count >= 20:
+        raise HTTPException(status_code=429, detail="Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút.")
+
+
+def _get_or_create_session(db: Session, user_id: Any, session_id: Any = None) -> ChatSession:
+    if session_id is not None:
+        session = (
+            db.query(ChatSession)
+            .filter(ChatSession.id == session_id, ChatSession.user_id == user_id)
+            .first()
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+        return session
+
+    session = ChatSession(user_id=user_id)
+    db.add(session)
+    db.flush()
+    return session
+
+
+def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> None:
+    app = (
+        db.query(LoanApplication)
+        .filter(LoanApplication.user_id == user_id)
+        .order_by(LoanApplication.submitted_at.desc())
+        .first()
+    )
+    if app is None or (app.default_probability is not None and app.model_version):
+        return
+
+    payload = _application_to_payload(app)
+    try:
+        prediction = ml_service.predict(payload, db=db, user_id=user_id)
+    except ml_service.ModelPredictionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"ML model is not available or has an invalid contract: {exc}",
+        ) from exc
+
+    app.default_probability = prediction.get("default_probability")
+    app.risk_level = prediction.get("risk_level")
+    app.risk_score = prediction.get("risk_score")
+    app.recommended_amount = prediction.get("recommended_amount")
+    app.recommended_term = prediction.get("recommended_term")
+    app.model_version = prediction.get("model_version")
+    app.feature_snapshot = prediction.get("feature_snapshot")
+    app.imputed_features = prediction.get("imputed_features")
+    db.flush()
+
+
+def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
+    return ApplicationCreate(
+        monthly_income=app.monthly_income,
+        loan_amount=app.loan_amount,
+        term=app.term,
+        employment_status=app.employment_status,
+        dti=app.dti,
+        is_homeowner=app.is_homeowner,
+        listing_category=app.listing_category,
+        credit_score=app.credit_score,
+        ext_source_1=app.ext_source_1,
+        ext_source_3=app.ext_source_3,
+        num_bureau_records=app.num_bureau_records,
+        num_active_credit=app.num_active_credit,
+        total_overdue_amount=app.total_overdue_amount,
+        max_credit_overdue_days=app.max_credit_overdue_days,
+        has_bad_debt=app.has_bad_debt,
+        income_verifiable_flag=app.income_verifiable_flag,
+        age_years=app.age_years,
+        gender_male_flag=app.gender_male_flag,
+        education_ordinal=app.education_ordinal,
+        cnt_children=app.cnt_children,
+        cnt_fam_members=app.cnt_fam_members,
+        is_married_flag=app.is_married_flag,
+    )
+
+
+def _extract_sources(documents: list[Any]) -> list[dict[str, Any]]:
+    sources: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for doc in documents:
+        metadata = getattr(doc, "metadata", {}) or {}
+        source = metadata.get("source") or metadata.get("file_path") or metadata.get("title")
+        if not source:
+            source = "knowledge_base"
+        key = str(source)
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append({
+            "source": key,
+            "title": metadata.get("title") or key,
+        })
+    return sources
