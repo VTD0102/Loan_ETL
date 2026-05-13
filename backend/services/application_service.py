@@ -68,7 +68,8 @@ def submit(db: Session, user_email: str, payload: ApplicationCreate):
     return {
         "application_id": str(new_app.id),
         "status": new_app.status,
-        "prediction": prediction
+        "prediction": prediction,
+        **prediction,
     }
 
 def list_my_applications(db: Session, user_email: str):

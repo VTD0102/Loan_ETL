@@ -26,6 +26,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.scoring import pd_to_credit_score, score_to_band
+from models.user import User
 
 SCORECARD_PATH = Path(__file__).parents[2] / "ml" / "models" / "scorecard_model.pkl"
 
@@ -34,6 +35,10 @@ NUMERIC_FEATURES     = [
     "log_monthly_income", "rating_ordinal", "is_homeowner_flag",
     "income_verifiable_flag", "high_dti_flag",
     "payment_to_income", "num_previous_loans", "previous_default_rate",
+    "num_bureau_records", "num_active_credit", "total_overdue_amount",
+    "max_credit_overdue_days", "has_bad_debt", "ext_source_1", "ext_source_3",
+    "age_years", "gender_male_flag", "education_ordinal", "cnt_children",
+    "cnt_fam_members", "is_married_flag",
 ]
 CATEGORICAL_FEATURES = ["employment_status_grouped"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
@@ -106,11 +111,37 @@ def _build_features(app, num_previous_loans: int, previous_default_rate: float,
         "payment_to_income":      hc_dti,
         "num_previous_loans":     num_previous_loans,
         "previous_default_rate":  previous_default_rate,
+        "num_bureau_records":     0,
+        "num_active_credit":      0,
+        "total_overdue_amount":   0.0,
+        "max_credit_overdue_days": 0,
+        "has_bad_debt":           0,
+        "ext_source_1":           cs / 850,
+        "ext_source_3":           cs / 850,
+        "age_years":              35,
+        "gender_male_flag":       0,
+        "education_ordinal":      3,
+        "cnt_children":           0,
+        "cnt_fam_members":        1,
+        "is_married_flag":        0,
         "employment_status_grouped": emp_grouped,
     }])
 
 
+def _resolve_user(identifier: str, db: Session) -> User:
+    user = db.query(User).filter(User.email == identifier).first()
+    if user:
+        return user
+
+    user = db.query(User).filter(User.id == identifier).first()
+    if user:
+        return user
+
+    raise ValueError(f"User '{identifier}' not found")
+
+
 def get_credit_score(user_id: str, db: Session) -> dict:
+    user = _resolve_user(user_id, db)
     artifact    = _load()
     pipeline    = artifact["pipeline"]
     feat_cols   = artifact["feature_cols"]
@@ -127,7 +158,7 @@ def get_credit_score(user_id: str, db: Session) -> dict:
             ORDER BY submitted_at DESC
             LIMIT 1
         """),
-        {"uid": user_id},
+        {"uid": user.id},
     ).fetchone()
 
     if app is None:
@@ -145,7 +176,7 @@ def get_credit_score(user_id: str, db: Session) -> dict:
             FROM loan_applications
             WHERE user_id = :uid
         """),
-        {"uid": user_id},
+        {"uid": user.id},
     ).fetchone()
 
     total              = int(prev.total) if prev else 0
@@ -188,7 +219,7 @@ def get_credit_score(user_id: str, db: Session) -> dict:
         pass
 
     return {
-        "member_key":          user_id,
+        "member_key":          str(user.id),
         "credit_score":        credit_score,
         "score_band":          score_to_band(credit_score),
         "default_probability": round(pd_value, 4),
