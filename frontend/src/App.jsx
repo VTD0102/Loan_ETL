@@ -15,7 +15,6 @@ import SubmitPersonalInfoPage from './pages/customer/SubmitInfo'
 import ChatbotPage            from './pages/customer/Chat'
 
 // ── Admin Pages ───────────────────────────────────
-import AdminLoginPage              from './pages/admin/Login'
 import AdminDashboardPage          from './pages/admin/Dashboard'
 import PendingApplicationsPage     from './pages/admin/PendingList'
 import AllApplicationsPage         from './pages/admin/ApplicationList'
@@ -58,10 +57,10 @@ const AdminProtectedRoute = ({ children }) => {
   const user  = useAuthStore((s) => s.user)
 
   if (!token) {
-    return <Navigate to="/admin/login" replace />
+    return <Navigate to="/login" replace />
   }
   if (user?.role !== 'admin') {
-    return <Navigate to="/admin/login" replace />
+    return <Navigate to="/login" replace />
   }
   return children
 }
@@ -107,7 +106,7 @@ const App = () => (
     } />
 
     {/* ── Admin — public ───────────────────────── */}
-    <Route path="/admin/login" element={<AdminLoginPage />} />
+    <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
     {/* ── Admin — protected (AdminLayout wraps all) */}
     <Route path="/admin" element={

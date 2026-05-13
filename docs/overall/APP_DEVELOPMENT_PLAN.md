@@ -20,12 +20,12 @@ CreditIntel là hệ thống Data Engineering + Machine Learning phục vụ **q
 | Gold | `gold.loan_features_v1` + 5 views | Feature engineering cho ML & Dashboard |
 
 **ML Model hiện tại:**
-- **Loại**: Random Forest Classifier (200 cây, class_weight='balanced')
-- **Target**: `is_default` (tỷ lệ vỡ nợ ~15%)
-- **Performance**: ROC-AUC = 0.864, Recall = 76% với default class
-- **Artifact**: `ml/models/loan_risk_model.pkl`
+- **Risk model**: LightGBM trained by `ml/retrain_customer_model.py`
+- **Risk artifact**: `ml/models/customer_risk_model.pkl`
+- **Scorecard model**: Logistic Regression trained by `ml/train_scorecard.py`
+- **Scorecard artifact**: `ml/models/scorecard_model.pkl`
 - **Ngưỡng rủi ro**: Low < 0.2, Medium 0.2–0.4, High > 0.4
-- **Output**: Risk level (Low/Medium/High), risk score, đề xuất hạn mức & kỳ hạn
+- **Output**: Risk level (Low/Medium/High), risk score, đề xuất hạn mức & kỳ hạn; scorecard trả FICO-style credit score.
 
 **Tech stack hiện tại:**
 - Database: PostgreSQL (Supabase)
@@ -59,7 +59,7 @@ FastAPI Backend
 ├── /auth/*           JWT Authentication
 ├── /applications/*   CRUD đơn vay
 ├── /admin/*          Admin APIs
-├── /predict          ML Model
+├── /credit-score     Scorecard API
 └── /chat             RAG Model
            │
            ▼

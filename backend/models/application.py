@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import String, DateTime, Numeric, Integer, Boolean, Text, ForeignKey, func
+from sqlalchemy import String, DateTime, Numeric, Integer, Boolean, Text, ForeignKey, func, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -27,6 +27,20 @@ class LoanApplication(Base):
     is_homeowner: Mapped[bool] = mapped_column(Boolean)
     listing_category: Mapped[str] = mapped_column(String)
     credit_score: Mapped[int] = mapped_column(Integer)
+    ext_source_1: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    ext_source_3: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    num_bureau_records: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    num_active_credit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_overdue_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    max_credit_overdue_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    has_bad_debt: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    income_verifiable_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    age_years: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    gender_male_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    education_ordinal: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cnt_children: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cnt_fam_members: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_married_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     
     # Các trường có thể cập nhật sau khi đánh giá, nên cho phép nullable ở cấp database / Python
     default_probability: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
@@ -34,6 +48,9 @@ class LoanApplication(Base):
     risk_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     recommended_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
     recommended_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    feature_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    imputed_features: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

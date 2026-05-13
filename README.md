@@ -11,7 +11,7 @@
 Loan_ETL/
 ├── backend/          # FastAPI REST API (Auth, CRUD, Admin, Chat)
 ├── frontend/         # React + Vite + TailwindCSS (Customer & Admin UI)
-├── ml/               # Machine Learning (Train, Predict, Model artifacts)
+├── ml/               # Machine Learning (risk retrain, scorecard train, artifacts)
 ├── etl/              # ETL Pipeline (Bronze → Silver → Core → Gold)
 ├── database/         # SQL Scripts khởi tạo & transform
 ├── data/             # Raw dataset (Prosper Loan)
@@ -52,8 +52,8 @@ python -m etl.etl_gold
 
 ### 4. Machine Learning
 ```bash
-python ml/train_model.py                    # Train model
-python ml/predict_engine.py <member_key>    # Predict cho 1 khách hàng
+python -m ml.retrain_customer_model         # Train LightGBM risk model
+python ml/train_scorecard.py                # Train LR scorecard model
 ```
 
 ---
@@ -65,7 +65,7 @@ python ml/predict_engine.py <member_key>    # Predict cho 1 khách hàng
 | **Backend API** | Python, FastAPI, SQLAlchemy 2.0, Pydantic V2, JWT (python-jose), bcrypt |
 | **Frontend** | React 18, Vite, TailwindCSS, Axios, Zustand, React Router v6 |
 | **Database** | PostgreSQL (Supabase) |
-| **ML** | scikit-learn, pandas, joblib |
+| **ML** | LightGBM, scikit-learn, pandas, joblib |
 | **AI Chatbot** | LangChain, RAG (Retrieval-Augmented Generation) |
 | **ETL** | Python, pandas, psycopg2, SQLAlchemy |
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CreditIntel** is a full-stack loan management and risk assessment system. It combines a FastAPI backend, React frontend, PostgreSQL database (hosted on Supabase), a scikit-learn ML risk model, a LangChain RAG chatbot (Pinecone + OpenRouter), and a Bronze→Silver→Core→Gold ETL pipeline over a Prosper Loan dataset.
+**CreditIntel** is a full-stack loan management and risk assessment system. It combines a FastAPI backend, React frontend, PostgreSQL database (hosted on Supabase), a LightGBM risk model, an LR scorecard model, a LangChain RAG chatbot (Pinecone + OpenRouter), and a Bronze→Silver→Core→Gold ETL pipeline.
 
 ## Commands
 
@@ -38,9 +38,8 @@ python -m etl.etl_gold
 
 ### Machine Learning
 ```bash
-python ml/train_model.py
-python ml/predict_engine.py <member_key>
-python ml/retrain_customer_model.py
+python -m ml.retrain_customer_model
+python ml/train_scorecard.py
 ```
 
 ### Backend Tests
@@ -55,7 +54,7 @@ python tests_local/test_task_1_3.py
 ### Request Flow
 1. **Frontend** (React/Zustand) → HTTP with JWT → **Backend API** (FastAPI)
 2. **Backend** → SQL → **PostgreSQL** (Supabase)
-3. **Backend** → scikit-learn model loaded via joblib → **ML prediction** on loan submission
+3. **Backend** → `customer_risk_model.pkl` loaded via joblib → **ML risk prediction** on loan submission
 4. **Backend** → LangChain RAG → **Pinecone** vector store + **OpenRouter** (Gemini Flash 1.5)
 
 ### Backend Layer Structure (`backend/`)
@@ -112,7 +111,8 @@ VITE_API_URL=http://localhost:8000
 
 ## Key Documentation
 - `backend/BACKEND_API_SPEC.md` — full endpoint reference
-- `backend/ML_INTEGRATION_CHECKLIST.md` — exact ML payload schema (feature names, types)
+- `ml/retrain_customer_model.py` — trains the LightGBM risk artifact consumed by `backend/services/ml_service.py`
+- `ml/train_scorecard.py` — trains the LR scorecard artifact consumed by `backend/services/credit_score_service.py`
 - `docs/ADMIN_GUIDE.md` — admin dashboard usage
 - `docs/data_dictionary/` — ETL layer schemas
 

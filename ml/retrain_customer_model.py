@@ -7,6 +7,7 @@ Run from project root:
     python -m ml.retrain_customer_model
 """
 import sys
+from datetime import datetime, timezone
 import joblib
 import pandas as pd
 from pathlib import Path
@@ -23,8 +24,9 @@ from utils.db_connection import get_engine
 from ml.validate_data import validate
 
 MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
+MODEL_VERSION = "customer_lgbm_v2"
 
-# ── Risk thresholds — must stay in sync with predict_customer.py ─────────────
+# ── Risk thresholds — used by backend/services/ml_service.py at inference ────
 LOW_THRESHOLD  = 0.2
 HIGH_THRESHOLD = 0.4
 
@@ -139,6 +141,8 @@ def train():
 
     X = df[ALL_FEATURES]
     y = df["is_default"]
+    feature_defaults = _feature_defaults(X)
+    dti_p75 = float(df["dti"].quantile(0.75))
 
     # ── 3. Split ─────────────────────────────────────────
     print("\n[4/6] Splitting 80/20 (stratified by is_default)...")
@@ -175,7 +179,7 @@ def train():
         )),
     ])
 
-    print("  Pipeline: StandardScaler + OneHotEncoder → RandomForest(200 trees)")
+    print("  Pipeline: numeric passthrough + OrdinalEncoder → LightGBM")
 
     # ── 5. Train ─────────────────────────────────────────
     print("\n[6/6] Training...")
@@ -194,25 +198,43 @@ def train():
     ))
 
     # ── 7. Save artifact ─────────────────────────────────
-    # FIX: save feature_names_out (expanded after OneHotEncoder)
-    # so predict_customer.py can align columns correctly at inference time
-    ohe_feature_names = (
+    feature_names_out = (
         pipeline
         .named_steps["preprocessor"]
-        .named_transformers_["cat"]
-        .get_feature_names_out(CATEGORICAL_FEATURES)
+        .get_feature_names_out()
         .tolist()
     )
-    feature_names_out = NUMERIC_FEATURES + ohe_feature_names
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({
-        "pipeline"    : pipeline,
-        "feature_cols": ALL_FEATURES,
-        "thresholds"  : {"low": LOW_THRESHOLD, "high": HIGH_THRESHOLD},
+        "pipeline"           : pipeline,
+        "feature_cols"       : ALL_FEATURES,
+        "feature_names_out"  : feature_names_out,
+        "feature_defaults"   : feature_defaults,
+        "thresholds"         : {"low": LOW_THRESHOLD, "high": HIGH_THRESHOLD},
+        "dti_p75"            : dti_p75,
+        "model_version"      : MODEL_VERSION,
+        "trained_at"         : datetime.now(timezone.utc).isoformat(),
     }, MODEL_PATH)
     print(f"\n  Saved → {MODEL_PATH}")
     print("=" * 55)
+
+
+def _feature_defaults(X: pd.DataFrame) -> dict:
+    defaults = {}
+    for col in NUMERIC_FEATURES:
+        value = X[col].median()
+        defaults[col] = 0 if pd.isna(value) else _python_scalar(value)
+    for col in CATEGORICAL_FEATURES:
+        mode = X[col].mode(dropna=True)
+        defaults[col] = "Other/Unknown" if mode.empty else str(mode.iloc[0])
+    return defaults
+
+
+def _python_scalar(value):
+    if hasattr(value, "item"):
+        return value.item()
+    return value
 
 
 if __name__ == "__main__":

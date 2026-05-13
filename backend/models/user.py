@@ -10,6 +10,7 @@ from .base import Base
 # Sử dụng TYPE_CHECKING để tránh Circular Import
 if TYPE_CHECKING:
     from .application import LoanApplication
+    from .chat import ChatSession
 
 class User(Base):
     __tablename__ = "users"
@@ -20,7 +21,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String)
     role: Mapped[str] = mapped_column(String, default="customer")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-    chat_history: Mapped[List["ChatMessage"]] = relationship("ChatMessage", back_populates="user")
+    chat_sessions: Mapped[List["ChatSession"]] = relationship(
+        "ChatSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
     # Relationships
     # Dùng string "LoanApplication" thay vì class object trực tiếp

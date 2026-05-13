@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #10: Đánh giá Model hiện tại cho RAG</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+        --accent:#58a6ff;--green:#7ee787;--yellow:#d29922;--red:#f85149;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;background:var(--bg);
+       color:var(--text);line-height:1.65;font-size:15.5px;max-width:980px;margin:0 auto;padding:48px 24px 80px;}
+  header{border-bottom:2px solid var(--border);padding-bottom:28px;margin-bottom:40px;}
+  .badge{display:inline-block;background:rgba(210,153,34,.15);color:var(--yellow);padding:4px 10px;
+         border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--muted);}
+  .meta span strong{color:var(--text);font-weight:500}
+  h2{font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;}
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+  p{margin-bottom:14px} ul,ol{margin-left:24px;margin-bottom:14px} li{margin-bottom:6px} li::marker{color:var(--accent)}
+  strong{color:var(--text);font-weight:600} em{color:var(--purple);font-style:normal;font-weight:500}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin:16px 0;}
+  .card.info{border-left:4px solid var(--accent)} .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)} .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--surface);border-radius:8px;
+        overflow:hidden;border:1px solid var(--border);font-size:14.5px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;}
+  th{background:rgba(88,166,255,.08);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(88,166,255,.04)}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(255,255,255,.06);
+       padding:1px 6px;border-radius:4px;color:var(--accent);}
+  pre{background:#0a0e13;border:1px solid var(--border);border-radius:8px;padding:14px 18px;
+      overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.5;}
+  pre code{background:transparent;padding:0;color:var(--text);}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 24px;margin:28px 0;}
+  .toc h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+  .toc ol{margin-left:18px} .toc a{color:var(--text);text-decoration:none} .toc a:hover{color:var(--accent)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;white-space:nowrap;}
+  .pill.ok{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.warn{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .pill.fail{background:rgba(248,81,73,.12);color:var(--red)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+  .metric .num{font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .metric .num.warn{color:var(--yellow)} .metric .num.fail{color:var(--red)} .metric .num.ok{color:var(--green)}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #10</span>
+  <h1>Đánh giá Model hiện tại cho RAG</h1>
+  <p class="subtitle">Kết luận kỹ thuật: đã đủ để làm demo RAG có kiểm soát, chưa đủ để coi là RAG production-ready</p>
+  <div class="meta">
+    <span><strong>Loại:</strong> Readiness assessment</span>
+    <span><strong>Ngày:</strong> 13/05/2026</span>
+    <span><strong>Phạm vi:</strong> ML model + RAG backend + knowledge base</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#s1">Kết luận nhanh</a></li>
+    <li><a href="#s2">RAG cần gì từ model?</a></li>
+    <li><a href="#s3">Trạng thái hiện tại trong repo</a></li>
+    <li><a href="#s4">Điểm đủ dùng</a></li>
+    <li><a href="#s5">Điểm chưa đủ</a></li>
+    <li><a href="#s6">Quyết định Go / No-Go</a></li>
+    <li><a href="#s7">Checklist cần hoàn tất</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1.</span>Kết luận nhanh</h2>
+<div class="card warn">
+  <h4>Verdict</h4>
+  <p>
+    <strong>Model hiện tại chưa đủ vững để làm RAG chạy thật end-to-end.</strong>
+    Tuy nhiên, repo đã có đủ khung để làm <em>demo RAG có kiểm soát</em>: có LightGBM risk model, scorecard,
+    knowledge base dạng Markdown, retriever Pinecone, prompt tiếng Việt, API <code>/chat</code>, và user context builder.
+  </p>
+  <p>
+    Vấn đề chính không nằm ở việc thiếu LLM. Vấn đề nằm ở <strong>độ tin cậy của context mà RAG nhận được</strong>:
+    backend prediction có nguy cơ fallback sang mock, schema chat trong SQL và SQLAlchemy chưa đồng nhất, và chưa có bằng chứng ingest Pinecone
+    đã chạy thành công trong môi trường hiện tại.
+  </p>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="num warn">Demo</div><div class="lbl">Mức sẵn sàng hiện tại</div></div>
+  <div class="metric"><div class="num ok">Có</div><div class="lbl">RAG code skeleton</div></div>
+  <div class="metric"><div class="num fail">Chưa</div><div class="lbl">Verified E2E</div></div>
+  <div class="metric"><div class="num warn">Cần sửa</div><div class="lbl">ML inference contract</div></div>
+</div>
+
+<h2 id="s2"><span class="num">2.</span>RAG cần gì từ model?</h2>
+<p>
+  RAG không trực tiếp "train" model ML. RAG cần model ML tạo ra dữ liệu đáng tin cậy để đưa vào prompt:
+  <code>default_probability</code>, <code>risk_level</code>, <code>risk_score</code>, hạn mức/kỳ hạn đề xuất, và nếu có thể là các yếu tố giải thích.
+</p>
+
+<table>
+  <thead><tr><th>Thành phần</th><th>Vai trò trong RAG</th><th>Yêu cầu tối thiểu</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>customer_risk_model.pkl</code></td>
+      <td>Tạo P(default), phân loại Low/Medium/High, làm context cá nhân hóa.</td>
+      <td>Inference không fallback mock, output được lưu vào <code>loan_applications</code>.</td>
+    </tr>
+    <tr>
+      <td><code>scorecard_model.pkl</code></td>
+      <td>Giải thích điểm tín dụng 300-850 và top factors cho khách hàng.</td>
+      <td>Endpoint <code>/credit-score</code> chạy được với application thật.</td>
+    </tr>
+    <tr>
+      <td>Knowledge base</td>
+      <td>Cung cấp policy, FAQ, data dictionary để LLM trả lời có nguồn.</td>
+      <td>Đã ingest vào vector DB, retrieve được source documents.</td>
+    </tr>
+    <tr>
+      <td>LLM + prompt</td>
+      <td>Ghép user context + retrieved docs thành câu trả lời tiếng Việt.</td>
+      <td>Có guardrails, từ chối ngoài phạm vi, không hứa phê duyệt.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s3"><span class="num">3.</span>Trạng thái hiện tại trong repo</h2>
+
+<h3>3.1. ML artifacts</h3>
+<table>
+  <thead><tr><th>Artifact</th><th>Trạng thái</th><th>Nhận xét</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>ml/models/customer_risk_model.pkl</code></td>
+      <td><span class="pill ok">Có file</span></td>
+      <td>File khoảng 27MB. Code training dùng LightGBM và threshold Low &lt; 0.2, High &gt; 0.4.</td>
+    </tr>
+    <tr>
+      <td><code>ml/models/scorecard_model.pkl</code></td>
+      <td><span class="pill ok">Có file</span></td>
+      <td>Dùng cho endpoint <code>/credit-score</code>, chuyển P(default) thành score 300-850.</td>
+    </tr>
+    <tr>
+      <td>Metadata artifact</td>
+      <td><span class="pill warn">Chưa xác minh runtime</span></td>
+      <td>Môi trường Python hiện tại thiếu <code>joblib</code>, nên chưa load trực tiếp pickle để đối chiếu schema artifact.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.2. RAG backend</h3>
+<table>
+  <thead><tr><th>File</th><th>Trạng thái</th><th>Ý nghĩa</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>backend/rag/chain.py</code></td>
+      <td><span class="pill ok">Có</span></td>
+      <td>Dùng <code>ConversationalRetrievalChain</code> với <code>ChatOpenAI</code> qua OpenRouter.</td>
+    </tr>
+    <tr>
+      <td><code>backend/rag/retriever.py</code></td>
+      <td><span class="pill ok">Có</span></td>
+      <td>Kết nối Pinecone index và dùng embedding model từ settings.</td>
+    </tr>
+    <tr>
+      <td><code>backend/rag/ingest.py</code></td>
+      <td><span class="pill ok">Có</span></td>
+      <td>Load Markdown từ <code>backend/rag/knowledge</code> và <code>docs/data_dictionary</code>, chunk 800/overlap 100.</td>
+    </tr>
+    <tr>
+      <td><code>backend/rag/prompts.py</code></td>
+      <td><span class="pill ok">Có</span></td>
+      <td>Prompt tiếng Việt có guardrails: không hứa phê duyệt, cite nguồn, từ chối ngoài phạm vi.</td>
+    </tr>
+    <tr>
+      <td><code>backend/services/chat_service.py</code></td>
+      <td><span class="pill warn">Có nhưng cần test</span></td>
+      <td>Đã nối <code>/chat</code> vào RAG, có rate limit 20 request/phút, nhưng bắt lỗi rộng và trả lỗi nội bộ vào response.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.3. Knowledge base</h3>
+<p>
+  Knowledge base hiện có <code>policy.md</code> và <code>faq.md</code>. Nội dung đủ cho câu hỏi phổ biến:
+  lý do AUTO_REJECTED, ý nghĩa Low/Medium/High, DTI, credit score, đề xuất hạn mức và quy trình sau duyệt.
+  Đây là mức đủ cho chatbot tư vấn cơ bản, nhưng chưa đủ cho audit hoặc compliance đầy đủ.
+</p>
+
+<h2 id="s4"><span class="num">4.</span>Điểm đủ dùng</h2>
+<div class="card success">
+  <ul>
+    <li><strong>Đã có đường đi dữ liệu cá nhân hóa</strong>: <code>build_user_context()</code> đọc application mới nhất và đưa P(default), risk_level, hạn mức vào prompt.</li>
+    <li><strong>Đã có knowledge retrieval</strong>: ingest Markdown vào Pinecone, retrieve top-k, đưa vào prompt dưới biến <code>{context}</code>.</li>
+    <li><strong>Prompt có guardrails cơ bản</strong>: chỉ trả lời về khoản vay/tín dụng, không hứa phê duyệt, không tiết lộ khách hàng khác.</li>
+    <li><strong>Model có output phù hợp cho RAG</strong>: xác suất vỡ nợ, risk level, risk score và recommendation đều là thông tin dễ giải thích bằng LLM.</li>
+    <li><strong>Scorecard bổ sung interpretability</strong>: có thể dùng endpoint <code>/credit-score</code> để giải thích điểm tín dụng nếu tích hợp vào chat context.</li>
+  </ul>
+</div>
+
+<h2 id="s5"><span class="num">5.</span>Điểm chưa đủ</h2>
+
+<h3>5.1. Contract giữa training và inference có dấu hiệu lệch</h3>
+<div class="card danger">
+  <p>
+    <code>ml/retrain_customer_model.py</code> hiện định nghĩa nhiều feature Gold/Home Credit như
+    <code>ext_source_1</code>, <code>num_previous_loans</code>, <code>num_bureau_records</code>, <code>age_years</code>,
+    <code>education_ordinal</code> và các demographic flags. Trong khi đó <code>backend/services/ml_service.py</code>
+    chỉ gửi 8 field từ form khách hàng.
+  </p>
+  <p>
+    Nếu artifact hiện tại đúng theo code training mới, backend prediction sẽ thiếu cột và rơi vào block <code>except</code>,
+    sau đó trả <strong>mock probability</strong>. Khi RAG dựa trên context này, chatbot có thể giải thích một kết quả không phải từ model thật.
+  </p>
+</div>
+
+<pre><code># Backend hiện chỉ tạo 8 fields:
+monthly_income, loan_amount, term, employment_status,
+dti, is_homeowner, listing_category, credit_score
+
+# Training hiện có thêm nhiều fields:
+ext_source_1, ext_source_3, bureau features,
+previous application features, demographic features...</code></pre>
+
+<h3>5.2. Schema chat SQL và SQLAlchemy chưa đồng nhất</h3>
+<table>
+  <thead><tr><th>Nguồn</th><th>Schema đang mô tả</th><th>Rủi ro</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>backend/models/chat.py</code></td>
+      <td><code>user_id</code>, <code>message</code>, <code>response</code>, <code>is_bot</code></td>
+      <td rowspan="2">Nếu database tạo theo SQL file, <code>chat_service.py</code> có thể query/insert sai cột.</td>
+    </tr>
+    <tr>
+      <td><code>backend/db/init_app.sql</code></td>
+      <td><code>session_id</code>, <code>role</code>, <code>content</code>, <code>sources</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>5.3. Chưa có bằng chứng Pinecone ingest đã chạy</h3>
+<p>
+  Code ingest đã có, nhưng cần chạy và xác nhận index <code>creditintel-kb</code> có vector. Nếu chưa ingest, retriever sẽ không có source documents,
+  LLM chỉ còn user context và dễ trả lời thiếu căn cứ.
+</p>
+
+<h3>5.4. RAG chưa có evaluation set</h3>
+<p>
+  Chưa thấy bộ câu hỏi kiểm thử cho RAG. Cần tối thiểu 15-20 câu hỏi bao phủ:
+  policy, FAQ, câu hỏi theo hồ sơ cá nhân, câu hỏi ngoài phạm vi, câu hỏi đòi tiết lộ model/khách hàng khác, và câu hỏi khi user chưa có đơn vay.
+</p>
+
+<h3>5.5. Error handling đang lộ chi tiết nội bộ</h3>
+<p>
+  <code>chat_service.py</code> trả trực tiếp nội dung exception vào answer:
+  <code>Lỗi truy vấn nội bộ RAG/LLM: {str(e)}</code>. Với demo nội bộ thì chấp nhận được, nhưng production nên log server-side và trả thông báo chung.
+</p>
+
+<h2 id="s6"><span class="num">6.</span>Quyết định Go / No-Go</h2>
+<table>
+  <thead><tr><th>Mục tiêu</th><th>Quyết định</th><th>Lý do</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Demo chatbot hỏi FAQ/chính sách</td>
+      <td><span class="pill ok">Go</span></td>
+      <td>Knowledge base và prompt đã đủ cho câu hỏi chung nếu Pinecone đã ingest.</td>
+    </tr>
+    <tr>
+      <td>Demo chatbot giải thích hồ sơ cá nhân</td>
+      <td><span class="pill warn">Go có điều kiện</span></td>
+      <td>Cần xác minh prediction không đang fallback mock và DB có application với ML outputs thật.</td>
+    </tr>
+    <tr>
+      <td>RAG dùng cho người dùng thật</td>
+      <td><span class="pill fail">No-Go</span></td>
+      <td>Chưa có E2E test, schema chat lệch, chưa verify vector index, chưa có RAG eval set.</td>
+    </tr>
+    <tr>
+      <td>RAG hỗ trợ quyết định tín dụng</td>
+      <td><span class="pill fail">No-Go</span></td>
+      <td>LLM chỉ nên giải thích/tham khảo; quyết định vẫn phải do rule + Admin. Prompt đã nói đúng nguyên tắc này.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s7"><span class="num">7.</span>Checklist cần hoàn tất</h2>
+
+<h3>7.1. Bắt buộc trước khi demo cá nhân hóa</h3>
+<div class="card warn">
+  <ul>
+    <li>Load <code>customer_risk_model.pkl</code> bằng <code>joblib</code> và in ra <code>feature_cols</code>, <code>thresholds</code>.</li>
+    <li>Sửa <code>ml_service.py</code> để feature input khớp artifact, hoặc retrain artifact chỉ dùng đúng 8 feature form.</li>
+    <li>Bỏ hoặc hạn chế fallback mock trong luồng demo RAG; nếu fallback thì phải gắn cờ <code>prediction_source = mock</code> và không để chatbot giải thích như model thật.</li>
+    <li>Chạy <code>python -m backend.rag.ingest</code> và xác nhận Pinecone index có vectors.</li>
+    <li>Gửi thử <code>POST /chat</code> với user có application mới nhất và kiểm tra answer có dùng đúng risk context.</li>
+  </ul>
+</div>
+
+<h3>7.2. Bắt buộc trước production</h3>
+<div class="card">
+  <ul>
+    <li>Đồng bộ schema <code>chat_messages</code> giữa SQL init và SQLAlchemy model.</li>
+    <li>Thêm RAG eval set: câu hỏi, expected behavior, source expected, pass/fail.</li>
+    <li>Không trả raw exception cho user; log lỗi bằng server logger.</li>
+    <li>Thêm citation từ <code>source_documents</code> vào response schema nếu frontend cần hiển thị nguồn.</li>
+    <li>Thêm kiểm thử regression cho các guardrails: không hứa phê duyệt, không tiết lộ khách hàng khác, không trả lời ngoài phạm vi.</li>
+    <li>Version hóa knowledge base và model artifact để biết mỗi câu trả lời dùng phiên bản nào.</li>
+  </ul>
+</div>
+
+<h3>7.3. Câu lệnh kiểm tra đề xuất</h3>
+<pre><code># 1. Kiểm tra artifact schema
+python -c "import joblib; a=joblib.load('ml/models/customer_risk_model.pkl'); print(a.keys()); print(a['feature_cols']); print(a['thresholds'])"
+
+# 2. Ingest knowledge base
+cd backend
+python -m rag.ingest
+
+# 3. Chạy backend và test Swagger
+uvicorn main:app --reload
+
+# 4. Test chatbot qua endpoint
+POST http://localhost:8000/chat</code></pre>
+
+<div class="card info">
+  <h4>Kết luận cuối</h4>
+  <p>
+    Nếu mục tiêu là demo module RAG trong project, hiện trạng đã gần đủ nhưng phải sửa/verify ML inference trước.
+    Nếu mục tiêu là chatbot dùng thật, cần hoàn tất checklist production. RAG chỉ mạnh khi context đúng; nếu risk score là mock hoặc schema DB lệch,
+    LLM sẽ trả lời trôi chảy nhưng không đáng tin.
+  </p>
+</div>
+
+<footer>
+  Báo cáo #10 — Đánh giá readiness của model hiện tại cho RAG. Tạo ngày 13/05/2026.
+</footer>
+
+</body>
+</html>
