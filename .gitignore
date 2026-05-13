@@ -2,6 +2,7 @@
 .env
 backend/.env
 frontend/.env
+config/etl_db.env
 frontend/.env.local
 frontend/.env.production
 
@@ -19,7 +20,7 @@ env/
 
 # ─── Data & Models (file lớn, KHÔNG push lên Git) ────────────────────────────
 data/raw/*.csv
-ml/models/*.pkl
+
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────
 frontend/node_modules/
@@ -31,10 +32,12 @@ frontend/build/
 .idea/
 .DS_Store
 Thumbs.db
-
+data/
 # ─── Docs build ───────────────────────────────────────────────────────────────
 docs/_build/
 
 # ─── AI Tools ─────────────────────────────────────────────────────────────────
 .claude/
 .gemini/
+.codex/
+.uv-python/

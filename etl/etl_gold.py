@@ -1,29 +1,54 @@
+"""
+Gold transformer — Home Credit dataset.
+
+Source : silver.home_credit_cleansed
+Target : gold.hc_features_v1  (DuckDB local)
+
+Run: python -m etl.etl_gold
+"""
+import sys
 from pathlib import Path
 
 from sqlalchemy import text
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+SQL_PATH = BASE_DIR / "database" / "transform_gold_homecredit.sql"
+
+sys.path.insert(0, str(BASE_DIR))
 from utils.db_connection import get_engine
 
-BASE_DIR = Path(__file__).resolve().parents[2]
 
+def main():
+    print("=" * 55)
+    print("  HOME CREDIT — GOLD TRANSFORM")
+    print("=" * 55)
 
-def run_gold_pipeline():
-    """Transform data from Core or Silver to Gold layer."""
-    try:
-        engine = get_engine()
+    engine = get_engine()
 
-        with (BASE_DIR / "database" / "transform_gold.sql").open("r", encoding="utf-8") as file:
-            etl_query = text(file.read())
+    print(f"\n[1/2] Chạy {SQL_PATH.name}...")
+    sql = SQL_PATH.read_text(encoding="utf-8")
 
-        with engine.connect() as conn:
-            print("Running Gold ETL from Core or Silver")
-            conn.execute(etl_query)
-            conn.commit()
-            print("Gold ETL completed")
+    with engine.connect() as conn:
+        conn.execute(text(sql))
+        conn.commit()
 
-    except Exception as exc:
-        print(f"Gold ETL failed: {exc}")
+    print("\n[2/2] Xác nhận...")
+    with engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM gold.hc_features_v1")
+        ).scalar()
+        default_rate = conn.execute(
+            text("SELECT ROUND(AVG(is_default::numeric)::numeric, 4) FROM gold.hc_features_v1")
+        ).scalar()
+        avg_score = conn.execute(
+            text("SELECT ROUND(AVG(credit_score_midpoint)::numeric, 1) FROM gold.hc_features_v1")
+        ).scalar()
+
+    print(f"  ✓ {count:,} rows trong gold.hc_features_v1")
+    print(f"  ✓ Default rate     : {float(default_rate):.2%}")
+    print(f"  ✓ Avg credit score : {avg_score}")
+    print("=" * 55)
 
 
 if __name__ == "__main__":
-    run_gold_pipeline()
+    main()

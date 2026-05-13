@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #03: Bronze Layer</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+        --accent:#58a6ff;--green:#7ee787;--yellow:#d29922;--red:#f85149;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;background:var(--bg);
+       color:var(--text);line-height:1.65;font-size:15.5px;max-width:920px;margin:0 auto;padding:48px 24px 80px;}
+  header{border-bottom:2px solid var(--border);padding-bottom:28px;margin-bottom:40px;}
+  .badge{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:4px 10px;
+         border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--muted);}
+  .meta span strong{color:var(--text);font-weight:500}
+  h2{font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;}
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+  p{margin-bottom:14px} ul,ol{margin-left:24px;margin-bottom:14px} li{margin-bottom:6px} li::marker{color:var(--accent)}
+  strong{color:var(--text);font-weight:600} em{color:var(--purple);font-style:normal;font-weight:500}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin:16px 0;}
+  .card.info{border-left:4px solid var(--accent)} .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)} .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--surface);border-radius:8px;
+        overflow:hidden;border:1px solid var(--border);font-size:14.5px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:rgba(88,166,255,.08);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(88,166,255,.04)}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(255,255,255,.06);
+       padding:1px 6px;border-radius:4px;color:var(--accent);}
+  pre{background:#0a0e13;border:1px solid var(--border);border-radius:8px;padding:14px 18px;
+      overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.5;}
+  pre code{background:transparent;padding:0;color:var(--text);}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 24px;margin:28px 0;}
+  .toc h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+  .toc ol{margin-left:18px} .toc a{color:var(--text);text-decoration:none} .toc a:hover{color:var(--accent)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;}
+  .pill.ok{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.todo{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .pill.fail{background:rgba(248,81,73,.12);color:var(--red)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+  .metric .num{font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+  .arch-flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:20px 0;padding:20px;
+             background:var(--surface);border:1px dashed var(--border);border-radius:8px;
+             font-family:'JetBrains Mono',monospace;font-size:13px;justify-content:center;}
+  .arch-flow .node{padding:8px 14px;background:rgba(88,166,255,.1);border:1px solid var(--accent);
+                   border-radius:6px;color:var(--accent);}
+  .arch-flow .node.bronze{background:rgba(210,153,34,.1);border-color:var(--yellow);color:var(--yellow)}
+  .arch-flow .arrow{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #03</span>
+  <h1>Bronze Layer</h1>
+  <p class="subtitle">Lớp lưu raw data — load CSV → DuckDB không biến đổi</p>
+  <div class="meta">
+    <span><strong>Module:</strong> ETL — Stage 1/3</span>
+    <span><strong>Code:</strong> <code>etl/load_bronze.py</code></span>
+    <span><strong>Ngày:</strong> 13/05/2026</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#s1">Tóm tắt báo cáo</a></li>
+    <li><a href="#s2">Vai trò của Bronze layer</a></li>
+    <li><a href="#s3">Cấu trúc &amp; nguồn dữ liệu</a></li>
+    <li><a href="#s4">Quy trình load</a></li>
+    <li><a href="#s5">Quyết định kỹ thuật quan trọng</a></li>
+    <li><a href="09_van_de_can_giai_quyet.html">→ Xem các vấn đề cần giải quyết (file riêng)</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
+<div class="card info">
+  <p>
+    Bronze là <strong>lớp thấp nhất</strong> trong kiến trúc Medallion (Bronze → Silver → Gold). Mục tiêu duy nhất: <em>nhập nguyên trạng</em> CSV
+    từ Kaggle vào DuckDB để các layer trên xử lý. <strong>Không biến đổi, không clean, không feature engineering</strong> ở giai đoạn này.
+  </p>
+  <p>
+    Project load 3 trong 7 CSV của Home Credit: <code>application_train</code>, <code>previous_application</code>, <code>bureau</code> —
+    chọn lọc <em>chỉ các cột cần thiết</em> để tiết kiệm memory (CSV gốc lên tới 800MB).
+  </p>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="num">307,511</div><div class="lbl">application rows</div></div>
+  <div class="metric"><div class="num">1.67M</div><div class="lbl">previous_application</div></div>
+  <div class="metric"><div class="num">1.72M</div><div class="lbl">bureau rows</div></div>
+  <div class="metric"><div class="num">~30s</div><div class="lbl">Total load time</div></div>
+</div>
+
+<div class="arch-flow">
+  <div class="node bronze">CSV (Kaggle)</div>
+  <span class="arrow">→</span>
+  <div class="node bronze">pandas read_csv</div>
+  <span class="arrow">→</span>
+  <div class="node">DuckDB CREATE TABLE</div>
+  <span class="arrow">→</span>
+  <div class="node">bronze.{table}</div>
+</div>
+
+<h2 id="s2"><span class="num">2.</span>Vai trò của Bronze layer</h2>
+
+<h3>2.1. Nguyên tắc thiết kế</h3>
+<div class="card">
+  <p><strong>Medallion Architecture</strong> (Databricks pattern) — chia data warehouse thành 3 lớp tăng dần về chất lượng:</p>
+  <ul>
+    <li><strong>Bronze</strong> — raw, immutable, "single source of truth" từ nguồn.</li>
+    <li><strong>Silver</strong> — cleaned, conformed, schema chuẩn hoá.</li>
+    <li><strong>Gold</strong> — business-ready, feature engineered, có thể serve thẳng cho ML/BI.</li>
+  </ul>
+</div>
+
+<h3>2.2. Tại sao cần Bronze riêng (không nhảy thẳng vào Silver)?</h3>
+<ul>
+  <li><strong>Reproducibility</strong> — nếu silver SQL có bug, có thể re-run từ bronze mà không cần re-download CSV.</li>
+  <li><strong>Audit trail</strong> — giữ raw để truy nguyên: "tại sao giá trị này có?" → check bronze.</li>
+  <li><strong>Idempotency</strong> — <code>CREATE OR REPLACE TABLE</code> trên bronze cho phép rerun an toàn.</li>
+  <li><strong>Decoupling</strong> — đổi schema silver không cần re-load CSV.</li>
+</ul>
+
+<h2 id="s3"><span class="num">3.</span>Cấu trúc &amp; nguồn dữ liệu</h2>
+
+<h3>3.1. Các bảng Bronze hiện có</h3>
+<table>
+  <thead><tr><th>Bảng</th><th>Source CSV</th><th>Rows</th><th>Cột load</th><th>Cột bỏ qua</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>bronze.home_credit_raw</code></td>
+      <td><code>application_train.csv</code></td>
+      <td>307,511</td>
+      <td>19 / 122</td>
+      <td>Drop ~103 cột không dùng (FLAG_DOCUMENT_*, AMT_REQ_*, HOUSETYPE_*)</td>
+    </tr>
+    <tr>
+      <td><code>bronze.previous_application_raw</code></td>
+      <td><code>previous_application.csv</code></td>
+      <td>1,670,214</td>
+      <td>3 / 37</td>
+      <td>Chỉ giữ SK_ID_CURR, SK_ID_PREV, NAME_CONTRACT_STATUS</td>
+    </tr>
+    <tr>
+      <td><code>bronze.bureau_raw</code></td>
+      <td><code>bureau.csv</code></td>
+      <td>1,716,428</td>
+      <td>4 / 17</td>
+      <td>Chỉ giữ SK_ID_CURR, CREDIT_ACTIVE, AMT_CREDIT_SUM_OVERDUE, CREDIT_DAY_OVERDUE</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.2. Schema home_credit_raw (cột giữ lại)</h3>
+<table>
+  <thead><tr><th>Cột</th><th>Kiểu</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr><td><code>SK_ID_CURR</code></td><td>INT</td><td>Primary key</td></tr>
+    <tr><td><code>TARGET</code></td><td>0/1</td><td>Default flag</td></tr>
+    <tr><td><code>AMT_CREDIT</code>, <code>AMT_ANNUITY</code>, <code>AMT_INCOME_TOTAL</code></td><td>NUMERIC</td><td>Loan + income</td></tr>
+    <tr><td><code>NAME_CONTRACT_TYPE</code>, <code>NAME_INCOME_TYPE</code></td><td>TEXT</td><td>Loại vay + thu nhập</td></tr>
+    <tr><td><code>FLAG_OWN_REALTY</code></td><td>Y/N</td><td>Có sở hữu bất động sản</td></tr>
+    <tr><td><code>DAYS_EMPLOYED</code></td><td>INT</td><td>Số ngày làm việc (âm = ngược)</td></tr>
+    <tr><td><code>EXT_SOURCE_1/2/3</code></td><td>0.0–1.0</td><td>External credit scores</td></tr>
+    <tr><td><code>FLAG_EMP_PHONE</code></td><td>0/1</td><td>Có cung cấp số điện thoại cty</td></tr>
+    <tr><td><code>DAYS_BIRTH</code></td><td>INT (âm)</td><td>Tuổi tính theo ngày</td></tr>
+    <tr><td><code>CODE_GENDER</code></td><td>M/F/XNA</td><td>Giới tính</td></tr>
+    <tr><td><code>NAME_EDUCATION_TYPE</code></td><td>TEXT</td><td>Trình độ học vấn</td></tr>
+    <tr><td><code>NAME_FAMILY_STATUS</code></td><td>TEXT</td><td>Tình trạng hôn nhân</td></tr>
+    <tr><td><code>CNT_CHILDREN</code>, <code>CNT_FAM_MEMBERS</code></td><td>INT</td><td>Số con + người trong gia đình</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s4"><span class="num">4.</span>Quy trình load</h2>
+
+<h3>4.1. Pseudocode</h3>
+<pre><code>1. Mở DuckDB connection (read-write)
+2. CREATE SCHEMA IF NOT EXISTS bronze
+3. Cho mỗi CSV:
+   a. pandas.read_csv(path, usecols=COLS) — chỉ load cột cần
+   b. con.execute("CREATE OR REPLACE TABLE bronze.X AS SELECT * FROM df")
+4. Verify row counts
+5. Đóng connection</code></pre>
+
+<h3>4.2. Pattern code chính</h3>
+<pre><code>import duckdb, pandas as pd
+
+df = pd.read_csv(CSV_PATH, usecols=COLS, low_memory=False)
+
+con = duckdb.connect('data/etl.duckdb')
+con.execute("CREATE SCHEMA IF NOT EXISTS bronze")
+con.execute("CREATE OR REPLACE TABLE bronze.home_credit_raw AS SELECT * FROM df")
+con.close()</code></pre>
+
+<h2 id="s5"><span class="num">5.</span>Quyết định kỹ thuật quan trọng</h2>
+
+<h3>5.1. Native DuckDB API thay vì SQLAlchemy</h3>
+<div class="card warn">
+  <h4>Lý do</h4>
+  <p>
+    Ban đầu dùng <code>pandas.to_sql()</code> qua SQLAlchemy. Nhưng <code>to_sql()</code> với <code>if_exists="replace"</code> gọi
+    <code>reflect()</code> để check table tồn tại — query này yêu cầu <code>pg_catalog.pg_collation</code> (PostgreSQL-specific) → DuckDB throw lỗi.
+  </p>
+  <p>
+    <strong>Fix:</strong> dùng native <code>duckdb.connect()</code> + <code>CREATE OR REPLACE TABLE ... AS SELECT * FROM df</code> — DuckDB tự
+    infer schema từ pandas DataFrame.
+  </p>
+</div>
+
+<h3>5.2. Column subsetting (load 19/122 cột)</h3>
+<p>
+  CSV gốc có 122 cột, nhiều cột <em>không dùng đến</em> (e.g. <code>FLAG_DOCUMENT_3..21</code>, <code>APARTMENTS_AVG</code>...).
+  Load đầy đủ tốn ~500MB memory. Subset 19 cột → ~30MB. Tradeoff: nếu cần thêm cột phải sửa <code>COLS</code> và re-run.
+</p>
+
+<h3>5.3. DAYS_EMPLOYED placeholder 365243</h3>
+<div class="card warn">
+  <p>
+    Trong Home Credit, <code>DAYS_EMPLOYED = 365243</code> (1000 năm) là <em>magic value</em> đánh dấu "không applicable"
+    (e.g. người về hưu, sinh viên). Bronze giữ nguyên giá trị này; Silver layer sẽ xử lý.
+  </p>
+</div>
+
+<h3>5.4. Chỉ load 3/7 bảng</h3>
+<p>
+  Project bỏ qua <code>installments_payments.csv</code> (13.6M rows) và <code>credit_card_balance.csv</code> (3.8M rows) vì:
+</p>
+<ul>
+  <li>Kích thước quá lớn, làm chậm pipeline trong khi gain AUC marginal (~+1–2%).</li>
+  <li>Có thể add sau khi cần boost performance ở Phase 4.</li>
+</ul>
+
+<footer>CreditIntel · Báo cáo #03 / Bronze Layer · Tài liệu nội bộ</footer>
+</body>
+</html>

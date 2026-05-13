@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #01: Mục tiêu Project</title>
+<style>
+  :root{
+    --bg:#0d1117; --surface:#161b22; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e;
+    --accent:#58a6ff; --green:#7ee787; --yellow:#d29922; --red:#f85149; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;
+    background:var(--bg);color:var(--text);
+    line-height:1.65;font-size:15.5px;
+    max-width:920px;margin:0 auto;padding:48px 24px 80px;
+  }
+  header{
+    border-bottom:2px solid var(--border);
+    padding-bottom:28px;margin-bottom:40px;
+  }
+  .badge{
+    display:inline-block;background:rgba(88,166,255,.12);
+    color:var(--accent);padding:4px 10px;border-radius:6px;
+    font-size:12px;font-weight:600;letter-spacing:.5px;
+    text-transform:uppercase;margin-bottom:14px;
+  }
+  h1{
+    font-size:32px;font-weight:700;letter-spacing:-.5px;
+    margin-bottom:8px;color:var(--text);
+  }
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{
+    display:flex;flex-wrap:wrap;gap:24px;
+    font-size:13px;color:var(--muted);
+  }
+  .meta span strong{color:var(--text);font-weight:500}
+
+  h2{
+    font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;
+    padding-bottom:8px;border-bottom:1px solid var(--border);
+    color:var(--text);
+  }
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{
+    font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;
+    color:var(--text);
+  }
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+
+  p{margin-bottom:14px;color:var(--text)}
+  ul,ol{margin-left:24px;margin-bottom:14px;color:var(--text)}
+  li{margin-bottom:6px}
+  li::marker{color:var(--accent)}
+
+  strong{color:var(--text);font-weight:600}
+  em{color:var(--purple);font-style:normal;font-weight:500}
+
+  .card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:18px 22px;margin:16px 0;
+  }
+  .card.info{border-left:4px solid var(--accent)}
+  .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)}
+  .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);
+           text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+
+  table{
+    width:100%;border-collapse:collapse;margin:18px 0;
+    background:var(--surface);border-radius:8px;overflow:hidden;
+    border:1px solid var(--border);font-size:14.5px;
+  }
+  th,td{
+    padding:11px 14px;text-align:left;
+    border-bottom:1px solid var(--border);
+  }
+  th{
+    background:rgba(88,166,255,.08);font-weight:600;
+    color:var(--text);font-size:13px;
+    text-transform:uppercase;letter-spacing:.5px;
+  }
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(88,166,255,.04)}
+  td code,td .tag{
+    font-family:'JetBrains Mono','Fira Code',monospace;font-size:12.5px;
+    background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px;
+  }
+
+  .pill{
+    display:inline-block;padding:2px 9px;border-radius:11px;
+    font-size:12px;font-weight:600;
+  }
+  .pill.in{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.out{background:rgba(248,81,73,.12);color:var(--red)}
+  .pill.partial{background:rgba(210,153,34,.15);color:var(--yellow)}
+
+  .toc{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:18px 24px;margin:28px 0;
+  }
+  .toc h4{
+    font-size:12px;font-weight:600;color:var(--muted);
+    text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;
+  }
+  .toc ol{margin-left:18px}
+  .toc a{color:var(--text);text-decoration:none}
+  .toc a:hover{color:var(--accent)}
+
+  .arch-flow{
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    margin:20px 0;padding:20px;
+    background:var(--surface);border:1px dashed var(--border);
+    border-radius:8px;font-family:'JetBrains Mono',monospace;
+    font-size:13px;justify-content:center;
+  }
+  .arch-flow .node{
+    padding:8px 14px;background:rgba(88,166,255,.1);
+    border:1px solid var(--accent);border-radius:6px;
+    color:var(--accent);
+  }
+  .arch-flow .node.green{background:rgba(126,231,135,.1);border-color:var(--green);color:var(--green)}
+  .arch-flow .node.purple{background:rgba(188,140,255,.1);border-color:var(--purple);color:var(--purple)}
+  .arch-flow .arrow{color:var(--muted);font-weight:600}
+
+  footer{
+    margin-top:60px;padding-top:24px;border-top:1px solid var(--border);
+    color:var(--muted);font-size:13px;text-align:center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #01</span>
+  <h1>CreditIntel — Mục tiêu Project</h1>
+  <p class="subtitle">Xác định bài toán, mục đích và yêu cầu giải pháp cho hệ thống quản lý &amp; đánh giá rủi ro tín dụng</p>
+  <div class="meta">
+    <span><strong>Đề tài:</strong> Hệ thống đánh giá rủi ro tín dụng dựa trên ML</span>
+    <span><strong>Phiên bản:</strong> 1.0</span>
+    <span><strong>Ngày:</strong> 12/05/2026</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#section-1">Tóm tắt báo cáo</a></li>
+    <li><a href="#section-2">Bối cảnh thực tế</a></li>
+    <li><a href="#section-3">Xác định bài toán</a></li>
+    <li><a href="#section-4">Mục đích &amp; tầm quan trọng</a></li>
+    <li><a href="#section-5">Người dùng &amp; bên liên quan</a></li>
+    <li><a href="#section-6">Yêu cầu giải pháp</a></li>
+    <li><a href="#section-7">Tài nguyên cần thiết</a></li>
+    <li><a href="#section-8">Tiêu chí thành công</a></li>
+    <li><a href="#section-9">Phạm vi &amp; giới hạn</a></li>
+    <li><a href="#section-10">Kết luận</a></li>
+  </ol>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
+<div class="card info">
+  <p>
+    <strong>CreditIntel</strong> là hệ thống quản lý vay và đánh giá rủi ro tín dụng, được xây dựng nhằm <em>tự động hoá quy trình duyệt vay</em>
+    và <em>cung cấp điểm tín dụng minh bạch</em> cho người dùng cuối. Project sử dụng kỹ thuật Machine Learning (LightGBM) kết hợp với phương pháp scorecard
+    truyền thống (Logistic Regression) để cho ra cả dự đoán rủi ro và điểm số FICO 300–850 có thể giải thích.
+  </p>
+  <p>
+    Mục tiêu chính: xây dựng một sản phẩm <strong>end-to-end</strong> bao gồm pipeline xử lý dữ liệu, mô hình ML, API backend, giao diện người dùng,
+    và chatbot hỗ trợ — đủ để demo một use case ngân hàng thực tế trong khuôn khổ học thuật.
+  </p>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-2"><span class="num">2.</span>Bối cảnh thực tế</h2>
+
+<h3>2.1. Vấn đề trong ngành ngân hàng</h3>
+<p>
+  Trong hoạt động cho vay tiêu dùng, ngân hàng đối mặt với hai mâu thuẫn lớn:
+</p>
+<ul>
+  <li><strong>Áp lực mở rộng quy mô</strong> — số lượng đơn vay tăng cao, nhân viên thẩm định không kịp xử lý thủ công.</li>
+  <li><strong>Áp lực kiểm soát rủi ro</strong> — duyệt sai một khoản vay có thể gây tổn thất lớn; tỷ lệ nợ xấu (NPL) là chỉ số sống còn.</li>
+</ul>
+<p>
+  Đánh giá rủi ro tín dụng thủ công có 3 hạn chế cơ bản: <em>chậm</em> (vài ngày/đơn), <em>thiếu nhất quán</em> (mỗi nhân viên có judgment khác nhau),
+  và <em>khó audit</em> (khó truy nguyên vì sao một đơn được duyệt/từ chối).
+</p>
+
+<h3>2.2. Khoảng trống dữ liệu cho người trẻ Việt Nam</h3>
+<p>
+  Ngoài tổ chức ngân hàng, người vay cũng gặp khó: hầu hết khách hàng <strong>không biết điểm tín dụng của mình</strong> và <strong>không biết
+  yếu tố nào ảnh hưởng tới khả năng được duyệt</strong>. Điều này làm gia tăng tỷ lệ đơn vay bị từ chối oan hoặc khách hàng tốt
+  không tiếp cận được dịch vụ tài chính.
+</p>
+
+<h3>2.3. Cơ hội từ Machine Learning</h3>
+<p>
+  Sự phát triển của ML trên dữ liệu dạng bảng (tabular data) — đặc biệt là gradient boosting (LightGBM, XGBoost) — đã cho phép xây dựng các mô hình
+  có ROC-AUC vượt 0.80 trên các dataset credit risk lớn. Đây là cơ sở kỹ thuật để giải quyết các vấn đề nêu trên.
+</p>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-3"><span class="num">3.</span>Xác định bài toán</h2>
+
+<h3>3.1. Bài toán lõi (Core ML Problem)</h3>
+<div class="card">
+  <p><strong>Bài toán phân loại nhị phân (Binary Classification):</strong></p>
+  <ul>
+    <li><strong>Input:</strong> Thông tin nhân khẩu, thu nhập, lịch sử tín dụng, đơn vay hiện tại của khách hàng.</li>
+    <li><strong>Output:</strong> Xác suất khách hàng sẽ default trong vòng 12 tháng tới — <code>P(default) ∈ [0, 1]</code>.</li>
+    <li><strong>Mục tiêu tối ưu:</strong> Tối đa hoá ROC-AUC trên tập test, đồng thời giữ recall cho lớp Default ở mức chấp nhận được.</li>
+  </ul>
+</div>
+
+<h3>3.2. Bài toán mở rộng (Credit Scoring)</h3>
+<p>
+  Bên cạnh dự đoán binary, project mở rộng sang bài toán <strong>credit scoring</strong> kiểu FICO:
+</p>
+<ul>
+  <li>Chuyển xác suất default thành điểm tín dụng trên thang <code>[300, 850]</code> theo công thức PDO (Points to Double the Odds).</li>
+  <li>Cung cấp <em>breakdown</em> cho từng feature: feature nào đóng góp bao nhiêu điểm vào tổng score — phục vụ tính minh bạch và auditability.</li>
+</ul>
+
+<h3>3.3. Bài toán phụ trợ</h3>
+<table>
+  <thead><tr><th>Bài toán</th><th>Phương pháp</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Xử lý dữ liệu thô → feature</td>
+      <td>ETL pipeline (Bronze → Silver → Gold)</td>
+      <td>Chuẩn hoá schema, tính feature engineering</td>
+    </tr>
+    <tr>
+      <td>Quản lý đơn vay end-to-end</td>
+      <td>State machine: Draft → Pending → Approved/Rejected</td>
+      <td>Workflow nghiệp vụ</td>
+    </tr>
+    <tr>
+      <td>Hỗ trợ khách hàng tự động</td>
+      <td>RAG chatbot (LangChain + Pinecone + LLM)</td>
+      <td>Trả lời câu hỏi cá nhân hoá theo credit score</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>3.4. Đặc điểm bài toán</h3>
+<div class="card warn">
+  <h4>Thách thức kỹ thuật</h4>
+  <ul>
+    <li><strong>Imbalanced class</strong> — chỉ ~8% applications bị default, model có xu hướng dự đoán "no default" cho mọi case.</li>
+    <li><strong>Missing data nhiều</strong> — <code>EXT_SOURCE_1</code> null 56%, nhiều cột demographic optional.</li>
+    <li><strong>Đánh đổi accuracy &amp; interpretability</strong> — model phức tạp (LGBM) chính xác hơn nhưng khó giải thích; LR đơn giản, dễ giải thích nhưng AUC thấp hơn.</li>
+    <li><strong>Yêu cầu pháp lý</strong> — quyết định tín dụng phải có thể giải thích cho khách hàng (Reg B ở Mỹ, tương tự ở các nước).</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-4"><span class="num">4.</span>Mục đích &amp; tầm quan trọng</h2>
+
+<h3>4.1. Mục tiêu cụ thể</h3>
+<ol>
+  <li><strong>Xây dựng mô hình ML dự đoán rủi ro mặc định</strong> với ROC-AUC ≥ 0.70.</li>
+  <li><strong>Cung cấp credit score chuẩn FICO 300–850</strong> kèm giải thích từng yếu tố ảnh hưởng.</li>
+  <li><strong>Hệ thống quản lý đơn vay</strong> hoạt động end-to-end từ submit đến quyết định cuối cùng.</li>
+  <li><strong>Pipeline ETL có tổ chức</strong> theo chuẩn modern data warehouse (Bronze/Silver/Gold).</li>
+  <li><strong>Chatbot RAG</strong> trả lời cá nhân hoá dựa trên context credit của user.</li>
+</ol>
+
+<h3>4.2. Ý nghĩa học thuật</h3>
+<p>
+  Project tổng hợp kiến thức nhiều môn học: <em>cơ sở dữ liệu</em> (PostgreSQL, DuckDB, ETL), <em>Machine Learning</em>
+  (gradient boosting, scorecard, SHAP), <em>web development</em> (FastAPI, React), <em>kiến trúc phần mềm</em>
+  (clean architecture, layered API), và <em>AI ứng dụng</em> (RAG, embedding, vector DB).
+</p>
+
+<h3>4.3. Giá trị thực tiễn</h3>
+<table>
+  <thead><tr><th>Vai trò</th><th>Giá trị nhận được</th></tr></thead>
+  <tbody>
+    <tr><td>Khách hàng cuối</td><td>Tự kiểm tra điểm tín dụng + biết được yếu tố ảnh hưởng</td></tr>
+    <tr><td>Loan officer / Admin</td><td>Tự động sort đơn theo risk score, giảm thời gian thẩm định 5–10x</td></tr>
+    <tr><td>Quản lý ngân hàng</td><td>Phân tích risk pattern, dự báo NPL, tuân thủ regulatory</td></tr>
+    <tr><td>Risk team</td><td>Có audit trail cho mọi quyết định ML, dễ tuning threshold</td></tr>
+  </tbody>
+</table>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-5"><span class="num">5.</span>Người dùng &amp; bên liên quan</h2>
+
+<h3>5.1. End users</h3>
+<table>
+  <thead><tr><th>Persona</th><th>Use case chính</th><th>Touchpoint</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Customer</strong></td>
+      <td>Đăng ký vay, kiểm tra credit score, hỏi chatbot</td>
+      <td>Frontend customer dashboard</td>
+    </tr>
+    <tr>
+      <td><strong>Loan officer</strong></td>
+      <td>Review danh sách đơn pending, approve/reject</td>
+      <td>Frontend admin dashboard</td>
+    </tr>
+    <tr>
+      <td><strong>Bank manager</strong></td>
+      <td>Xem báo cáo aggregate, risk distribution</td>
+      <td>Analytics view + Gold layer SQL</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>5.2. Stakeholders kỹ thuật</h3>
+<ul>
+  <li><strong>Data team</strong> — duy trì ETL pipeline, đảm bảo data quality.</li>
+  <li><strong>ML team</strong> — retrain model định kỳ khi data drift.</li>
+  <li><strong>Backend/Frontend team</strong> — phát triển và bảo trì API/UI.</li>
+  <li><strong>Devops / Infra</strong> — deploy, monitor, scale.</li>
+</ul>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-6"><span class="num">6.</span>Yêu cầu giải pháp</h2>
+
+<h3>6.1. Kiến trúc tổng quan</h3>
+<div class="arch-flow">
+  <div class="node green">Raw CSV</div>
+  <span class="arrow">→</span>
+  <div class="node">Bronze</div>
+  <span class="arrow">→</span>
+  <div class="node">Silver</div>
+  <span class="arrow">→</span>
+  <div class="node">Gold</div>
+  <span class="arrow">→</span>
+  <div class="node purple">ML Models</div>
+  <span class="arrow">→</span>
+  <div class="node">Backend API</div>
+  <span class="arrow">→</span>
+  <div class="node green">Frontend / User</div>
+</div>
+
+<h3>6.2. Các thành phần cần xây dựng</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Lớp</th><th>Thành phần</th><th>Công nghệ</th><th>Vai trò</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="3"><em>Data</em></td>
+      <td>ETL Pipeline</td>
+      <td>Python + DuckDB</td>
+      <td>Đưa CSV vào Bronze, làm sạch → Silver, feature engineering → Gold</td>
+    </tr>
+    <tr>
+      <td>Data Validation</td>
+      <td>Python (pandas)</td>
+      <td>Kiểm tra null rate, schema, class balance trước khi train</td>
+    </tr>
+    <tr>
+      <td>Local Storage</td>
+      <td>DuckDB file</td>
+      <td>Bronze/Silver/Gold không lên cloud, tránh quá tải Supabase</td>
+    </tr>
+    <tr>
+      <td rowspan="3"><em>ML</em></td>
+      <td>Risk Model</td>
+      <td>LightGBM</td>
+      <td>Dự đoán P(default), phục vụ /applications/submit</td>
+    </tr>
+    <tr>
+      <td>Scorecard</td>
+      <td>Logistic Regression + FICO PDO</td>
+      <td>Tính credit score 300–850, breakdown từng feature</td>
+    </tr>
+    <tr>
+      <td>Validation</td>
+      <td>scikit-learn metrics</td>
+      <td>ROC-AUC, precision/recall, calibration</td>
+    </tr>
+    <tr>
+      <td rowspan="3"><em>Backend</em></td>
+      <td>API Layer</td>
+      <td>FastAPI + Pydantic</td>
+      <td>Endpoints: auth, applications, admin, chat, credit-score</td>
+    </tr>
+    <tr>
+      <td>Database</td>
+      <td>PostgreSQL (Supabase)</td>
+      <td>Lưu users, loan_applications, chat_messages</td>
+    </tr>
+    <tr>
+      <td>Auth</td>
+      <td>JWT + bcrypt</td>
+      <td>Xác thực user/admin</td>
+    </tr>
+    <tr>
+      <td rowspan="2"><em>Frontend</em></td>
+      <td>Customer UI</td>
+      <td>React + Vite + Tailwind</td>
+      <td>Trang đăng ký, dashboard, credit score view</td>
+    </tr>
+    <tr>
+      <td>Admin UI</td>
+      <td>React + Zustand</td>
+      <td>Trang duyệt đơn, analytics</td>
+    </tr>
+    <tr>
+      <td><em>AI</em></td>
+      <td>RAG Chatbot</td>
+      <td>LangChain + Pinecone + OpenRouter</td>
+      <td>Hỗ trợ khách hàng, context-aware theo credit score</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-7"><span class="num">7.</span>Tài nguyên cần thiết</h2>
+
+<h3>7.1. Dữ liệu</h3>
+<table>
+  <thead><tr><th>Nguồn</th><th>Quy mô</th><th>Vai trò</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Home Credit Default Risk</strong> (Kaggle 2018)</td>
+      <td>307,511 applications · 23 cột chính + 2 bảng phụ (bureau, previous_application)</td>
+      <td>Nguồn data training chính</td>
+    </tr>
+    <tr>
+      <td>application_train.csv</td>
+      <td>~165 MB</td>
+      <td>Đơn vay + nhân khẩu học + flags</td>
+    </tr>
+    <tr>
+      <td>bureau.csv</td>
+      <td>~170 MB (1.72M rows)</td>
+      <td>Lịch sử tín dụng từ các ngân hàng khác</td>
+    </tr>
+    <tr>
+      <td>previous_application.csv</td>
+      <td>~404 MB (1.67M rows)</td>
+      <td>Lịch sử đơn vay trước đây tại Home Credit</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>7.2. Công cụ &amp; thư viện</h3>
+<ul>
+  <li><strong>Python 3.12+</strong>: pandas, scikit-learn, lightgbm, joblib, sqlalchemy, duckdb</li>
+  <li><strong>FastAPI ≥ 0.115</strong>: backend framework</li>
+  <li><strong>React 18 + Vite</strong>: frontend</li>
+  <li><strong>PostgreSQL</strong>: production DB (Supabase managed)</li>
+  <li><strong>DuckDB</strong>: local analytics DB cho ETL</li>
+  <li><strong>LangChain + Pinecone</strong>: RAG infrastructure</li>
+  <li><strong>OpenRouter (Gemini Flash 1.5)</strong>: LLM cho chatbot</li>
+</ul>
+
+<h3>7.3. Hạ tầng</h3>
+<ul>
+  <li><strong>Máy local</strong>: chạy ETL + train model (CPU đủ, không cần GPU).</li>
+  <li><strong>Supabase Free Tier</strong>: 512MB DB cho backend tables.</li>
+  <li><strong>Pinecone Free Tier</strong>: vector DB cho RAG.</li>
+  <li><strong>OpenRouter</strong>: API key cho LLM (chi phí thấp với Gemini Flash).</li>
+</ul>
+
+<h3>7.4. Nhân lực &amp; thời gian</h3>
+<p>
+  Project được thực hiện trong khuôn khổ học phần, cần phân chia công việc cho thành viên nhóm theo các mảng:
+  Data/ETL, ML, Backend, Frontend, RAG. Mỗi thành viên có thể đảm nhiệm 1–2 mảng tuỳ năng lực.
+</p>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-8"><span class="num">8.</span>Tiêu chí thành công</h2>
+
+<h3>8.1. Tiêu chí định lượng</h3>
+<table>
+  <thead><tr><th>Hạng mục</th><th>Tối thiểu</th><th>Mục tiêu</th><th>Cách đo</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>ROC-AUC LightGBM</td>
+      <td>≥ 0.70</td>
+      <td>≥ 0.75</td>
+      <td>Trên tập test 20% (stratified split)</td>
+    </tr>
+    <tr>
+      <td>ROC-AUC LR Scorecard</td>
+      <td>≥ 0.68</td>
+      <td>≥ 0.72</td>
+      <td>Trên cùng tập test</td>
+    </tr>
+    <tr>
+      <td>Recall (lớp Default)</td>
+      <td>≥ 0.50</td>
+      <td>≥ 0.65</td>
+      <td>Classification report</td>
+    </tr>
+    <tr>
+      <td>Credit score spread</td>
+      <td>≥ 150 điểm</td>
+      <td>≥ 200 điểm</td>
+      <td>Max – Min score trên tập test</td>
+    </tr>
+    <tr>
+      <td>API response time</td>
+      <td>≤ 500ms</td>
+      <td>≤ 200ms</td>
+      <td>Endpoint <code>/applications/submit</code></td>
+    </tr>
+    <tr>
+      <td>ETL pipeline runtime</td>
+      <td>≤ 5 phút</td>
+      <td>≤ 2 phút</td>
+      <td>Bronze → Silver → Gold full run</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>8.2. Tiêu chí định tính</h3>
+<ul>
+  <li>Hệ thống chạy ổn định, không crash trong demo.</li>
+  <li>Có thể giải thích quyết định approve/reject cho từng đơn vay cụ thể.</li>
+  <li>Code có cấu trúc rõ ràng, tuân theo clean architecture pattern.</li>
+  <li>Có documentation đầy đủ: README, API spec, kiến trúc.</li>
+  <li>Chatbot trả lời được câu hỏi tự nhiên, không bị "ảo giác" thông tin sai.</li>
+</ul>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-9"><span class="num">9.</span>Phạm vi &amp; giới hạn</h2>
+
+<h3>9.1. Trong phạm vi (In Scope)</h3>
+<ul>
+  <li><span class="pill in">IN</span> Dự đoán default cho personal loan (vay tiêu dùng cá nhân).</li>
+  <li><span class="pill in">IN</span> Credit score 300–850 với breakdown feature contribution.</li>
+  <li><span class="pill in">IN</span> Quản lý đơn vay end-to-end với state machine.</li>
+  <li><span class="pill in">IN</span> Dashboard customer + admin.</li>
+  <li><span class="pill in">IN</span> Chatbot RAG cho FAQ &amp; credit score Q&amp;A.</li>
+</ul>
+
+<h3>9.2. Ngoài phạm vi (Out of Scope)</h3>
+<ul>
+  <li><span class="pill out">OUT</span> Vay doanh nghiệp (corporate lending) — yêu cầu features và logic khác.</li>
+  <li><span class="pill out">OUT</span> Vay thế chấp bất động sản — quy trình thẩm định tài sản phức tạp.</li>
+  <li><span class="pill out">OUT</span> Tích hợp Credit Bureau thực — dùng dataset mô phỏng.</li>
+  <li><span class="pill out">OUT</span> KYC / E-KYC tự động — không thuộc trọng tâm môn học.</li>
+  <li><span class="pill out">OUT</span> Thanh toán &amp; thu hồi nợ thực tế.</li>
+  <li><span class="pill out">OUT</span> Mobile native app — chỉ làm web responsive.</li>
+</ul>
+
+<h3>9.3. Giới hạn đã biết</h3>
+<div class="card danger">
+  <h4>Hạn chế cần thừa nhận</h4>
+  <ul>
+    <li><strong>Dataset cũ</strong>: Home Credit data từ 2018, không phản ánh thị trường Việt Nam hiện tại.</li>
+    <li><strong>Không có ground truth dài hạn</strong>: dataset chỉ có target binary, không theo dõi default sau 3-5 năm.</li>
+    <li><strong>Bias địa lý</strong>: data chủ yếu từ Đông Âu (Séc, Slovakia), generalize ra Việt Nam có sai số.</li>
+    <li><strong>Demo, không production</strong>: project học thuật, chưa pass audit ngân hàng thực.</li>
+  </ul>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<h2 id="section-10"><span class="num">10.</span>Kết luận</h2>
+
+<div class="card success">
+  <p>
+    Project <strong>CreditIntel</strong> giải quyết một bài toán <em>thực tế và phổ biến</em> trong ngành tài chính — đánh giá rủi ro tín dụng tự động —
+    bằng một stack công nghệ <em>hiện đại và phù hợp</em>: gradient boosting cho prediction, scorecard cho explainability, FastAPI + React cho serving,
+    RAG cho hỗ trợ khách hàng.
+  </p>
+  <p>
+    Bằng cách kết hợp <strong>chiều rộng kỹ thuật</strong> (5 mảng: data, ML, backend, frontend, AI) và <strong>chiều sâu phương pháp</strong>
+    (FICO scorecard chuẩn ngân hàng), project đạt mục tiêu <em>vừa demo được tính ứng dụng vừa thể hiện độ rigorous học thuật</em>.
+  </p>
+  <p>
+    Các báo cáo tiếp theo sẽ đi sâu vào từng phần: <em>(#02)</em> kiến trúc dữ liệu &amp; ETL, <em>(#03)</em> mô hình ML &amp; scorecard,
+    <em>(#04)</em> backend API, <em>(#05)</em> frontend, <em>(#06)</em> RAG chatbot, và <em>(#07)</em> đánh giá tổng thể.
+  </p>
+</div>
+
+<footer>
+  CreditIntel · Báo cáo #01 / Mục tiêu Project · Tài liệu nội bộ — không phân phối ra ngoài
+</footer>
+
+</body>
+</html>

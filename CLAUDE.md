@@ -4,103 +4,140 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CreditIntel** — a loan credit risk management platform. It ingests the Prosper loan dataset through a four-layer ETL pipeline, trains a RandomForest default-prediction model, exposes a FastAPI backend with a RAG chatbot, and provides a Streamlit analytics dashboard. A React frontend is planned but currently only has placeholder directories.
+**CreditIntel** is a full-stack loan management and risk assessment system. It combines a FastAPI backend, React frontend, PostgreSQL database (hosted on Supabase), a scikit-learn ML risk model, a LangChain RAG chatbot (Pinecone + OpenRouter), and a Bronze→Silver→Core→Gold ETL pipeline over a Prosper Loan dataset.
 
-## Environment Setup
+## Commands
 
+### Backend (FastAPI)
 ```bash
-# Root-level Python deps (ETL, Streamlit, ML)
+cd backend
+source ../venv/bin/activate
 pip install -r requirements.txt
-
-# Backend deps (FastAPI, LangChain, Pinecone)
-pip install -r backend/requirements.txt
+python init_db.py              # Create/migrate DB tables
+uvicorn main:app --reload      # http://localhost:8000 — Swagger at /docs
 ```
 
-Copy `backend/.env.example` to `backend/.env` and fill in values for:
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` (Supabase PostgreSQL)
-- `SECRET_KEY` (JWT, 32-char random string)
-- `OPENROUTER_API_KEY`, `RAG_LLM_MODEL`, `RAG_EMBEDDING_MODEL`
-- `PINECONE_API_KEY`, `PINECONE_INDEX_NAME`, `PINECONE_CLOUD`, `PINECONE_REGION`
-
-Root-level ETL uses `config/settings.yaml` for database credentials (no `.env` needed for ETL).
-
-## Running the Services
-
+### Frontend (React + Vite)
 ```bash
-# Streamlit dashboard (http://localhost:8501)
-streamlit run ml_service/app.py
-
-# FastAPI backend (http://localhost:8000, docs at /docs)
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+cd frontend
+npm install
+npm run dev      # http://localhost:5173 (requires running backend)
+npm run mock     # Full app using mocked API responses — no backend needed
+npm run build
+npm run preview
 ```
 
-## ETL Pipeline
-
-Run each layer in order from the repo root:
-
+### ETL Pipeline (run from repo root)
 ```bash
-python -m ml_service.etl.load_bronze   # CSV → bronze.prosper_loans_raw
-python -m ml_service.etl.etl_silver    # bronze → silver.prosper_loans_cleansed
-python -m ml_service.etl.etl_core      # silver → core schema (normalized relational)
-python -m ml_service.etl.etl_gold      # core → gold.loan_features_v1 (ML-ready features)
+source venv/bin/activate
+python -m etl.load_bronze
+python -m etl.etl_silver
+python -m etl.etl_core
+python -m etl.etl_gold
 ```
 
-Database schemas must be initialized first (one-time):
-
+### Machine Learning
 ```bash
-psql ... < database/init_database.sql   # bronze + silver schemas
-psql ... < database/init_core.sql       # core schema (dim/fact tables)
-```
-
-## ML Model
-
-```bash
-# Train and save model artifact
 python ml/train_model.py
-# Output: ml/models/loan_risk_model.pkl
+python ml/predict_engine.py <member_key>
+python ml/retrain_customer_model.py
 ```
 
-The artifact contains the trained pipeline (StandardScaler → RandomForest), feature column names, and risk thresholds (`low` < 0.2, `high` > 0.4). The `predict_engine.py` loads this artifact and applies business rules (auto-reject on high debt-to-income ratio) on top of model scores.
+### Backend Tests
+```bash
+cd backend
+python tests_local/test_db.py
+python tests_local/test_task_1_3.py
+```
 
 ## Architecture
 
-### Data Layers (PostgreSQL / Supabase)
+### Request Flow
+1. **Frontend** (React/Zustand) → HTTP with JWT → **Backend API** (FastAPI)
+2. **Backend** → SQL → **PostgreSQL** (Supabase)
+3. **Backend** → scikit-learn model loaded via joblib → **ML prediction** on loan submission
+4. **Backend** → LangChain RAG → **Pinecone** vector store + **OpenRouter** (Gemini Flash 1.5)
 
-| Schema | Key Table | Purpose |
-|--------|-----------|---------|
-| `bronze` | `prosper_loans_raw` | Raw CSV ingestion |
-| `silver` | `prosper_loans_cleansed` | Cleaned, deduplicated |
-| `core` | loans, borrowers, credit_profiles, dim_* | Normalized relational model |
-| `gold` | `loan_features_v1` + analytical views | Feature-engineered, ML-ready |
+### Backend Layer Structure (`backend/`)
+- `api/routers/` — thin route handlers (`auth`, `applications`, `admin`, `chat`)
+- `services/` — all business logic; routers delegate here
+- `models/` — SQLAlchemy ORM table definitions (`User`, `LoanApplication`, `PersonalInfo`, `ChatMessage`)
+- `schemas/` — Pydantic V2 request/response contracts (separate from models)
+- `core/` — `config.py` (settings from `.env`), `security.py` (JWT + bcrypt)
+- `db/` — `session.py` (engine, `get_db` dependency)
+- `rag/` — LangChain RAG chain, Pinecone retriever, conversation memory, ingestion script
 
-### Backend (`/backend/`)
+### Loan Application State Machine
+`DRAFT` → `PENDING_REVIEW` (auto-rejected if ML default probability > 0.4) → `AWAITING_INFO` (admin approves) → `APPROVED` / `REJECTED`
 
-FastAPI app with modular routers under `backend/api/routers/`. Key paths:
+### Frontend Structure (`frontend/src/`)
+- `pages/` — route-level components (customer: `Apply`, `Dashboard`, `Detail`; admin: `AdminDashboard`, `ApplicationDetail`)
+- `components/` — reusable UI (PascalCase, e.g. `ApplicationCard/index.jsx`)
+- `services/api.js` — single Axios instance with JWT interceptor; all HTTP calls go here
+- `store/` — Zustand stores (`authStore`)
+- `mocks/` — MSW-style mock handlers for `npm run mock` mode
 
-- `backend/core/config.py` — Pydantic settings loaded from `backend/.env`
-- `backend/db/session.py` — SQLAlchemy session factory
-- `backend/services/` — Business logic (auth, applications, ML predictions, chat)
-- `backend/rag/` — RAG chatbot: `chain.py` builds a LangChain `ConversationalRetrievalChain` using OpenRouter as the LLM and Pinecone for vector retrieval; `ingest.py` populates the Pinecone index from markdown knowledge base files in `backend/rag/knowledge/`
-- `backend/models/` — Pydantic request/response schemas (separate from SQLAlchemy ORM)
+## Key Conventions
 
-### Streamlit App (`/ml_service/`)
+**Backend:**
+- Always use **absolute imports** inside `backend/`: `from core.config import settings`, not relative paths — this is required for `uvicorn` to resolve modules correctly.
+- API handlers stay thin; business logic belongs in `services/`.
+- `models/` defines DB schema; `schemas/` defines API contracts — keep them separate even when they look similar.
+- UUIDs (not integer IDs) for `users` and `loan_applications`.
+- RAG imports are lazy (`try/except ImportError`) so the API starts even if LangChain is not installed.
 
-- `app.py` — Entry point; routes to Risk Dashboard or Underwriting System
-- `dashboard.py` — Portfolio KPIs, charts, record search (reads `gold.loan_features_v1`)
-- `prediction_ui.py` — Real-time loan risk form using `ml/predict_engine.py`
-- `data_handler.py` — Loads gold layer with `@st.cache_data`
+**Frontend:**
+- Use `npm run mock` to develop UI features without a running backend.
+- Add new API calls to `services/api.js` — never call `axios` directly in components.
+- Use existing Tailwind utilities and shared components before introducing new patterns.
 
-### Shared Database Connection
+**Commits:** Use prefixes `feat:`, `fix:`, `refactor:`, `update:`, `merge:` with a concise scope, e.g. `feat: add admin risk filter`.
 
-`utils/db_connection.py` provides a cached SQLAlchemy engine used by both the ETL scripts and the Streamlit app. It reads credentials from `config/settings.yaml` but environment variable overrides take precedence.
+## Environment Variables
 
-### Frontend (`/frontend/`)
+`backend/.env` (required, never commit):
+```
+DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD   # Supabase PostgreSQL
+SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES # JWT
+OPENROUTER_API_KEY, RAG_LLM_MODEL                  # OpenRouter (Gemini Flash 1.5)
+RAG_EMBEDDING_MODEL                                # openai/text-embedding-3-small
+PINECONE_API_KEY, PINECONE_INDEX_NAME              # creditintel-kb
+PINECONE_CLOUD, PINECONE_REGION                    # aws / us-east-1
+```
 
-Placeholder directory structure only — React pages and components have not been implemented yet.
+`frontend/.env`:
+```
+VITE_API_URL=http://localhost:8000
+```
 
-## Key Docs
+## Key Documentation
+- `backend/BACKEND_API_SPEC.md` — full endpoint reference
+- `backend/ML_INTEGRATION_CHECKLIST.md` — exact ML payload schema (feature names, types)
+- `docs/ADMIN_GUIDE.md` — admin dashboard usage
+- `docs/data_dictionary/` — ETL layer schemas
 
-- `docs/overall/PROJECT_OVERVIEW.md` — Full architecture, data pipeline, and ML approach
-- `docs/overall/APP_DEVELOPMENT_PLAN.md` — Web application design and feature roadmap (customer/admin roles)
-- `docs/data_dictionary/` — Column-level schema documentation for each ETL layer
-- `docs/ml_md/` — Model training details and feature reference
+## Coding Guidelines
+
+### Think Before Coding
+- State assumptions explicitly before touching backend state machine logic, ML thresholds, or ETL transforms — these have downstream effects.
+- If a request can be interpreted multiple ways (e.g., "update the risk model" could mean retrain, swap threshold, or change features), ask rather than pick silently.
+- If `backend/ML_INTEGRATION_CHECKLIST.md` or `backend/BACKEND_API_SPEC.md` conflicts with the code, surface the discrepancy before resolving it.
+
+### Simplicity First
+- A new endpoint belongs in an existing router + service pair unless the domain is genuinely new. Don't create new files for single functions.
+- Don't add Pydantic fields, DB columns, or ML features speculatively. Every addition must be tied to a concrete, requested behaviour.
+- The ETL pipeline is already four layers; don't introduce a fifth transform stage for a one-off data fix.
+
+### Surgical Changes
+- When editing a service, don't reformat unrelated routers or schemas in the same file.
+- Match existing Vietnamese error messages in `services/` — don't silently switch to English.
+- If your change makes an import or schema field unused, remove it. Don't remove pre-existing dead code unless asked.
+
+### Goal-Driven Execution
+Before starting a multi-step task, state the plan and success criteria:
+```
+1. [change] → verify: [backend/tests_local/ script passes, or curl to /docs confirms endpoint]
+2. [change] → verify: [npm run build succeeds, flow works in npm run mock]
+```
+- For bug fixes: reproduce the failure in `backend/tests_local/` first, then fix.
+- For new API endpoints: confirm the contract in `BACKEND_API_SPEC.md` before writing the router.

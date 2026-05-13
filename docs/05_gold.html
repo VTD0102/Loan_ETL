@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CreditIntel — Báo cáo #05: Gold Layer</title>
+<style>
+  :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;
+        --accent:#58a6ff;--green:#7ee787;--yellow:#d29922;--red:#f85149;--purple:#bc8cff;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI','Roboto','Inter',sans-serif;background:var(--bg);
+       color:var(--text);line-height:1.65;font-size:15.5px;max-width:920px;margin:0 auto;padding:48px 24px 80px;}
+  header{border-bottom:2px solid var(--border);padding-bottom:28px;margin-bottom:40px;}
+  .badge{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:4px 10px;
+         border-radius:6px;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px;}
+  h1{font-size:32px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px;}
+  .subtitle{color:var(--muted);font-size:17px;margin-bottom:18px}
+  .meta{display:flex;flex-wrap:wrap;gap:24px;font-size:13px;color:var(--muted);}
+  .meta span strong{color:var(--text);font-weight:500}
+  h2{font-size:22px;font-weight:600;margin-top:48px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+  h3{font-size:17px;font-weight:600;margin-top:24px;margin-bottom:10px;}
+  h3::before{content:"▸ ";color:var(--accent);font-weight:400}
+  p{margin-bottom:14px} ul,ol{margin-left:24px;margin-bottom:14px} li{margin-bottom:6px} li::marker{color:var(--accent)}
+  strong{color:var(--text);font-weight:600} em{color:var(--purple);font-style:normal;font-weight:500}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 22px;margin:16px 0;}
+  .card.info{border-left:4px solid var(--accent)} .card.warn{border-left:4px solid var(--yellow)}
+  .card.success{border-left:4px solid var(--green)} .card.danger{border-left:4px solid var(--red)}
+  .card h4{font-size:14px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--surface);border-radius:8px;
+        overflow:hidden;border:1px solid var(--border);font-size:14.5px;}
+  th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:rgba(88,166,255,.08);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(88,166,255,.04)}
+  code{font-family:'JetBrains Mono',monospace;font-size:13px;background:rgba(255,255,255,.06);
+       padding:1px 6px;border-radius:4px;color:var(--accent);}
+  pre{background:#0a0e13;border:1px solid var(--border);border-radius:8px;padding:14px 18px;
+      overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.5;}
+  pre code{background:transparent;padding:0;color:var(--text);}
+  .toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 24px;margin:28px 0;}
+  .toc h4{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;}
+  .toc ol{margin-left:18px} .toc a{color:var(--text);text-decoration:none} .toc a:hover{color:var(--accent)}
+  footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center;}
+  .pill{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;}
+  .pill.ok{background:rgba(126,231,135,.12);color:var(--green)}
+  .pill.todo{background:rgba(210,153,34,.15);color:var(--yellow)}
+  .pill.fail{background:rgba(248,81,73,.12);color:var(--red)}
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:18px 0}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center}
+  .metric .num{font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+  .metric .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+  .arch-flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:20px 0;padding:20px;
+             background:var(--surface);border:1px dashed var(--border);border-radius:8px;
+             font-family:'JetBrains Mono',monospace;font-size:13px;justify-content:center;}
+  .arch-flow .node{padding:8px 14px;background:rgba(88,166,255,.1);border:1px solid var(--accent);
+                   border-radius:6px;color:var(--accent);}
+  .arch-flow .node.silver{background:rgba(189,195,199,.12);border-color:#bdc3c7;color:#bdc3c7}
+  .arch-flow .node.gold{background:rgba(255,193,7,.12);border-color:#ffc107;color:#ffc107}
+  .arch-flow .arrow{color:var(--muted);font-weight:600}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">Báo cáo #05</span>
+  <h1>Gold Layer</h1>
+  <p class="subtitle">Lớp feature engineering — sẵn sàng cho ML training, có bureau + previous_application aggregates</p>
+  <div class="meta">
+    <span><strong>Module:</strong> ETL — Stage 3/3</span>
+    <span><strong>Code:</strong> <code>database/transform_gold_homecredit.sql</code> + <code>etl/etl_gold.py</code></span>
+    <span><strong>Ngày:</strong> 13/05/2026</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h4>Mục lục</h4>
+  <ol>
+    <li><a href="#s1">Tóm tắt báo cáo</a></li>
+    <li><a href="#s2">Vai trò Gold layer</a></li>
+    <li><a href="#s3">Schema 44 cột</a></li>
+    <li><a href="#s4">Feature engineering chi tiết</a></li>
+    <li><a href="#s5">Analytical views</a></li>
+    <li><a href="09_van_de_can_giai_quyet.html">→ Xem các vấn đề cần giải quyết (file riêng)</a></li>
+  </ol>
+</div>
+
+<h2 id="s1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
+<div class="card info">
+  <p>
+    Gold là lớp <strong>sẵn sàng cho ML</strong> — output <code>gold.hc_features_v1</code> chứa 44 cột, trong đó <em>23+ feature đã engineered</em>
+    bao gồm bureau aggregates, previous_application aggregates, demographics encoding, và missing flags.
+  </p>
+  <p>
+    Gold là <strong>nguồn duy nhất</strong> mà 2 model ML đọc: <code>retrain_customer_model.py</code> (LightGBM, 27 features)
+    và <code>train_scorecard.py</code> (LR, 25 features). Tách biệt feature engineering khỏi ML code giúp dễ retrain hoặc thử model khác.
+  </p>
+</div>
+
+<div class="metric-grid">
+  <div class="metric"><div class="num">300,360</div><div class="lbl">Rows</div></div>
+  <div class="metric"><div class="num">44</div><div class="lbl">Cột tổng</div></div>
+  <div class="metric"><div class="num">23+</div><div class="lbl">ML features</div></div>
+  <div class="metric"><div class="num">3</div><div class="lbl">Analytical views</div></div>
+</div>
+
+<div class="arch-flow">
+  <div class="node silver">silver.home_credit_cleansed</div>
+  <span class="arrow">+</span>
+  <div class="node">bureau_raw</div>
+  <span class="arrow">+</span>
+  <div class="node">prev_app_raw</div>
+  <span class="arrow">→</span>
+  <div class="node">JOIN + AGG</div>
+  <span class="arrow">→</span>
+  <div class="node gold">gold.hc_features_v1</div>
+</div>
+
+<h2 id="s2"><span class="num">2.</span>Vai trò Gold layer</h2>
+
+<h3>2.1. Trách nhiệm</h3>
+<ul>
+  <li><strong>Feature engineering nâng cao</strong> — tính log, ratio, flag từ silver columns.</li>
+  <li><strong>Aggregate từ bảng quan hệ</strong> — JOIN <code>bronze.bureau_raw</code> và <code>bronze.previous_application_raw</code> để có history features.</li>
+  <li><strong>Encode categorical</strong> — group + ordinal cho rating/education.</li>
+  <li><strong>Missing indicator flags</strong> — tạo các cột <code>*_missing_flag</code> cho ML model học pattern missingness.</li>
+  <li><strong>Analytical views</strong> — tạo view cho admin dashboard (distribution, default rate by segment).</li>
+</ul>
+
+<h3>2.2. So sánh trách nhiệm Silver vs Gold</h3>
+<table>
+  <thead><tr><th></th><th>Silver</th><th>Gold</th></tr></thead>
+  <tbody>
+    <tr><td>Pass-through cột từ source</td><td>✓</td><td>✗</td></tr>
+    <tr><td>Type casting (TEXT→NUMERIC)</td><td>✓</td><td>✗</td></tr>
+    <tr><td>Filter outlier</td><td>✓ (basic)</td><td>✓ (refined)</td></tr>
+    <tr><td>Single-column transform</td><td>✓ (e.g. DTI, term)</td><td>✓ (e.g. log, ratio)</td></tr>
+    <tr><td>JOIN bảng khác</td><td>✗</td><td>✓ (bureau, prev_app)</td></tr>
+    <tr><td>Aggregate (COUNT, SUM, AVG)</td><td>✗</td><td>✓</td></tr>
+    <tr><td>Missing flags</td><td>✗</td><td>✓</td></tr>
+    <tr><td>Categorical encoding</td><td>✗ (giữ TEXT)</td><td>✓ (ordinal, group)</td></tr>
+    <tr><td>Analytical views</td><td>✗</td><td>✓</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s3"><span class="num">3.</span>Schema 44 cột</h2>
+
+<h3>3.1. Nhóm cột theo chức năng</h3>
+<table>
+  <thead><tr><th>Nhóm</th><th>Cột tiêu biểu</th><th>Số lượng</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Keys &amp; Target</strong></td>
+      <td><code>listing_key</code>, <code>member_key</code>, <code>is_default</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Raw từ silver (pass-through)</strong></td>
+      <td><code>loan_original_amount</code>, <code>term</code>, <code>stated_monthly_income</code>, <code>debt_to_income_ratio</code>...</td>
+      <td>11</td>
+    </tr>
+    <tr>
+      <td><strong>Credit Score</strong></td>
+      <td><code>credit_score_midpoint</code>, <code>credit_score_band</code>, <code>rating_ordinal</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Income engineered</strong></td>
+      <td><code>log_monthly_income</code>, <code>annual_income_est</code>, <code>income_range_ordinal</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Burden ratio</strong></td>
+      <td><code>loan_amount_to_income</code>, <code>payment_to_income</code>, <code>high_dti_flag</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Previous applications</strong></td>
+      <td><code>num_previous_loans</code>, <code>previous_default_rate</code></td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td><strong>Bureau aggregates</strong></td>
+      <td><code>num_bureau_records</code>, <code>num_active_credit</code>, <code>total_overdue_amount</code>, <code>max_credit_overdue_days</code>, <code>has_bad_debt</code></td>
+      <td>5</td>
+    </tr>
+    <tr>
+      <td><strong>Demographics (Phase 3)</strong></td>
+      <td><code>age_years</code>, <code>cnt_children</code>, <code>cnt_fam_members</code>, <code>gender_male_flag</code>, <code>education_ordinal</code>, <code>family_status_grouped</code>, <code>is_married_flag</code></td>
+      <td>7</td>
+    </tr>
+    <tr>
+      <td><strong>Boolean flags</strong></td>
+      <td><code>is_homeowner_flag</code>, <code>income_verifiable_flag</code></td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td><strong>Term buckets</strong></td>
+      <td><code>term_12_flag</code>, <code>term_36_flag</code>, <code>term_60_flag</code></td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td><strong>Missing flags</strong></td>
+      <td><code>credit_score_missing_flag</code>, <code>dti_missing_flag</code>, <code>rating_missing_flag</code>, <code>income_missing_flag</code></td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td><strong>Time</strong></td>
+      <td><code>origination_year</code>, <code>origination_month</code>, <code>loan_origination_date</code></td>
+      <td>3</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s4"><span class="num">4.</span>Feature engineering chi tiết</h2>
+
+<h3>4.1. Aggregate từ <code>previous_application</code></h3>
+<pre><code>prev_stats AS (
+    SELECT SK_ID_CURR::TEXT AS member_key,
+           COUNT(*) FILTER (WHERE NAME_CONTRACT_STATUS='Approved')::INT AS num_previous_loans,
+           ROUND(COUNT(*) FILTER (WHERE NAME_CONTRACT_STATUS IN ('Refused','Canceled'))
+                 / NULLIF(COUNT(*),0), 4) AS previous_default_rate
+    FROM bronze.previous_application_raw
+    GROUP BY SK_ID_CURR
+)</code></pre>
+<p>
+  <strong>Lưu ý:</strong> <code>previous_default_rate</code> là <em>proxy</em> — đếm tỷ lệ Refused/Canceled (không phải default thực). Vẫn có signal vì khách
+  hàng bị refuse nhiều lần thường rủi ro cao.
+</p>
+
+<h3>4.2. Aggregate từ <code>bureau</code></h3>
+<pre><code>bureau_stats AS (
+    SELECT SK_ID_CURR::TEXT AS member_key,
+           COUNT(*)::INT AS num_bureau_records,
+           COUNT(*) FILTER (WHERE CREDIT_ACTIVE='Active')::INT AS num_active_credit,
+           COALESCE(SUM(AMT_CREDIT_SUM_OVERDUE), 0)::NUMERIC AS total_overdue_amount,
+           COALESCE(MAX(CREDIT_DAY_OVERDUE), 0)::INT AS max_credit_overdue_days,
+           MAX(CASE WHEN CREDIT_ACTIVE='Bad debt' THEN 1 ELSE 0 END) AS has_bad_debt
+    FROM bronze.bureau_raw GROUP BY SK_ID_CURR
+)</code></pre>
+
+<h3>4.3. Dynamic threshold cho <code>high_dti_flag</code></h3>
+<p>
+  Threshold 0.35 (chuẩn US) làm 99.7% rows HC có flag = 1 (DTI HC thường cao do <code>AMT_ANNUITY</code> tính theo công thức khác).
+  Fix: compute P75 từ chính data → flag = (DTI > P75).
+</p>
+<pre><code>dti_threshold AS (
+    SELECT quantile_cont(debt_to_income_ratio, 0.75) AS p75
+    FROM silver.home_credit_cleansed
+    WHERE debt_to_income_ratio IS NOT NULL
+)
+-- sau đó: CASE WHEN debt_to_income_ratio > d.p75 THEN 1 ELSE 0 END AS high_dti_flag</code></pre>
+
+<h3>4.4. Term buckets cân bằng</h3>
+<p>
+  HC <code>term</code> liên tục 12–45 (tính từ credit/annuity). Không có 12/36/60 fixed như Prosper. Bucket cân bằng theo phân phối thực:
+</p>
+<table>
+  <thead><tr><th>Bucket</th><th>Điều kiện</th><th>Tỷ lệ rows</th></tr></thead>
+  <tbody>
+    <tr><td><code>term_12_flag</code></td><td>term ≤ 18</td><td>~34%</td></tr>
+    <tr><td><code>term_36_flag</code></td><td>19 ≤ term ≤ 25</td><td>~37%</td></tr>
+    <tr><td><code>term_60_flag</code></td><td>term ≥ 26</td><td>~29%</td></tr>
+  </tbody>
+</table>
+
+<h3>4.5. Education ordinal mapping</h3>
+<pre><code>CASE NAME_EDUCATION_TYPE
+    WHEN 'Academic degree'               THEN 5
+    WHEN 'Higher education'              THEN 4
+    WHEN 'Incomplete higher'             THEN 3
+    WHEN 'Secondary / secondary special' THEN 2
+    WHEN 'Lower secondary'               THEN 1
+    ELSE NULL
+END AS education_ordinal</code></pre>
+
+<h3>4.6. Credit score band (US FICO classification)</h3>
+<pre><code>CASE
+    WHEN credit_score_midpoint &lt; 580 THEN 'Poor'
+    WHEN credit_score_midpoint &lt; 670 THEN 'Fair'
+    WHEN credit_score_midpoint &lt; 740 THEN 'Good'
+    ELSE 'Excellent'
+END AS credit_score_band</code></pre>
+
+<h2 id="s5"><span class="num">5.</span>Analytical views</h2>
+
+<p>3 views sẵn cho admin dashboard, không cần ML query:</p>
+
+<table>
+  <thead><tr><th>View</th><th>Mục đích</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>gold.vw_credit_score_distribution</code></td>
+      <td>Loan count + default rate + avg DTI theo 4 band (Poor / Fair / Good / Excellent)</td>
+    </tr>
+    <tr>
+      <td><code>gold.vw_dti_vs_default</code></td>
+      <td>Loan count + default rate theo 4 DTI bucket (Low / Medium / High / Very High)</td>
+    </tr>
+    <tr>
+      <td><code>gold.vw_employment_vs_default</code></td>
+      <td>Loan count + default rate + avg credit score theo employment status</td>
+    </tr>
+  </tbody>
+</table>
+
+<footer>CreditIntel · Báo cáo #05 / Gold Layer · Tài liệu nội bộ</footer>
+</body>
+</html>

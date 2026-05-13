@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import auth, applications, admin, chat
+from api.routers import auth, applications, admin, chat, credit_score
 # from api.routers import predict
 
 app = FastAPI(title="CreditIntel API", version="1.0.0")
@@ -25,6 +25,7 @@ app.include_router(applications.router, prefix="/applications", tags=["applicati
 app.include_router(admin.router,        prefix="/admin",        tags=["admin"])
 # app.include_router(predict.router,      prefix="/predict",      tags=["predict"])
 app.include_router(chat.router,         prefix="/chat",         tags=["chat"])
+app.include_router(credit_score.router, prefix="/credit-score", tags=["credit-score"])
 
 
 @app.get("/health")
