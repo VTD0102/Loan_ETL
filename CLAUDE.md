@@ -14,7 +14,7 @@ cd backend
 source ../venv/bin/activate
 pip install -r requirements.txt
 python init_db.py              # Create/migrate DB tables
-uvicorn main:app --reload      # http://localhost:8000 — Swagger at /docs
+python -m uvicorn main:app --reload      # http://localhost:8000 — Swagger at /docs
 ```
 
 ### Frontend (React + Vite)
