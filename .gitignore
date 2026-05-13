@@ -41,3 +41,5 @@ docs/_build/
 .gemini/
 .codex/
 .uv-python/
+
+.python-version
