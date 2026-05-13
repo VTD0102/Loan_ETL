@@ -1,4 +1,4 @@
-from langchain.chains import ConversationalRetrievalChain
+from langchain_classic.chains import ConversationalRetrievalChain
 from langchain_openai import ChatOpenAI
 
 from core.config import settings

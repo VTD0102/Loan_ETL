@@ -1,4 +1,4 @@
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 SYSTEM_TEMPLATE = """Bạn là trợ lý tín dụng CreditIntel, chuyên giải thích kết quả đánh giá rủi ro \
 và tư vấn tài chính cho khách hàng. Tuân thủ nghiêm ngặt các quy tắc:

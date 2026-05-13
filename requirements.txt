@@ -22,3 +22,8 @@ joblib>=1.4.0
 
 # Utils
 python-dotenv>=1.0.0
+
+# RAG & AI
+langchain>=0.1.0
+langchain-openai>=0.1.0
+pinecone-client>=3.0.0

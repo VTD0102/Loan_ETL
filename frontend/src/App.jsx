@@ -13,6 +13,7 @@ import ApplyPage              from './pages/customer/Apply'
 import ApplicationDetailPage  from './pages/customer/ApplicationDetail'
 import SubmitPersonalInfoPage from './pages/customer/SubmitInfo'
 import ChatbotPage            from './pages/customer/Chat'
+import HistoryPage            from './pages/customer/History'
 
 // ── Admin Pages ───────────────────────────────────
 import AdminDashboardPage          from './pages/admin/Dashboard'
@@ -125,6 +126,11 @@ const App = () => (
 
     {/* Fallback */}
     <Route path="*" element={<NotFound />} />
+    <Route path="/history" element={
+      <ProtectedRoute>
+        <WithNav><HistoryPage /></WithNav>
+      </ProtectedRoute>
+    } />
   </Routes>
 
   {isMock && <MockBanner />}
