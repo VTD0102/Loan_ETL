@@ -30,10 +30,11 @@ npm run preview
 ### ETL Pipeline (run from repo root)
 ```bash
 source venv/bin/activate
-python -m etl.load_bronze
-python -m etl.etl_silver
-python -m etl.etl_core
-python -m etl.etl_gold
+python -m etl.pipeline        # chạy bronze → silver → gold một lần
+# hoặc từng bước:
+# python -m etl.load_bronze
+# python -m etl.etl_silver
+# python -m etl.etl_gold
 ```
 
 ### Machine Learning
