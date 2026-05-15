@@ -37,10 +37,10 @@ async def upload_documents(
         raise HTTPException(404, "Application not found")
     if app.user_id != user.id:
         raise HTTPException(403, "Forbidden")
-    if app.status != "AWAITING_INFO":
+    if app.status not in ("AWAITING_INFO", "INFO_SUBMITTED"):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"Trạng thái đơn là '{app.status}'. Yêu cầu 'AWAITING_INFO'.",
+            f"Trạng thái đơn là '{app.status}'. Yêu cầu 'AWAITING_INFO' hoặc 'INFO_SUBMITTED'.",
         )
 
     # Validate files
