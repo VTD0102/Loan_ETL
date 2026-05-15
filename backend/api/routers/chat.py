@@ -8,6 +8,7 @@ from services import chat_service
 
 router = APIRouter()
 
+
 @router.post("", response_model=ChatResponse, status_code=201)
 def send_message(
     payload: ChatRequest,
@@ -22,3 +23,16 @@ def send_message(
     """
     result = chat_service.send(db, current_user["sub"], payload.message, payload.session_id)
     return ChatResponse(**result)
+
+
+@router.get("/context")
+def get_context(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_customer),
+):
+    """
+    Xuất JSON context đầy đủ (4 blocks) từ đơn vay gần nhất + kết quả ML.
+    Dùng để debug RAG hoặc hiển thị pre-loaded context trên ChatWidget.
+    """
+    from rag.context_builder import build_context_json
+    return build_context_json(db, current_user["sub"])
