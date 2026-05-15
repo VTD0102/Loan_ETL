@@ -25,16 +25,18 @@ COLS = [
     "AMT_CREDIT", "AMT_ANNUITY", "AMT_INCOME_TOTAL",
     "NAME_CONTRACT_TYPE", "NAME_INCOME_TYPE",
     "FLAG_OWN_REALTY",
-    "DAYS_EMPLOYED",
-    "EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3",
+    "DAYS_EMPLOYED",         # số ngày làm việc (âm); 365243 = không đi làm
+    "EXT_SOURCE_2",          # dùng để tính credit_score (300-850)
     "FLAG_EMP_PHONE",
-    # ── Demographic features (Phase: thêm để boost AUC) ────────────────────
+    # ── Demographic features ───────────────────────────────────────────────
     "DAYS_BIRTH",            # tuổi (đếm ngày ngược, âm)
     "CODE_GENDER",           # M / F / XNA
     "NAME_EDUCATION_TYPE",   # Higher / Secondary / Lower secondary / ...
     "NAME_FAMILY_STATUS",    # Married / Single / Widow / Separated / ...
     "CNT_CHILDREN",          # số con
     "CNT_FAM_MEMBERS",       # tổng người trong gia đình
+    # ── New v3 features ───────────────────────────────────────────────────
+    "OCCUPATION_TYPE",       # 18 nghề nghiệp cụ thể
 ]
 
 # Subset cần cho aggregate num_previous_loans + previous_default_rate trong Gold

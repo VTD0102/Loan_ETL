@@ -72,14 +72,7 @@ WITH cleaned AS (
             ELSE NULL
         END                                            AS credit_score_range_upper,
 
-        -- ── Auxiliary credit signals (FIX #7) ─────────────────────────────
-        -- EXT_SOURCE_1 (null 56.4%) và EXT_SOURCE_3 (null 19.8%) là 2 nguồn
-        -- credit signal độc lập với EXT_SOURCE_2 — đã load ở Bronze nhưng
-        -- trước đây bị bỏ qua. Expose ở Silver để ML model dùng được.
-        "EXT_SOURCE_1"::NUMERIC                        AS ext_source_1,
-        "EXT_SOURCE_3"::NUMERIC                        AS ext_source_3,
-
-        -- ── Demographic features (Phase 3: boost AUC) ─────────────────────
+        -- ── Demographic features ──────────────────────────────────────────
         -- DAYS_BIRTH âm (đếm ngày ngược tới ngày sinh) → tuổi = -DAYS_BIRTH/365
         ROUND(-"DAYS_BIRTH" / 365.25, 1)::NUMERIC      AS age_years,
         "CODE_GENDER"                                  AS gender,
@@ -87,6 +80,16 @@ WITH cleaned AS (
         "NAME_FAMILY_STATUS"                           AS family_status,
         "CNT_CHILDREN"::INT                            AS cnt_children,
         "CNT_FAM_MEMBERS"::NUMERIC                     AS cnt_fam_members,
+
+        -- ── v3 features ───────────────────────────────────────────────────
+        -- years_employed: abs(DAYS_EMPLOYED)/365.25; 365243 (N/A) và NULL → 0
+        CASE
+            WHEN "DAYS_EMPLOYED" IS NULL OR "DAYS_EMPLOYED" = 365243 THEN 0.0
+            ELSE ROUND(ABS("DAYS_EMPLOYED") / 365.25, 1)
+        END::NUMERIC                                   AS years_employed,
+
+        -- occupation_type: 18 nghề nghiệp HC; NULL → 'Unknown'
+        COALESCE("OCCUPATION_TYPE", 'Unknown')         AS occupation_type,
 
         -- ── Rating (analogue of prosper_rating_alpha) ─────────────────────
         CASE

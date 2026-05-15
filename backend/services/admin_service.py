@@ -13,6 +13,7 @@ def _application_payload(app: LoanApplication) -> dict:
         "id": app.id,
         "user_id": app.user_id,
         "status": app.status,
+        # Core
         "monthly_income": app.monthly_income,
         "loan_amount": app.loan_amount,
         "term": app.term,
@@ -21,15 +22,38 @@ def _application_payload(app: LoanApplication) -> dict:
         "is_homeowner": app.is_homeowner,
         "listing_category": app.listing_category,
         "credit_score": app.credit_score,
+        # v3
+        "occupation_type": app.occupation_type,
+        "years_employed": app.years_employed,
+        # Bureau
+        "num_bureau_records": app.num_bureau_records,
+        "num_active_credit": app.num_active_credit,
+        "total_overdue_amount": app.total_overdue_amount,
+        "max_credit_overdue_days": app.max_credit_overdue_days,
+        "has_bad_debt": app.has_bad_debt,
+        "income_verifiable_flag": app.income_verifiable_flag,
+        # Demographics
+        "age_years": app.age_years,
+        "gender_male_flag": app.gender_male_flag,
+        "education_ordinal": app.education_ordinal,
+        "cnt_children": app.cnt_children,
+        "cnt_fam_members": app.cnt_fam_members,
+        "is_married_flag": app.is_married_flag,
+        # ML results
         "default_probability": app.default_probability,
         "risk_level": app.risk_level,
         "risk_score": app.risk_score,
         "recommended_amount": app.recommended_amount,
         "recommended_term": app.recommended_term,
+        "model_version": app.model_version,
+        "feature_snapshot": app.feature_snapshot,
+        "imputed_features": app.imputed_features,
+        # Timestamps & review
         "submitted_at": app.submitted_at,
         "reviewed_at": app.reviewed_at,
         "reviewed_by": app.reviewed_by,
         "admin_note": app.admin_note,
+        # User info (admin only)
         "user_email": None,
         "user_username": None,
     }

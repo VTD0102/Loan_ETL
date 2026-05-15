@@ -3,8 +3,9 @@ import pandas as pd
 from pathlib import Path
 from typing import Any
 
-from schemas.application import ApplicationCreate
+from schemas.application import ApplicationBase
 from services.model_feature_builder import build_model_input, fetch_previous_applications
+from services.loan_suggestion_service import compute_suggestion
 
 MODEL_PATH = Path(__file__).parents[2] / "ml" / "models" / "customer_risk_model.pkl"
 
@@ -25,7 +26,11 @@ def _load():
     return _artifact
 
 
-def predict(payload: ApplicationCreate, db: Any = None, user_id: Any = None) -> dict:
+def predict(payload: ApplicationBase, db: Any = None, user_id: Any = None) -> dict:
+    """
+    Runs ML prediction + binary-search loan suggestion.
+    Returns full evaluation dict including suggestion and perfect_fit flag.
+    """
     try:
         artifact  = _load()
         _validate_artifact(artifact)
@@ -33,33 +38,26 @@ def predict(payload: ApplicationCreate, db: Any = None, user_id: Any = None) -> 
         threshold = artifact["thresholds"]
 
         previous = fetch_previous_applications(db, user_id)
+
+        # ── Core prediction ────────────────────────────────────────────────
         built = build_model_input(payload, artifact, previous_applications=previous)
-        row = pd.DataFrame([built.features], columns=artifact["feature_cols"])
+        row   = pd.DataFrame([built.features], columns=artifact["feature_cols"])
+        prob  = float(pipeline.predict_proba(row)[0, 1])
 
-        prob = float(pipeline.predict_proba(row)[0, 1])
-
-        if prob < threshold["low"]:
-            risk_level          = "Low"
-            recommended_amount  = 15_000
-            recommended_term    = 36
-        elif prob <= threshold["high"]:
-            risk_level          = "Medium"
-            recommended_amount  = 8_000
-            recommended_term    = 24
-        else:
-            risk_level          = "High"
-            recommended_amount  = 3_000
-            recommended_term    = 12
+        # ── Suggestion via binary search ───────────────────────────────────
+        suggestion = compute_suggestion(payload, artifact, previous_applications=previous)
+        risk_level = suggestion["risk_level"] if prob < threshold["high"] else "High"
 
         return {
             "default_probability": round(prob, 4),
-            "risk_level"         : risk_level,
-            "risk_score"         : round((1 - prob) * 100),
-            "recommended_amount" : recommended_amount,
-            "recommended_term"   : recommended_term,
-            "model_version"      : artifact.get("model_version"),
-            "feature_snapshot"   : built.features,
-            "imputed_features"   : built.imputed_features,
+            "risk_level":          risk_level,
+            "risk_score":          round((1 - prob) * 100),
+            "is_perfect_fit":      suggestion["is_perfect_fit"],
+            "suggested_amount":    suggestion["suggested_amount"],
+            "suggested_term":      suggestion["suggested_term"],
+            "model_version":       artifact.get("model_version"),
+            "feature_snapshot":    built.features,
+            "imputed_features":    built.imputed_features,
         }
     except Exception as e:
         if isinstance(e, ModelPredictionError):
@@ -68,7 +66,7 @@ def predict(payload: ApplicationCreate, db: Any = None, user_id: Any = None) -> 
 
 
 def _validate_artifact(artifact: dict) -> None:
-    required = {"pipeline", "feature_cols", "feature_defaults", "thresholds", "model_version"}
-    missing = sorted(required - set(artifact))
+    required = {"pipeline", "feature_cols", "thresholds", "model_version"}
+    missing  = sorted(required - set(artifact))
     if missing:
         raise ModelPredictionError(f"Model artifact missing required keys: {', '.join(missing)}")

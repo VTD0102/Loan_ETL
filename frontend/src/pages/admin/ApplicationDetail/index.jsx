@@ -76,15 +76,37 @@ const AdminApplicationDetailPage = () => {
     { label: 'Username', value: app.user_username || '—' },
   ]
 
+  const EDUCATION_LABEL = { 1: 'Tiểu học', 2: 'THCS', 3: 'THPT', 4: 'Cao đẳng / ĐH', 5: 'Sau đại học' }
+
   const loanInfo = [
-    { label: 'Số tiền vay',        value: formatCurrency(app.loan_amount) },
-    { label: 'Kỳ hạn',            value: `${app.term} tháng` },
+    { label: 'Số tiền vay',         value: formatCurrency(app.loan_amount) },
+    { label: 'Kỳ hạn',             value: `${app.term} tháng` },
     { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income) },
-    { label: 'DTI',                value: `${app.dti}%` },
+    { label: 'DTI',                 value: app.dti != null ? `${app.dti}%` : '—' },
     { label: 'Tình trạng việc làm', value: app.employment_status },
+    { label: 'Nghề nghiệp',        value: app.occupation_type ?? '—' },
+    { label: 'Năm kinh nghiệm',    value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
     { label: 'Tình trạng nhà',     value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
     { label: 'Mục đích vay',       value: app.listing_category },
-    { label: 'Điểm tín dụng',      value: app.credit_score },
+    { label: 'Điểm tín dụng',     value: app.credit_score },
+  ]
+
+  const demographicInfo = [
+    { label: 'Tuổi',               value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
+    { label: 'Giới tính',          value: app.gender_male_flag != null ? (app.gender_male_flag ? 'Nam' : 'Nữ') : '—' },
+    { label: 'Trình độ học vấn',   value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
+    { label: 'Tình trạng hôn nhân',value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Độc thân') : '—' },
+    { label: 'Số con',             value: app.cnt_children ?? '—' },
+    { label: 'Số người trong gia đình', value: app.cnt_fam_members ?? '—' },
+  ]
+
+  const bureauInfo = [
+    { label: 'Số hồ sơ tín dụng',  value: app.num_bureau_records ?? '—' },
+    { label: 'Tín dụng đang hoạt động', value: app.num_active_credit ?? '—' },
+    { label: 'Tổng nợ quá hạn',    value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
+    { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
+    { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
+    { label: 'Thu nhập xác minh',  value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
   ]
 
   return (
@@ -140,14 +162,24 @@ const AdminApplicationDetailPage = () => {
             <InfoGrid items={loanInfo} />
           </SectionCard>
 
-          {/* 3. Kết quả ML */}
+          {/* 3. Nhân khẩu học */}
+          <SectionCard title="Nhân khẩu học">
+            <InfoGrid items={demographicInfo} />
+          </SectionCard>
+
+          {/* 4. Lịch sử tín dụng */}
+          <SectionCard title="Lịch sử tín dụng (Bureau)">
+            <InfoGrid items={bureauInfo} />
+          </SectionCard>
+
+          {/* 5. Kết quả ML */}
           {(app.risk_level || app.default_probability != null) && (
             <SectionCard title="Kết quả phân tích ML">
               <MLResultsDisplay app={app} />
             </SectionCard>
           )}
 
-          {/* 4. Actions — chỉ hiện khi PENDING_REVIEW */}
+          {/* 6. Actions — chỉ hiện khi PENDING_REVIEW */}
           {app.status === 'PENDING_REVIEW' && (
             <SectionCard title="Hành động xét duyệt">
               <p className="text-sm text-gray-500 mb-4">
@@ -157,7 +189,7 @@ const AdminApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {/* 5. Timeline */}
+          {/* 7. Timeline */}
           <SectionCard title="Lịch sử tiến trình">
             <ApplicationTimeline app={app} />
             {/* Extra meta */}

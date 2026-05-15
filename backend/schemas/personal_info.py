@@ -3,6 +3,7 @@ from datetime import datetime, date
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr
 
+
 class PersonalInfoBase(BaseModel):
     full_name: str
     id_card_number: str
@@ -10,9 +11,13 @@ class PersonalInfoBase(BaseModel):
     email: EmailStr
     date_of_birth: date
     address: str
+    bank_account_number: Optional[str] = None
+    document_urls: Optional[list[str]] = None
+
 
 class PersonalInfoCreate(PersonalInfoBase):
-    pass # application_id is usually inferred from the path parameter during submission
+    pass
+
 
 class PersonalInfoRead(PersonalInfoBase):
     id: UUID

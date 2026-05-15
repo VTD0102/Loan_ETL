@@ -64,13 +64,13 @@ NUMERIC_FEATURES = [
     # Bureau aggregates
     "num_bureau_records", "num_active_credit",
     "total_overdue_amount", "max_credit_overdue_days", "has_bad_debt",
-    # Raw EXT_SOURCEs
-    "ext_source_1", "ext_source_3",
-    # Demographics (Phase 3)
+    # v3: years_employed thay thế ext_source_1/3
+    "years_employed",
+    # Demographics
     "age_years", "gender_male_flag", "education_ordinal",
     "cnt_children", "cnt_fam_members", "is_married_flag",
 ]
-CATEGORICAL_FEATURES = ["employment_status_grouped"]
+CATEGORICAL_FEATURES = ["employment_status_grouped", "occupation_type"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 QUERY = """
@@ -81,10 +81,11 @@ SELECT
     num_previous_loans, previous_default_rate,
     num_bureau_records, num_active_credit,
     total_overdue_amount, max_credit_overdue_days, has_bad_debt,
-    ext_source_1, ext_source_3,
+    years_employed,
     age_years, gender_male_flag, education_ordinal,
     cnt_children, cnt_fam_members, is_married_flag,
     employment_status_grouped,
+    occupation_type,
     is_default
 FROM gold.hc_features_v1
 WHERE credit_score_midpoint  IS NOT NULL

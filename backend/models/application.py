@@ -18,7 +18,8 @@ class LoanApplication(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     status: Mapped[str] = mapped_column(String, default="pending")
-    
+
+    # ── Core loan fields (8) ───────────────────────────────────────────────
     monthly_income: Mapped[Decimal] = mapped_column(Numeric)
     loan_amount: Mapped[Decimal] = mapped_column(Numeric)
     term: Mapped[int] = mapped_column(Integer)
@@ -27,22 +28,28 @@ class LoanApplication(Base):
     is_homeowner: Mapped[bool] = mapped_column(Boolean)
     listing_category: Mapped[str] = mapped_column(String)
     credit_score: Mapped[int] = mapped_column(Integer)
-    ext_source_1: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
-    ext_source_3: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+
+    # ── v3 new fields ──────────────────────────────────────────────────────
+    occupation_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    years_employed: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+
+    # ── Credit bureau features — nullable for backward compat with old rows ─
     num_bureau_records: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     num_active_credit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     total_overdue_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
     max_credit_overdue_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     has_bad_debt: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     income_verifiable_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
+    # ── Demographic features — nullable for backward compat ────────────────
     age_years: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     gender_male_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     education_ordinal: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     cnt_children: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     cnt_fam_members: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_married_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    
-    # Các trường có thể cập nhật sau khi đánh giá, nên cho phép nullable ở cấp database / Python
+
+    # ── ML prediction results ──────────────────────────────────────────────
     default_probability: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
     risk_level: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     risk_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -51,24 +58,13 @@ class LoanApplication(Base):
     model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     feature_snapshot: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     imputed_features: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    
+
     submitted_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), nullable=True)
     admin_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Relationships
-    # Vì bảng này có 2 cột foreign_keys trỏ về user_id và reviewed_by (đều từ users.id),
-    # ta nên set rõ foreign_keys trong relationship để SQLAlchemy không bị nhầm.
-    user: Mapped["User"] = relationship(
-        "User", 
-        foreign_keys=[user_id], 
-        back_populates="applications"
-    )
-
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="applications")
     personal_info: Mapped[Optional["PersonalInfo"]] = relationship(
-        "PersonalInfo", 
-        back_populates="application", 
-        uselist=False, # Quan hệ 1-1, trả về 1 Object thay vì List
-        cascade="all, delete-orphan"
+        "PersonalInfo", back_populates="application", uselist=False, cascade="all, delete-orphan"
     )

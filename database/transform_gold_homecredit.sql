@@ -69,10 +69,6 @@ SELECT
     s.prosper_score,
     s.borrower_apr,
 
-    -- FIX #7: pass-through 2 EXT_SOURCE phụ (đã expose ở Silver)
-    s.ext_source_1,
-    s.ext_source_3,
-
     -- ── Credit Score ───────────────────────────────────────────────────────
     (s.credit_score_range_lower + s.credit_score_range_upper) / 2.0
         AS credit_score_midpoint,
@@ -152,10 +148,13 @@ SELECT
         ELSE 'Other/Unknown'
     END                                                         AS employment_status_grouped,
 
-    -- ── Demographics (Phase 3: thêm để boost AUC) ─────────────────────────
+    -- ── Demographics ──────────────────────────────────────────────────────
     s.age_years,
     s.cnt_children,
     s.cnt_fam_members,
+    -- v3: new features
+    s.years_employed,
+    s.occupation_type,
 
     -- Gender: Male=1, Female=0, XNA → NULL
     CASE s.gender

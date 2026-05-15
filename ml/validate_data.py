@@ -17,6 +17,7 @@ REQUIRED_COLUMNS = {
     "stated_monthly_income", "loan_original_amount", "term", "employment_status",
     "debt_to_income_ratio", "is_homeowner", "listing_category_id",
     "credit_score_range_lower", "credit_score_range_upper", "is_default",
+    "years_employed", "occupation_type",
 }
 
 MIN_ROWS              = 50_000

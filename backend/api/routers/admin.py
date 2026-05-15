@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from api.dependencies import require_admin
 from db.session import get_db
-from schemas.application import ApplicationRead, ApplicationPendingSummary, AdminReject
+from schemas.application import ApplicationRead, AdminApplicationRead, ApplicationPendingSummary, AdminReject
 from schemas.personal_info import PersonalInfoRead
 from services import admin_service
 
@@ -41,7 +41,7 @@ def list_pending(
     return admin_service.list_pending(db, page=page, limit=limit)
 
 
-@router.get("/applications/{app_id}", response_model=ApplicationRead)
+@router.get("/applications/{app_id}", response_model=AdminApplicationRead)
 def get_application(
     app_id: str,
     db: Session = Depends(get_db),
