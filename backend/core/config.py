@@ -6,7 +6,11 @@ ENV_FILE = Path(__file__).parents[1] / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=str(ENV_FILE), env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=str(ENV_FILE),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     # Database
     db_host: str
@@ -26,11 +30,10 @@ class Settings(BaseSettings):
     rag_embedding_model: str = "openai/text-embedding-3-small"
     rag_top_k: int = 4
 
-    # Pinecone
-    pinecone_api_key: str
-    pinecone_index_name: str = "creditintel-kb"
-    pinecone_cloud: str = "aws"
-    pinecone_region: str = "us-east-1"
+    # Qdrant
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    qdrant_collection: str = "creditintel-kb"
 
 
 settings = Settings()

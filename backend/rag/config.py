@@ -5,7 +5,6 @@ LLM_MODEL = settings.rag_llm_model
 EMBEDDING_MODEL = settings.rag_embedding_model
 TOP_K = settings.rag_top_k
 
-PINECONE_API_KEY = settings.pinecone_api_key
-PINECONE_INDEX = settings.pinecone_index_name
-PINECONE_CLOUD = settings.pinecone_cloud
-PINECONE_REGION = settings.pinecone_region
+QDRANT_URL = settings.qdrant_url
+QDRANT_API_KEY = settings.qdrant_api_key or None
+QDRANT_COLLECTION = settings.qdrant_collection

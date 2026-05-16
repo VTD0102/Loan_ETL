@@ -31,14 +31,14 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 
 | Hạng mục | Lựa chọn | Lý do |
 |---|---|---|
-| Framework | **LangChain** (Python) | Có sẵn `ConversationalRetrievalChain`, `PostgresChatMessageHistory`, tích hợp Pinecone gọn |
-| Vector store | **Pinecone** (cloud managed) | Không phải tự host, free tier đủ cho KB nhỏ, scale tốt về sau |
+| Framework | **LangChain** (Python) | Có sẵn `ConversationalRetrievalChain`, `PostgresChatMessageHistory`, tích hợp Qdrant gọn |
+| Vector store | **Qdrant** (local Docker/server) | Chạy local không cần cloud vector DB key, vẫn có đường nâng cấp sang server/cloud về sau |
 | LLM provider | **OpenRouter** | 1 API key cho nhiều model, dễ chuyển đổi, OpenAI-compatible SDK |
 | LLM model | **`google/gemini-flash-1.5`** | Rẻ, nhanh, tiếng Việt tốt, context 1M tokens |
 | Embedding provider | **OpenRouter** (cùng API key) | Không cần tạo thêm tài khoản OpenAI riêng |
 | Embedding model | **`openai/text-embedding-3-small`** | 1536 dims, rẻ, đủ chất lượng cho KB <1000 chunks |
 | Chat memory | **PostgreSQL** — bảng `chat_messages` | Persistent, refresh trang vẫn còn lịch sử; reuse Supabase đang có |
-| Package chính | `langchain`, `langchain-community`, `langchain-openai`, `pinecone-client` | |
+| Package chính | `langchain`, `langchain-community`, `langchain-openai`, `qdrant-client` | |
 
 **Ghi chú OpenRouter**: sử dụng qua `ChatOpenAI` / `OpenAIEmbeddings` của LangChain với `base_url="https://openrouter.ai/api/v1"` (OpenRouter tương thích OpenAI SDK).
 
@@ -62,7 +62,7 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 │  3. Load chat history cho session (top 10 turns)          │
 │  4. LangChain ConversationalRetrievalChain                │
 │     ┌──────────────────────────────────────┐             │
-│     │  Retriever → Pinecone (top-k=4)      │             │
+│     │  Retriever → Qdrant (top-k=4)       │             │
 │     │  LLM → OpenRouter gemini-flash-1.5   │             │
 │     │  Memory → PostgresChatMessageHistory │             │
 │     └──────────────────────────────────────┘             │
@@ -72,7 +72,7 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
          │
          ▼
 ┌─────────────────────┐       ┌─────────────────────┐
-│  Pinecone Index     │       │  PostgreSQL         │
+│  Qdrant Collection│       │  PostgreSQL         │
 │  creditintel-kb     │       │  • users            │
 │  (1536 dims,cosine) │       │  • loan_applications│
 │  • policy.md chunks │       │  • core.risk_assess │
@@ -92,7 +92,7 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 | Policy tự viết | `backend/rag/knowledge/policy.md` *(tạo mới)* | `RecursiveCharacterTextSplitter`, chunk 800 ký tự, overlap 100 | Tiêu chí phê duyệt, ngưỡng rủi ro, rule business |
 | ML docs | `docs/ml/*.md` | Same | Giải thích chỉ số: DTI, credit_score, listing_category, feature và model |
 | FAQ | `backend/rag/knowledge/faq.md` *(tạo mới)* | Q-A pair splitter (mỗi Q+A = 1 chunk) | ~20 câu hỏi thường gặp |
-| Per-user prediction | `core.risk_assessment` + `loan_applications` | **KHÔNG embed** — query live tại request time, inject vào prompt | Cá nhân hóa, không đưa vào Pinecone |
+| Per-user prediction | `core.risk_assessment` + `loan_applications` | **KHÔNG embed** — query live tại request time, inject vào prompt | Cá nhân hóa, không đưa vào Qdrant |
 
 ### 4.2 Ingestion Pipeline (`backend/rag/ingest.py`)
 
@@ -103,8 +103,8 @@ Script chạy 1 lần (hoặc khi cập nhật KB):
 2. Text splitter → chunks
 3. Mỗi chunk gắn metadata: {source_file, chunk_id, section_title}
 4. Embeddings qua OpenRouter text-embedding-3-small
-5. Upsert vào Pinecone index creditintel-kb
-6. Idempotent: xóa toàn bộ namespace cũ trước khi insert (dev mode)
+5. Upsert vào Qdrant collection creditintel-kb
+6. Idempotent: xóa collection cũ trước khi insert (dev mode)
 ```
 
 **Output mong đợi**: ~200–400 chunks sau khi split toàn bộ KB hiện tại.
@@ -244,7 +244,7 @@ rủi ro và tư vấn tài chính cho khách hàng. Tuân thủ nghiêm ngặt 
 
 ### 7.3 Placeholder `{retrieved_chunks}`
 
-Top-4 chunks từ Pinecone, format:
+Top-4 chunks từ Qdrant, format:
 ```
 [1] (policy.md) Ngưỡng rủi ro cao khi P(default) > 0.4...
 [2] (faq.md) Cách cải thiện DTI...
@@ -267,9 +267,9 @@ backend/
 │       └── chat.py              # POST /chat, GET /chat/history, GET /chat/sessions
 ├── rag/
 │   ├── __init__.py
-│   ├── config.py                # load OPENROUTER_API_KEY, PINECONE_* từ env
+│   ├── config.py                # load OPENROUTER_API_KEY, QDRANT_* từ env
 │   ├── ingest.py                # script chạy 1 lần để build index
-│   ├── retriever.py             # Pinecone retriever factory
+│   ├── retriever.py             # Qdrant retriever factory
 │   ├── chain.py                 # ConversationalRetrievalChain builder
 │   ├── memory.py                # PostgresChatMessageHistory wrapper
 │   ├── context_builder.py       # build {user_context} từ DB cho 1 user
@@ -292,7 +292,8 @@ backend/
 langchain>=0.3.0,<0.4.0
 langchain-community>=0.3.0,<0.4.0
 langchain-openai>=0.2.0,<0.3.0
-pinecone>=6.0.0
+langchain-qdrant>=0.2.0
+qdrant-client>=1.12.0
 python-dotenv>=1.0.0
 slowapi>=0.1.9                   # rate limit FastAPI
 ```
@@ -308,10 +309,9 @@ Thêm vào `.env` (đã gitignored):
 | Var | Mô tả | Ví dụ |
 |---|---|---|
 | `OPENROUTER_API_KEY` | Gọi LLM + embeddings | `sk-or-v1-...` |
-| `PINECONE_API_KEY` | Truy cập vector DB | `pcsk_...` |
-| `PINECONE_INDEX_NAME` | Tên index | `creditintel-kb` |
-| `PINECONE_CLOUD` | Cloud provider | `aws` |
-| `PINECONE_REGION` | Region | `us-east-1` |
+| `QDRANT_URL` | URL Qdrant server local/Docker | `http://localhost:6333` |
+| `QDRANT_API_KEY` | API key nếu dùng Qdrant Cloud; để trống khi local | `` |
+| `QDRANT_COLLECTION` | Tên collection | `creditintel-kb` |
 | `RAG_LLM_MODEL` | Model chat | `google/gemini-flash-1.5` |
 | `RAG_EMBEDDING_MODEL` | Model embedding | `openai/text-embedding-3-small` |
 | `RAG_TOP_K` | Số chunks retrieve | `4` |
@@ -323,7 +323,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 ## 11. Checklist triển khai (Tuần 2)
 
 ### Giai đoạn A — Hạ tầng
-- [ ] Đăng ký Pinecone, tạo index `creditintel-kb` (dim=1536, metric=cosine, serverless)
+- [ ] Chạy Qdrant local server: `docker run -p 6333:6333 -v "$(pwd)/qdrant_storage:/qdrant/storage" qdrant/qdrant`
 - [ ] Đăng ký OpenRouter, nạp credit (~5 USD đủ test), verify access `gemini-flash-1.5` + `text-embedding-3-small`
 - [ ] Thêm env vars vào `.env`, verify `.gitignore` đã loại trừ `.env`
 - [ ] Thêm RAG packages vào `backend/requirements-rag.txt`, chạy `pip install -r backend/requirements-rag.txt`
@@ -332,7 +332,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] Viết `backend/rag/knowledge/policy.md` — lấy thresholds từ `docs/ml/ML_FEATURES.md`, thêm tiêu chí auto-reject, rule business
 - [ ] Viết `backend/rag/knowledge/faq.md` — ~20 Q&A (cách giảm DTI, ý nghĩa các risk level, các bước sau khi được duyệt, v.v.)
 - [ ] Implement `backend/rag/ingest.py`
-- [ ] Chạy `python -m backend.rag.ingest` → kiểm tra Pinecone có ~200–400 vectors
+- [ ] Chạy `python -m backend.rag.ingest` → kiểm tra Qdrant có ~200–400 vectors
 
 ### Giai đoạn C — Database
 - [ ] Viết `backend/db/init_chat.sql` với 2 bảng ở §6
@@ -341,7 +341,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 
 ### Giai đoạn D — Backend
 - [ ] `backend/rag/config.py` — load env
-- [ ] `backend/rag/retriever.py` — PineconeVectorStore + as_retriever(top_k)
+- [ ] `backend/rag/retriever.py` — QdrantVectorStore + as_retriever(top_k)
 - [ ] `backend/rag/memory.py` — PostgresChatMessageHistory, reuse `machinelearning/utils/db_connection.py`
 - [ ] `backend/rag/context_builder.py` — query `loan_applications` + `core.risk_assessment` cho user_id
 - [ ] `backend/rag/prompts.py` — system template ở §7
@@ -388,10 +388,10 @@ Giả định: 50 customer active, mỗi người 10 tin/ngày, mỗi tin ~500 t
 |---|---|
 | OpenRouter LLM (gemini-flash-1.5) | ~15,000 tin × 800 tokens × $0.075/1M = **~$0.9** |
 | OpenRouter embeddings (ingest 1 lần) | 400 chunks × 500 tokens × $0.02/1M = **~$0.004** |
-| Pinecone (Starter free tier) | **$0** (đủ cho <2GB storage, <1 pod) |
+| Qdrant local Docker | **$0** |
 | **Tổng** | **< $1 / tháng** |
 
-Với scale lớn hơn (1000+ user), xem xét chuyển Pinecone Standard tier (~$70/tháng) và batch embedding.
+Với scale lớn hơn (1000+ user), xem xét chuyển sang Qdrant Cloud/self-host riêng và batch embedding.
 
 ---
 
@@ -410,4 +410,4 @@ Với scale lớn hơn (1000+ user), xem xét chuyển Pinecone Standard tier (~
 
 ---
 
-> Tài liệu được tạo ngày 2026-04-22, mở rộng từ Mục 8 của `APP_DEVELOPMENT_PLAN.md`. Các quyết định stack (LangChain + Pinecone + OpenRouter + gemini-flash-1.5 + text-embedding-3-small + persistent chat history) đã được chốt trong phiên thảo luận cùng ngày.
+> Tài liệu được tạo ngày 2026-04-22, mở rộng từ Mục 8 của `APP_DEVELOPMENT_PLAN.md`. Các quyết định stack (LangChain + Qdrant + OpenRouter + gemini-flash-1.5 + text-embedding-3-small + persistent chat history) đã được chốt trong phiên thảo luận cùng ngày.

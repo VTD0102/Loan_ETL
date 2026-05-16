@@ -15,7 +15,7 @@ Câu hỏi người dùng
        │
        ▼
 ┌──────────────────┐     ┌─────────────────────────┐
-│  Context Builder  │──▶ │  Retriever (Pinecone)    │
+│  Context Builder  │──▶ │  Retriever (Qdrant)     │
 │ (DB: hồ sơ vay)  │     │  Vector Search top-K docs│
 └──────────────────┘     └────────────┬────────────┘
                                       │
@@ -33,7 +33,7 @@ Câu hỏi người dùng
 
 **Mô hình LLM:** `google/gemini-flash-1.5` (qua OpenRouter)  
 **Embedding Model:** `openai/text-embedding-3-small` (1536 chiều)  
-**Vector Store:** Pinecone Serverless (AWS us-east-1)  
+**Vector Store:** Qdrant local server/Docker (`http://localhost:6333`)  
 **Framework:** LangChain `ConversationalRetrievalChain`
 
 ---
@@ -44,8 +44,8 @@ Câu hỏi người dùng
 backend/rag/
 ├── __init__.py          # Export công khai của package RAG
 ├── config.py            # Cấu hình: model, API keys, top-K
-├── ingest.py            # Pipeline nạp dữ liệu → Pinecone (one-shot script)
-├── retriever.py         # Kết nối Pinecone, tạo retriever top-K
+├── ingest.py            # Pipeline nạp dữ liệu → Qdrant (one-shot script)
+├── retriever.py         # Kết nối Qdrant, tạo retriever top-K
 ├── context_builder.py   # Build context từ DB: hồ sơ vay của user
 ├── prompts.py           # Định nghĩa System Prompt tiếng Việt
 ├── chain.py             # Khởi tạo ConversationalRetrievalChain (singleton)
@@ -60,7 +60,7 @@ backend/rag/
 ## 3. Giai Đoạn 1 — INGEST: Xây Dựng Knowledge Base
 
 ### 3.1 Mục đích
-Đây là bước **one-shot** (chạy một lần) để đưa tài liệu kiến thức vào Pinecone. Không chạy lại mỗi khi có câu hỏi.
+Đây là bước **one-shot** (chạy một lần) để đưa tài liệu kiến thức vào Qdrant. Không chạy lại mỗi khi có câu hỏi.
 
 ### 3.2 Nguồn dữ liệu đầu vào
 
@@ -90,11 +90,11 @@ Chia nhỏ thành chunks
 Encode → Vector 1536 chiều
    Model: openai/text-embedding-3-small
          │
-         ▼  [PineconeVectorStore.from_documents()]
-Upsert vào Pinecone
-   Index: "creditintel-kb"
+         ▼  [QdrantVectorStore.from_documents()]
+Upsert vào Qdrant
+   Collection: "creditintel-kb"
    Metric: cosine similarity
-   Cloud: AWS us-east-1 (Serverless)
+   URL: http://localhost:6333
 ```
 
 ### 3.4 Chi tiết kỹ thuật Chunking
@@ -114,9 +114,9 @@ cd backend
 python -m rag.ingest
 ```
 
-Output: `Ingested N chunks into Pinecone index 'creditintel-kb'`
+Output: `Ingested N chunks into Qdrant collection 'creditintel-kb'`
 
-> ⚠️ Script sẽ **xóa toàn bộ index cũ** (`delete_all=True`) trước khi nạp lại.
+> ⚠️ Script sẽ **xóa toàn bộ collection cũ** trước khi nạp lại.
 
 ---
 
@@ -188,11 +188,11 @@ Input:
 │    vào ngữ cảnh hội thoại trước             │
 └───────────────────┬─────────────────────────┘
                     │
-                    ▼ [Retriever — Pinecone cosine search]
+                    ▼ [Retriever — Qdrant cosine search]
 ┌─────────────────────────────────────────────┐
 │  STEP 2: Semantic Retrieval                  │
 │  Embed câu hỏi → vector 1536 chiều          │
-│  Tìm TOP_K=4 chunks gần nhất trong Pinecone │
+│  Tìm TOP_K=4 chunks gần nhất trong Qdrant  │
 │  Metric: cosine similarity                   │
 │  Trả về: list[Document] + metadata.source   │
 └───────────────────┬─────────────────────────┘
@@ -203,7 +203,7 @@ Input:
 │  [System] = SYSTEM_TEMPLATE:                 │
 │    - Rules (6 quy tắc hành vi AI)           │
 │    - {user_context} → hồ sơ cá nhân        │
-│    - {context}      → chunks từ Pinecone    │
+│    - {context}      → chunks từ Qdrant     │
 │  [History] = MessagesPlaceholder            │
 │  [Human]   = câu hỏi gốc                   │
 └───────────────────┬─────────────────────────┘
@@ -244,7 +244,7 @@ Prompt được thiết kế với 6 ràng buộc hành vi cứng:
   ═══ THÔNG TIN HỒ SƠ KHÁCH HÀNG ═══
   {user_context}          ← inject từ DB (personal data)
   ═══ TÀI LIỆU LIÊN QUAN ═══
-  {context}               ← inject từ Pinecone (retrieved docs)
+  {context}               ← inject từ Qdrant (retrieved docs)
 
 [CHAT HISTORY]
   HumanMessage: ...
@@ -309,9 +309,10 @@ if query_count >= 20:
 **File:** `rag/retriever.py`
 
 ```python
-vectorstore = PineconeVectorStore.from_existing_index(
-    index_name = "creditintel-kb",
-    embedding   = OpenAIEmbeddings(model="openai/text-embedding-3-small")
+vectorstore = QdrantVectorStore.from_existing_collection(
+    collection_name = "creditintel-kb",
+    embedding       = OpenAIEmbeddings(model="openai/text-embedding-3-small"),
+    url             = "http://localhost:6333",
 )
 retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 ```
@@ -328,7 +329,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
 cos(θ) = (A · B) / (|A| × |B|)
 
 A = embedding(câu hỏi user)    [1536-dim vector]
-B = embedding(mỗi chunk trong Pinecone)
+B = embedding(mỗi chunk trong Qdrant)
 
 Score ∈ [-1, 1], càng gần 1 càng tương đồng
 → Lấy top-4 có score cao nhất
@@ -380,7 +381,7 @@ Content-Type: application/json
 | **Context Builder** | user_id → DB query | Chuỗi text hồ sơ vay |
 | **Retriever** | Câu hỏi (string) | List 4 Document chunks |
 | **LLM Chain** | question + user_context + chunks + history | Answer string |
-| **Ingest** | File .md | Pinecone index đã lưu vectors |
+| **Ingest** | File .md | Qdrant collection đã lưu vectors |
 
 ---
 
@@ -390,9 +391,9 @@ Content-Type: application/json
 |---|---|---|
 | `langchain` | ≥0.2 | ConversationalRetrievalChain, TextSplitter, Prompts |
 | `langchain-openai` | ≥0.1 | ChatOpenAI, OpenAIEmbeddings |
-| `langchain-pinecone` | ≥0.1 | PineconeVectorStore |
+| `langchain-qdrant` | ≥0.1 | QdrantVectorStore |
 | `langchain-community` | ≥0.2 | DirectoryLoader, TextLoader |
-| `pinecone` | ≥3.0 | Pinecone client SDK |
+| `qdrant-client` | ≥1.12 | Qdrant client SDK |
 | `openrouter` | — | Proxy API cho LLM + Embeddings |
 | `sqlalchemy` | ≥2.0 | ORM — lưu chat history vào PostgreSQL |
 | `fastapi` | ≥0.100 | REST API endpoint |
@@ -411,11 +412,10 @@ RAG_LLM_MODEL=google/gemini-flash-1.5
 RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
 RAG_TOP_K=4
 
-# Pinecone
-PINECONE_API_KEY=pcsk_...
-PINECONE_INDEX_NAME=creditintel-kb
-PINECONE_CLOUD=aws
-PINECONE_REGION=us-east-1
+# Qdrant
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=creditintel-kb
 ```
 
 ---
@@ -427,7 +427,7 @@ PINECONE_REGION=us-east-1
 │                        INGEST PHASE (one-shot)                  │
 │                                                                  │
 │  faq.md ─┐                                                      │
-│           ├─▶ DirectoryLoader ─▶ Chunker ─▶ Embeddings ─▶ Pinecone │
+│           ├─▶ DirectoryLoader ─▶ Chunker ─▶ Embeddings ─▶ Qdrant │
 │  policy.md┘  (TextLoader)       800/100     text-embed-3-small  │
 └─────────────────────────────────────────────────────────────────┘
 
@@ -446,7 +446,7 @@ PINECONE_REGION=us-east-1
 │                    │  5. build_user_context() ← DB    │         │
 │                    │  6. rag.invoke()                  │         │
 │                    │     ├─ Rephrase question          │         │
-│                    │     ├─ Retriever → Pinecone       │         │
+│                    │     ├─ Retriever → Qdrant        │         │
 │                    │     │   cosine top-K=4 chunks     │         │
 │                    │     ├─ Assemble Prompt            │         │
 │                    │     │   [system + context +       │         │

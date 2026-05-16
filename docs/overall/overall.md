@@ -16,7 +16,7 @@
 - Chuẩn hóa quy trình xử lý dữ liệu từ thô đến phân tích (Data Lakehouse).
 - Cung cấp mô hình ML đánh giá rủi ro và tự động hóa quyết định cho vay.
 - Giao diện Web đầy đủ cho **Customer** (đăng ký, nộp đơn, chat) và **Admin** (quản lý, xét duyệt, dashboard).
-- Tích hợp **RAG Chatbot** (LangChain + Pinecone) hỗ trợ tư vấn tài chính cá nhân hóa.
+- Tích hợp **RAG Chatbot** (LangChain + Qdrant) hỗ trợ tư vấn tài chính cá nhân hóa.
 
 ---
 
@@ -37,7 +37,7 @@ Hệ thống gồm 4 thành phần chính:
        │              │              │
 ┌──────▼───┐  ┌───────▼──────┐  ┌───▼──────────────────┐
 │PostgreSQL│  │ ML Models    │  │ RAG (LangChain +     │
-│(Supabase)│  │(pkl files)   │  │  Pinecone)           │
+│(Supabase)│  │(pkl files)   │  │  Qdrant)            │
 └──────────┘  └──────────────┘  └──────────────────────┘
        ▲
 ┌──────┴───────────────────────────────────────────────────┐
@@ -80,9 +80,9 @@ Xử lý Prosper Loan Data thông qua script SQL chạy trên Supabase:
 
 **Thresholds chung:** Low < 0.20 ≤ Medium ≤ 0.40 < High
 
-### 2.4. RAG Chatbot (LangChain + Pinecone)
+### 2.4. RAG Chatbot (LangChain + Qdrant)
 
-- Nhúng tài liệu từ `backend/rag/knowledge/` lên Pinecone index.
+- Nhúng tài liệu từ `backend/rag/knowledge/` lên Qdrant collection.
 - `ConversationalRetrievalChain` dùng OpenAI/OpenRouter LLM.
 - Lịch sử chat lưu vào PostgreSQL (`chat_messages`, `chat_sessions`).
 - Context builder tổng hợp thông tin đơn vay hiện tại của user vào prompt.
@@ -138,9 +138,9 @@ Loan_ETL/
 │   │   ├── ml_service.py       # Wrapper gọi model inference (load pkl files)
 │   │   └── credit_score_service.py  # FICO scorecard inference + SHAP
 │   ├── rag/                    # RAG Chatbot module
-│   │   ├── ingest.py           # Embed docs lên Pinecone
+│   │   ├── ingest.py           # Embed docs lên Qdrant
 │   │   ├── chain.py            # ConversationalRetrievalChain
-│   │   ├── retriever.py        # Pinecone retriever setup
+│   │   ├── retriever.py        # Qdrant retriever setup
 │   │   ├── memory.py           # Chat history management
 │   │   ├── context_builder.py  # Build user context từ DB
 │   │   ├── prompts.py          # System/user prompt templates
@@ -320,9 +320,9 @@ python -m machinelearning.etl.etl_gold
 
 | Module | Chức năng |
 |---|---|
-| `rag/ingest.py` | Embed tài liệu markdown → Pinecone index |
+| `rag/ingest.py` | Embed tài liệu markdown → Qdrant collection |
 | `rag/chain.py` | ConversationalRetrievalChain setup |
-| `rag/retriever.py` | Kết nối Pinecone retriever |
+| `rag/retriever.py` | Kết nối Qdrant retriever |
 | `rag/memory.py` | Quản lý lịch sử hội thoại |
 | `rag/context_builder.py` | Tổng hợp context từ đơn vay hiện tại của user |
 | `rag/prompts.py` | System prompt, user prompt templates |
@@ -338,7 +338,7 @@ python -m machinelearning.etl.etl_gold
 | **Database** | PostgreSQL (Supabase), SQLAlchemy 2.x, psycopg2-binary |
 | **ETL (HC)** | DuckDB, pandas, duckdb Python client |
 | **ML** | scikit-learn ≥1.4, LightGBM ≥4.6, numpy, pandas, joblib, shap |
-| **RAG** | LangChain ≥0.3, langchain-openai, langchain-pinecone, pinecone ≥6.0 |
+| **RAG** | LangChain ≥0.3, langchain-openai, langchain-qdrant, qdrant-client ≥1.12 |
 | **Frontend** | React 18, Vite, Tailwind CSS, React Router v6, Zustand, Axios |
 | **Dev Tools** | python-dotenv, PyYAML, kaggle CLI, Git |
 
@@ -351,8 +351,9 @@ python -m machinelearning.etl.etl_gold
 DATABASE_URL=postgresql://...          # Supabase connection string
 SECRET_KEY=...                         # JWT signing key
 OPENAI_API_KEY=...                     # Hoặc OpenRouter key
-PINECONE_API_KEY=...
-PINECONE_INDEX_NAME=...
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=creditintel-kb
 ```
 
 ### ETL (`machinelearning/config/etl_db.env`)
@@ -440,7 +441,7 @@ python tests_local/test_task_5_3.py
 | ETL engine | pandas + SQLAlchemy (Prosper) | DuckDB (Home Credit) song song với SQL scripts (Prosper) |
 | ML Models | 1 model (loan_risk_model.pkl) | 2 models: customer_risk_model.pkl (LightGBM) + scorecard_model.pkl (LR) |
 | Credit Score | Không có | FICO-style scorecard (300–850) với SHAP explanation |
-| Chatbot | Không có | RAG (LangChain + Pinecone) đầy đủ |
+| Chatbot | Không có | RAG (LangChain + Qdrant) đầy đủ |
 | Dataset | Chỉ Prosper | Prosper + Home Credit Default Risk (Kaggle) |
 | API | Không có | FastAPI với 5 routers đang active |
 

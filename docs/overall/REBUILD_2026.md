@@ -423,14 +423,13 @@ SECRET_KEY=<chuỗi-bí-mật-ngẫu-nhiên>
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 
-# RAG (OpenRouter + Pinecone)
+# RAG (OpenRouter + Qdrant)
 OPENROUTER_API_KEY=<key>
 RAG_LLM_MODEL=google/gemini-flash-1.5
 RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
-PINECONE_API_KEY=<key>
-PINECONE_INDEX_NAME=creditintel-kb
-PINECONE_CLOUD=aws
-PINECONE_REGION=us-east-1
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=creditintel-kb
 
 # Supabase Storage (tùy chọn — dùng cho tải lên tài liệu)
 SUPABASE_URL=https://xxx.supabase.co
