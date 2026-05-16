@@ -1,27 +1,25 @@
 """
-Retrain customer risk model (LightGBM) — v5.0
+Retrain customer risk model (XGBoost) — v4.3
 
-Converted from XGBoost v4.3 to LightGBM.
-
-Main design:
-  - Keep current 28 features.
-  - Tune scale_pos_weight instead of blindly using neg/pos ratio.
-  - Early stopping optimizes validation ROC-AUC.
+Main changes vs v4.2:
+  - Tune scale_pos_weight instead of always using neg/pos ratio.
+  - Early stopping still optimizes ROC-AUC.
   - Select best scale_pos_weight by validation ROC-AUC.
-  - Retrain final model on train + val using best_iteration.
-  - Evaluate on untouched test set.
-  - Save artifact as:
-        {
-            "pipeline": pipeline,
-            "thresholds": {"low": 0.2, "high": 0.4},
-            ...
-        }
+  - Retrain final model on train + val using best_iteration + 1.
+  - Keep full evaluation:
+      ROC-AUC
+      PR-AUC
+      Brier
+      classification report at HIGH_THRESHOLD
+      threshold analysis
+      risk band report
+      optimal threshold for target recall
+  - Save tuning results into artifact.
 
-Why LightGBM:
-  - Usually fast on large tabular datasets.
-  - Strong performance for credit-risk style tabular ML.
-  - Handles non-linear interactions well.
-  - Good candidate to compare with XGBoost.
+Why this version:
+  v4.2 improved ROC-AUC but probability calibration became worse.
+  scale_pos_weight=neg/pos may be too aggressive and can inflate PD.
+  This version tries multiple scale_pos_weight values and chooses the best one.
 
 Source : gold.hc_features_v1
 Output : ml/models/customer_risk_model.pkl
@@ -38,8 +36,6 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import (
     average_precision_score,
@@ -52,6 +48,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
+from xgboost import XGBClassifier
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths & config
@@ -63,8 +61,8 @@ sys.path.insert(0, str(BASE_DIR))
 from utils.db_connection import get_engine  # noqa: E402
 
 
-MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model_3.pkl"
-MODEL_VERSION = "customer_lgbm_v5.0_spw_tuned"
+MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
+MODEL_VERSION = "customer_xgb_v4.3_spw_tuned"
 
 LOW_THRESHOLD = 0.2
 HIGH_THRESHOLD = 0.4
@@ -72,27 +70,32 @@ HIGH_THRESHOLD = 0.4
 RANDOM_STATE = 42
 TARGET_RECALL = 0.75
 
+# XGBoost uses the LAST metric in eval_metric for early stopping.
+# Here we want to optimize ROC-AUC.
+EVAL_METRICS = ["logloss", "aucpr", "auc"]
 EARLY_STOPPING_METRIC_NAME = "auc"
 
+# Search scale_pos_weight instead of blindly using neg/pos.
+# None means "use automatically computed neg/pos ratio".
 SCALE_POS_WEIGHT_CANDIDATES = [
     1.0,
     3.0,
     5.0,
     7.0,
     9.0,
-    None,  # use neg / pos ratio
+    None,
 ]
 
-LGBM_BASE_PARAMS = {
+# XGBoost hyperparameters
+XGB_BASE_PARAMS = {
     "n_estimators": 3000,
     "learning_rate": 0.02,
-    "num_leaves": 31,
-    "max_depth": -1,
-    "min_child_samples": 50,
-    "subsample": 0.85,
-    "colsample_bytree": 0.85,
+    "max_depth": 5,
+    "min_child_weight": 30,
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
+    "subsample": 0.85,
+    "colsample_bytree": 0.85,
 }
 
 
@@ -246,16 +249,16 @@ def train() -> None:
       3. Split 70/10/20 train/val/test
       4. Fit preprocessor on train
       5. Tune scale_pos_weight using validation ROC-AUC
-      6. Retrain final LightGBM model on train + val
+      6. Retrain final model on train+val with best params
       7. Evaluate final model on untouched test set
       8. Save artifact
     """
 
     _run_validation_safely()
 
-    print("\n" + "=" * 64)
-    print("  CUSTOMER RISK MODEL — RETRAIN (LightGBM v5.0)")
-    print("=" * 64)
+    print("\n" + "=" * 60)
+    print("  CUSTOMER RISK MODEL — RETRAIN (XGBoost v4.3)")
+    print("=" * 60)
 
     # ── 1. Fetch data ────────────────────────────────────────────────────
     print("\n[1/8] Fetching data from gold.hc_features_v1...")
@@ -333,17 +336,21 @@ def train() -> None:
         else:
             candidate_spw.append(float(value))
 
+    # Add sqrt ratio as an extra useful candidate.
     candidate_spw.append(float(sqrt_scale_pos_weight))
+
+    # Remove duplicates while preserving order.
     candidate_spw = _unique_float_list(candidate_spw)
 
     print(f"  neg={negative_count:,} / pos={positive_count:,}")
-    print(f"  neg/pos scale_pos_weight : {ratio_scale_pos_weight:.4f}")
-    print(f"  sqrt scale_pos_weight    : {sqrt_scale_pos_weight:.4f}")
-    print(f"  candidates               : {[round(v, 4) for v in candidate_spw]}")
+    print(f"  neg/pos scale_pos_weight  : {ratio_scale_pos_weight:.4f}")
+    print(f"  sqrt scale_pos_weight     : {sqrt_scale_pos_weight:.4f}")
+    print(f"  candidates                : {[round(v, 4) for v in candidate_spw]}")
 
     # ── 5. Tune scale_pos_weight ─────────────────────────────────────────
     print("\n[5/8] Tuning scale_pos_weight with early stopping...")
-    print(f"  early stopping metric: {EARLY_STOPPING_METRIC_NAME}")
+    print(f"  eval_metric order       : {EVAL_METRICS}")
+    print(f"  early stopping metric   : {EARLY_STOPPING_METRIC_NAME}")
 
     tuning_results = []
 
@@ -355,31 +362,27 @@ def train() -> None:
     best_val_brier = None
 
     for spw in candidate_spw:
-        print("\n" + "-" * 64)
+        print("\n" + "-" * 60)
         print(f"  Training candidate scale_pos_weight={spw:.4f}")
 
-        clf = build_lgbm_classifier(
-            n_estimators=LGBM_BASE_PARAMS["n_estimators"],
-            learning_rate=LGBM_BASE_PARAMS["learning_rate"],
-            num_leaves=LGBM_BASE_PARAMS["num_leaves"],
-            max_depth=LGBM_BASE_PARAMS["max_depth"],
-            min_child_samples=LGBM_BASE_PARAMS["min_child_samples"],
-            subsample=LGBM_BASE_PARAMS["subsample"],
-            colsample_bytree=LGBM_BASE_PARAMS["colsample_bytree"],
-            reg_alpha=LGBM_BASE_PARAMS["reg_alpha"],
-            reg_lambda=LGBM_BASE_PARAMS["reg_lambda"],
+        clf = build_xgb_classifier(
+            n_estimators=XGB_BASE_PARAMS["n_estimators"],
+            learning_rate=XGB_BASE_PARAMS["learning_rate"],
+            max_depth=XGB_BASE_PARAMS["max_depth"],
+            min_child_weight=XGB_BASE_PARAMS["min_child_weight"],
+            reg_alpha=XGB_BASE_PARAMS["reg_alpha"],
+            reg_lambda=XGB_BASE_PARAMS["reg_lambda"],
+            subsample=XGB_BASE_PARAMS["subsample"],
+            colsample_bytree=XGB_BASE_PARAMS["colsample_bytree"],
             scale_pos_weight=spw,
+            early_stopping_rounds=100,
         )
 
         clf.fit(
             X_train_enc,
             y_train,
             eval_set=[(X_val_enc, y_val)],
-            eval_metric="auc",
-            callbacks=[
-                early_stopping(stopping_rounds=100, verbose=False),
-                log_evaluation(period=100),
-            ],
+            verbose=100,
         )
 
         val_prob = clf.predict_proba(X_val_enc)[:, 1]
@@ -388,18 +391,10 @@ def train() -> None:
         val_pr_auc = average_precision_score(y_val, val_prob)
         val_brier = brier_score_loss(y_val, val_prob)
 
-        current_best_iteration = int(
-            clf.best_iteration_
-            if getattr(clf, "best_iteration_", None) is not None
-            else LGBM_BASE_PARAMS["n_estimators"]
-        )
-
         result = {
             "scale_pos_weight": float(spw),
-            "best_iteration": current_best_iteration,
-            "best_score_from_lgbm": float(
-                clf.best_score_["valid_0"].get("auc", val_auc)
-            ),
+            "best_iteration": int(clf.best_iteration),
+            "best_score_from_xgb": float(clf.best_score),
             "val_roc_auc": float(val_auc),
             "val_pr_auc": float(val_pr_auc),
             "val_brier": float(val_brier),
@@ -415,6 +410,8 @@ def train() -> None:
             f"val_brier={val_brier:.4f}"
         )
 
+        # Primary selection criterion: validation ROC-AUC.
+        # Tie-breaker: higher PR-AUC.
         is_better = (
             val_auc > best_val_auc
             or (
@@ -426,18 +423,14 @@ def train() -> None:
         if is_better:
             best_clf = clf
             best_spw = float(spw)
-            best_iteration = current_best_iteration
+            best_iteration = int(clf.best_iteration)
             best_val_auc = float(val_auc)
             best_val_pr_auc = float(val_pr_auc)
             best_val_brier = float(val_brier)
 
-    if best_clf is None or best_spw is None or best_iteration is None:
-        raise RuntimeError("No LightGBM candidate was successfully trained.")
-
-    print("\n" + "=" * 64)
+    print("\n" + "=" * 60)
     print("  SCALE_POS_WEIGHT TUNING SUMMARY")
-    print("=" * 64)
-
+    print("=" * 60)
     for result in sorted(tuning_results, key=lambda x: x["val_roc_auc"], reverse=True):
         print(
             f"  spw={result['scale_pos_weight']:.4f} | "
@@ -454,8 +447,12 @@ def train() -> None:
     print(f"  val PR-AUC       : {best_val_pr_auc:.4f}")
     print(f"  val Brier        : {best_val_brier:.4f}")
 
+    # Safety check
+    if best_clf is None or best_spw is None or best_iteration is None:
+        raise RuntimeError("No XGBoost candidate was successfully trained.")
+
     # ── 6. Retrain final model on train + val ────────────────────────────
-    print("\n[6/8] Retraining final LightGBM model on train + val...")
+    print("\n[6/8] Retraining final model on train + val...")
 
     X_final = pd.concat([X_train, X_val], axis=0)
     y_final = pd.concat([y_train, y_val], axis=0)
@@ -466,28 +463,29 @@ def train() -> None:
     X_final_enc = preprocessor_final.transform(X_final)
     X_test_enc = preprocessor_final.transform(X_test)
 
-    final_n_estimators = max(int(best_iteration), 1)
+    final_n_estimators = max(best_iteration + 1, 1)
 
-    print(f"  Final train rows       : {len(X_final):,}")
-    print(f"  Final n_estimators     : {final_n_estimators}")
-    print(f"  Final scale_pos_weight : {best_spw:.4f}")
+    print(f"  Final train rows        : {len(X_final):,}")
+    print(f"  Final n_estimators      : {final_n_estimators}")
+    print(f"  Final scale_pos_weight  : {best_spw:.4f}")
 
-    final_clf = build_lgbm_classifier(
+    final_clf = build_xgb_classifier(
         n_estimators=final_n_estimators,
-        learning_rate=LGBM_BASE_PARAMS["learning_rate"],
-        num_leaves=LGBM_BASE_PARAMS["num_leaves"],
-        max_depth=LGBM_BASE_PARAMS["max_depth"],
-        min_child_samples=LGBM_BASE_PARAMS["min_child_samples"],
-        subsample=LGBM_BASE_PARAMS["subsample"],
-        colsample_bytree=LGBM_BASE_PARAMS["colsample_bytree"],
-        reg_alpha=LGBM_BASE_PARAMS["reg_alpha"],
-        reg_lambda=LGBM_BASE_PARAMS["reg_lambda"],
+        learning_rate=XGB_BASE_PARAMS["learning_rate"],
+        max_depth=XGB_BASE_PARAMS["max_depth"],
+        min_child_weight=XGB_BASE_PARAMS["min_child_weight"],
+        reg_alpha=XGB_BASE_PARAMS["reg_alpha"],
+        reg_lambda=XGB_BASE_PARAMS["reg_lambda"],
+        subsample=XGB_BASE_PARAMS["subsample"],
+        colsample_bytree=XGB_BASE_PARAMS["colsample_bytree"],
         scale_pos_weight=best_spw,
+        early_stopping_rounds=None,
     )
 
     final_clf.fit(
         X_final_enc,
         y_final,
+        verbose=False,
     )
 
     pipeline = Pipeline([
@@ -550,7 +548,7 @@ def train() -> None:
         "dti_p75": dti_p75,
         "model_version": MODEL_VERSION,
         "trained_at": datetime.now(timezone.utc).isoformat(),
-        "best_iteration": int(best_iteration),
+        "best_iteration": best_iteration,
         "best_validation_score": {
             "metric": EARLY_STOPPING_METRIC_NAME,
             "roc_auc": round(best_val_auc, 6),
@@ -558,16 +556,17 @@ def train() -> None:
             "brier": round(best_val_brier, 6),
         },
         "selected_params": {
-            **LGBM_BASE_PARAMS,
+            **XGB_BASE_PARAMS,
             "scale_pos_weight": round(float(best_spw), 6),
             "n_estimators": int(final_n_estimators),
-            "eval_metric": EARLY_STOPPING_METRIC_NAME,
+            "eval_metric": EVAL_METRICS,
+            "early_stopping_metric": EARLY_STOPPING_METRIC_NAME,
         },
         "scale_pos_weight_tuning_results": [
             {
                 "scale_pos_weight": round(float(r["scale_pos_weight"]), 6),
                 "best_iteration": int(r["best_iteration"]),
-                "best_score_from_lgbm": round(float(r["best_score_from_lgbm"]), 6),
+                "best_score_from_xgb": round(float(r["best_score_from_xgb"]), 6),
                 "val_roc_auc": round(float(r["val_roc_auc"]), 6),
                 "val_pr_auc": round(float(r["val_pr_auc"]), 6),
                 "val_brier": round(float(r["val_brier"]), 6),
@@ -588,8 +587,9 @@ def train() -> None:
             "n_test": int(len(X_test)),
         },
         "training_config": {
-            "model": "LGBMClassifier",
+            "model": "XGBClassifier",
             "version": MODEL_VERSION,
+            "eval_metric": EVAL_METRICS,
             "early_stopping_metric": EARLY_STOPPING_METRIC_NAME,
             "low_threshold": LOW_THRESHOLD,
             "high_threshold": HIGH_THRESHOLD,
@@ -599,7 +599,7 @@ def train() -> None:
                 "Select highest validation ROC-AUC; tie-break by PR-AUC."
             ),
             "note": (
-                "LightGBM version converted from XGBoost v4.3. "
+                "XGBoost uses the last metric in eval_metric for early stopping. "
                 "This version optimizes validation ROC-AUC and tunes scale_pos_weight."
             ),
         },
@@ -609,7 +609,7 @@ def train() -> None:
 
     print(f"\n  Saved   → {MODEL_PATH}")
     print(f"  Version → {MODEL_VERSION}")
-    print("=" * 64)
+    print("=" * 60)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -620,8 +620,9 @@ def build_preprocessor() -> ColumnTransformer:
     """
     Build preprocessing transformer.
 
-    Numeric features are passed through. Categorical features are ordinal-encoded
-    with safe handling for unknown categories.
+    Numeric features are passed through because XGBoost can handle numeric values
+    directly. Categorical features are ordinal-encoded with safe handling for
+    unknown categories.
     """
     return ColumnTransformer([
         ("num", "passthrough", NUMERIC_FEATURES),
@@ -636,41 +637,47 @@ def build_preprocessor() -> ColumnTransformer:
     ])
 
 
-def build_lgbm_classifier(
+def build_xgb_classifier(
     *,
     n_estimators: int,
     learning_rate: float,
-    num_leaves: int,
     max_depth: int,
-    min_child_samples: int,
-    subsample: float,
-    colsample_bytree: float,
+    min_child_weight: float,
     reg_alpha: float,
     reg_lambda: float,
+    subsample: float,
+    colsample_bytree: float,
     scale_pos_weight: float,
-) -> LGBMClassifier:
+    early_stopping_rounds: int | None,
+) -> XGBClassifier:
     """
-    Build LightGBM classifier.
+    Build XGBoost classifier.
+
+    Important:
+      eval_metric order matters. XGBoost uses the LAST metric for early stopping.
+      Here the last metric is "auc", so early stopping optimizes ROC-AUC.
     """
-    return LGBMClassifier(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        num_leaves=num_leaves,
-        max_depth=max_depth,
-        min_child_samples=min_child_samples,
-        subsample=subsample,
-        subsample_freq=1,
-        colsample_bytree=colsample_bytree,
-        reg_alpha=reg_alpha,
-        reg_lambda=reg_lambda,
-        scale_pos_weight=scale_pos_weight,
-        objective="binary",
-        boosting_type="gbdt",
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
-        verbosity=-1,
-        force_col_wise=True,
-    )
+    params = {
+        "n_estimators": n_estimators,
+        "learning_rate": learning_rate,
+        "max_depth": max_depth,
+        "min_child_weight": min_child_weight,
+        "reg_alpha": reg_alpha,
+        "reg_lambda": reg_lambda,
+        "subsample": subsample,
+        "colsample_bytree": colsample_bytree,
+        "scale_pos_weight": scale_pos_weight,
+        "objective": "binary:logistic",
+        "eval_metric": EVAL_METRICS,
+        "tree_method": "hist",
+        "random_state": RANDOM_STATE,
+        "n_jobs": -1,
+    }
+
+    if early_stopping_rounds is not None:
+        params["early_stopping_rounds"] = early_stopping_rounds
+
+    return XGBClassifier(**params)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -706,6 +713,11 @@ def _print_risk_band_report(
 ) -> None:
     """
     Verify Low/Medium/High bands are meaningful.
+
+    A good risk model should show:
+      Low    → lower actual default rate
+      Medium → moderate actual default rate
+      High   → higher actual default rate
     """
     report_df = pd.DataFrame({
         "y_true": y_true.values if hasattr(y_true, "values") else y_true,
@@ -737,6 +749,11 @@ def find_threshold_for_recall(
     """
     Find the highest-precision threshold that achieves target_recall
     for the default class.
+
+    Returns:
+        threshold as float.
+
+    Falls back to HIGH_THRESHOLD if no candidate is found.
     """
     precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
 
@@ -792,7 +809,7 @@ def _feature_defaults(X: pd.DataFrame) -> dict:
 
 def _python_scalar(value):
     """
-    Convert numpy scalar to native Python type.
+    Convert numpy scalar to native Python type for JSON/joblib metadata safety.
     """
     if hasattr(value, "item"):
         return value.item()
@@ -816,6 +833,9 @@ def _unique_float_list(values: list[float]) -> list[float]:
 def _run_validation_safely() -> None:
     """
     Run data validation if available.
+
+    Training continues if validation fails, but a warning is printed.
+    For strict production training, change this behavior to raise the error.
     """
     try:
         from ml.validate_data import validate
