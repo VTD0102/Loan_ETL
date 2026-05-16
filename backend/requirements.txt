@@ -1,0 +1,26 @@
+# FastAPI backend runtime
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic[email]
+pydantic-settings>=2.3.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
+# Auth
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.1.0
+
+# Runtime ML inference for pickled model artifacts
+joblib>=1.4.0
+lightgbm>=4.6.0
+numpy>=1.26.0
+pandas>=2.2.0
+scikit-learn>=1.4.0
+
+# API utilities and local tests
+httpx>=0.27.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.9

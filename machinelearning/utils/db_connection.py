@@ -1,8 +1,9 @@
 """
 Shared database connection utility for ML and ETL scripts.
 
-If config/etl_db.env exists and ETL_DB_TYPE=duckdb  → local DuckDB file (no server needed)
-Otherwise                                             → Supabase (backend/.env)
+If machinelearning/config/etl_db.env exists and ETL_DB_TYPE=duckdb
+→ local DuckDB file (no server needed).
+Otherwise → Supabase (backend/.env).
 """
 import os
 from pathlib import Path
@@ -10,8 +11,9 @@ from pathlib import Path
 from sqlalchemy import create_engine, Engine
 
 BASE_DIR          = Path(__file__).resolve().parents[1]
+PROJECT_ROOT      = BASE_DIR.parent
 _ETL_ENV_FILE     = BASE_DIR / "config" / "etl_db.env"
-_BACKEND_ENV_FILE = BASE_DIR / "backend" / ".env"
+_BACKEND_ENV_FILE = PROJECT_ROOT / "backend" / ".env"
 
 _engine: Engine | None = None
 

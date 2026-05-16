@@ -24,16 +24,16 @@ Tài liệu này mô tả toàn bộ quá trình cải tổ hệ thống vay v�
 
 | File | Thay đổi |
 |------|---------|
-| `etl/load_bronze.py` | Thêm `OCCUPATION_TYPE`; xóa `EXT_SOURCE_1`, `EXT_SOURCE_3`; giữ `DAYS_EMPLOYED` |
-| `database/transform_silver_homecredit.sql` | Thêm `years_employed` (ABS(DAYS_EMPLOYED)/365.25, 365243→0) và `occupation_type` (COALESCE với 'Unknown') |
-| `database/transform_gold_homecredit.sql` | Thêm `s.years_employed`, `s.occupation_type` vào SELECT chính |
-| `ml/validate_data.py` | Thêm `years_employed` và `occupation_type` vào `REQUIRED_COLUMNS` |
+| `machinelearning/etl/load_bronze.py` | Thêm `OCCUPATION_TYPE`; xóa `EXT_SOURCE_1`, `EXT_SOURCE_3`; giữ `DAYS_EMPLOYED` |
+| `machinelearning/database/transform_silver_homecredit.sql` | Thêm `years_employed` (ABS(DAYS_EMPLOYED)/365.25, 365243→0) và `occupation_type` (COALESCE với 'Unknown') |
+| `machinelearning/database/transform_gold_homecredit.sql` | Thêm `s.years_employed`, `s.occupation_type` vào SELECT chính |
+| `machinelearning/ml/validate_data.py` | Thêm `years_employed` và `occupation_type` vào `REQUIRED_COLUMNS` |
 
 ### Tầng ML
 
 | File | Thay đổi |
 |------|---------|
-| `ml/retrain_customer_model.py` | Viết lại toàn bộ — 28 đặc trưng, OrdinalEncoder cho 2 đặc trưng phân loại, n_estimators=500, num_leaves=63 |
+| `machinelearning/ml/retrain_customer_model.py` | Viết lại toàn bộ — 28 đặc trưng, OrdinalEncoder cho 2 đặc trưng phân loại, n_estimators=500, num_leaves=63 |
 
 ### Tầng Backend
 
@@ -49,7 +49,7 @@ Tài liệu này mô tả toàn bộ quá trình cải tổ hệ thống vay v�
 | `backend/api/routers/applications.py` | Thay `/submit` bằng `/evaluate` + `/confirm`; thêm `/{app_id}/documents` |
 | `backend/models/personal_info.py` | Thêm bank_account_number, document_urls |
 | `backend/schemas/personal_info.py` | Thêm bank_account_number, document_urls |
-| `requirements.txt` | Thêm python-multipart, httpx |
+| `backend/requirements.txt` | Thêm python-multipart, httpx |
 
 ### Tầng Frontend
 
@@ -199,8 +199,8 @@ Working, Commercial associate, Pensioner, State servant, Unemployed
 # Kích hoạt môi trường ảo
 source venv/bin/activate
 
-# Cài đặt thư viện
-pip install -r requirements.txt
+# Cài đặt thư viện backend
+pip install -r backend/requirements.txt
 ```
 
 ### Bước 1 — Migration cơ sở dữ liệu (chỉ cần làm lần đầu)
@@ -223,12 +223,12 @@ ALTER TABLE personal_info
 
 ```bash
 # Cách A: Chạy toàn bộ pipeline
-python -m etl.pipeline
+python -m machinelearning.etl.pipeline
 
 # Cách B: Chạy từng bước thủ công
-python -m etl.load_bronze      # → tầng bronze DuckDB (thêm OCCUPATION_TYPE)
-python -m etl.etl_silver       # → tầng silver (thêm years_employed, occupation_type)
-python -m etl.etl_gold         # → tầng gold (bảng đặc trưng cuối cùng)
+python -m machinelearning.etl.load_bronze      # → tầng bronze DuckDB (thêm OCCUPATION_TYPE)
+python -m machinelearning.etl.etl_silver       # → tầng silver (thêm years_employed, occupation_type)
+python -m machinelearning.etl.etl_gold         # → tầng gold (bảng đặc trưng cuối cùng)
 ```
 
 Kiểm tra kết quả:
@@ -236,7 +236,7 @@ Kiểm tra kết quả:
 ```bash
 python -c "
 import duckdb
-con = duckdb.connect('data/etl.duckdb')
+con = duckdb.connect('machinelearning/data/etl.duckdb')
 print(con.execute('SELECT COUNT(*) FROM gold.hc_features_v1').fetchone())
 print(con.execute('SELECT occupation_type, COUNT(*) FROM gold.hc_features_v1 GROUP BY 1 ORDER BY 2 DESC LIMIT 5').fetchdf())
 "
@@ -245,7 +245,7 @@ print(con.execute('SELECT occupation_type, COUNT(*) FROM gold.hc_features_v1 GRO
 ### Bước 3 — Kiểm tra dữ liệu
 
 ```bash
-python ml/validate_data.py
+python -m machinelearning.ml.validate_data
 ```
 
 Kết quả mong đợi: tất cả REQUIRED_COLUMNS có mặt, không có NULL ở cột quan trọng.
@@ -253,7 +253,7 @@ Kết quả mong đợi: tất cả REQUIRED_COLUMNS có mặt, không có NULL 
 ### Bước 4 — Huấn luyện lại model
 
 ```bash
-python -m ml.retrain_customer_model
+python -m machinelearning.ml.retrain_customer_model
 ```
 
 Script sẽ thực hiện:
@@ -285,7 +285,7 @@ curl http://localhost:8000/docs
 Model scorecard LR độc lập và dùng đặc trưng khác. Chỉ cần retrain khi có yêu cầu:
 
 ```bash
-python ml/train_scorecard.py
+python -m machinelearning.ml.train_scorecard
 ```
 
 ---

@@ -23,6 +23,20 @@ def test_predict_raises_instead_of_mocking_invalid_artifact():
             is_homeowner=True,
             listing_category=1,
             credit_score=720,
+            occupation_type="Laborers",
+            years_employed=Decimal("4.5"),
+            num_bureau_records=3,
+            num_active_credit=2,
+            total_overdue_amount=Decimal("0"),
+            max_credit_overdue_days=0,
+            has_bad_debt=False,
+            income_verifiable_flag=True,
+            age_years=41,
+            gender_male_flag=True,
+            education_ordinal=4,
+            cnt_children=2,
+            cnt_fam_members=4,
+            is_married_flag=True,
         )
         try:
             ml_service.predict(payload)

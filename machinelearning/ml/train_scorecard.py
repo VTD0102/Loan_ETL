@@ -3,7 +3,7 @@ LR Scorecard — Home Credit dataset.
 
 Mục đích: Convert P(default) → FICO-style score 300–850, có breakdown từng feature.
 Source : gold.hc_features_v1 (12 engineered features)
-Output : ml/models/scorecard_model.pkl
+Output : machinelearning/ml/models/scorecard_model.pkl
 
 FICO PDO (Points to Double the Odds):
     score = base_score - factor * (model_logit - base_logit)
@@ -13,7 +13,7 @@ FICO PDO (Points to Double the Odds):
 Default params: base_score=600, base_odds_good=50, PDO=20
   → 720 = rất tốt, 600 = trung bình, 500 = rủi ro cao.
 
-Run: python ml/train_scorecard.py
+Run: python -m machinelearning.ml.train_scorecard
 """
 import math
 import sys
@@ -32,9 +32,10 @@ from sklearn.preprocessing import OrdinalEncoder, StandardScaler
 BASE_DIR   = Path(__file__).resolve().parents[1]
 MODEL_PATH = BASE_DIR / "ml" / "models" / "scorecard_model.pkl"
 
-sys.path.insert(0, str(BASE_DIR))
-from utils.db_connection import get_engine
-from ml.validate_data import validate
+PROJECT_ROOT = BASE_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from machinelearning.utils.db_connection import get_engine
+from machinelearning.ml.validate_data import validate
 
 # ── FICO PDO params ─────────────────────────────────────────────────────────
 BASE_SCORE     = 600

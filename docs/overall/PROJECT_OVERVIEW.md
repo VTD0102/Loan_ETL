@@ -16,8 +16,8 @@ CreditIntel là một dự án Data Engineering và Machine Learning toàn diệ
 - **Phân tích thời gian thực:** Cập nhật dữ liệu từ database để cung cấp insights kịp thời cho người dùng.
 
 ### 3. AI Dự đoán Rủi ro
-- **Risk model:** LightGBM train bởi `ml/retrain_customer_model.py`, artifact `customer_risk_model.pkl`.
-- **Scorecard:** Logistic Regression train bởi `ml/train_scorecard.py`, artifact `scorecard_model.pkl`.
+- **Risk model:** LightGBM train bởi `machinelearning/ml/retrain_customer_model.py`, artifact `customer_risk_model.pkl`.
+- **Scorecard:** Logistic Regression train bởi `machinelearning/ml/train_scorecard.py`, artifact `scorecard_model.pkl`.
 - **Business Rule Engine:** Áp dụng ngưỡng risk để quyết định `AUTO_REJECTED` hoặc `PENDING_REVIEW`.
 - **Đánh giá thời gian thực:** Backend service load artifact bằng joblib, xử lý đơn vay mới và đưa ra khuyến nghị về số tiền/kỳ hạn.
 
@@ -36,17 +36,16 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 - **Gold Layer:** Dữ liệu tổng hợp cho ML và dashboard, với feature engineering (bảng gold.loan_features_v1).
 
 ### Cấu trúc Thư mục
-- `app.py`: Ứng dụng chính Streamlit, tích hợp dashboard và prediction UI.
-- `dashboard.py`: Module trực quan hóa dữ liệu.
-- `data_handler.py`: Xử lý dữ liệu chung.
-- `ml_service/etl/`: Scripts ETL cho từng lớp (load_bronze.py, etl_silver.py, etl_gold.py, etl_core.py).
-- `frontend/src/pages/customer/Apply/`: Giao diện nộp đơn vay.
-- `ml/`: Thư mục chứa hai script model được hỗ trợ: `retrain_customer_model.py`, `train_scorecard.py`, và artifacts trong `models/`.
-- `database/`: Scripts SQL khởi tạo database và schema.
-- `config/`: File cấu hình settings.yaml.
-- `data/`: Thư mục dữ liệu thô và xử lý.
+- `backend/`: FastAPI API, auth, services, schemas, models, RAG runtime.
+- `frontend/`: React/Vite UI.
+- `machinelearning/etl/`: Scripts ETL cho từng lớp (load_bronze.py, etl_silver.py, etl_gold.py).
+- `machinelearning/ml/`: Hai script model được hỗ trợ: `retrain_customer_model.py`, `train_scorecard.py`, và artifacts trong `models/`.
+- `machinelearning/database/`: SQL transforms cho Home Credit ETL.
+- `machinelearning/config/`: Cấu hình ETL/DuckDB.
+- `machinelearning/data/`: Dữ liệu thô và DuckDB local.
+- `machinelearning/notebooks/`: Notebook EDA/training phụ trợ.
+- `machinelearning/utils/`: Utilities như db_connection.py.
 - `docs/`: Tài liệu chi tiết về data dictionary và ML.
-- `utils/`: Utilities như db_connection.py.
 
 ## Các Hoạt động Chính
 
@@ -104,7 +103,7 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 1. **Chuẩn bị môi trường:** Clone repo, tạo venv, cài dependencies.
 2. **Thiết lập DB:** Chạy scripts SQL để tạo schema.
 3. **Chạy ETL:** Load và transform dữ liệu qua các lớp.
-4. **Train Model:** Chạy `python -m ml.retrain_customer_model` và `python ml/train_scorecard.py`.
+4. **Train Model:** Chạy `python -m machinelearning.ml.retrain_customer_model` và `python -m machinelearning.ml.train_scorecard`.
 5. **Khởi chạy App:** Chạy FastAPI backend và React frontend.
 
 Dự án này không chỉ là một sản phẩm kỹ thuật mà còn là minh chứng cho việc áp dụng Data Engineering và ML vào bài toán thực tế trong lĩnh vực tài chính.

@@ -27,8 +27,8 @@ source .venv/bin/activate
 
 ### 3. Cài đặt thư viện (Dependencies)
 ```bash
-# Cài đặt từ file requirements.txt ở thư mục gốc
-pip install -r requirements.txt
+# Cài đặt backend dependencies từ root project
+pip install -r backend/requirements.txt
 ```
 
 ### 4. Cấu hình Biến môi trường (.env)

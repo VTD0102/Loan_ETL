@@ -86,7 +86,7 @@ Thang điểm importance: **Cực cao** ≥ 900 | **Cao** 400–899 | **Trung b�
 | `flag_own_car` | `FLAG_OWN_CAR` | ⭐ thấp | Có ô tô → tài sản bổ sung |
 | `occupation_type` | `OCCUPATION_TYPE` | ⭐⭐ trung bình | 18 loại nghề — default rate khác biệt rõ theo nhóm (laborers vs managers) |
 
-**Cách thêm vào:** Bổ sung vào `COLS` trong `etl/load_bronze.py` → thêm transform trong `database/transform_silver_homecredit.sql` → thêm pass-through trong Gold SQL → thêm vào `NUMERIC_FEATURES` trong training script.
+**Cách thêm vào:** Bổ sung vào `COLS` trong `machinelearning/etl/load_bronze.py` → thêm transform trong `machinelearning/database/transform_silver_homecredit.sql` → thêm pass-through trong Gold SQL → thêm vào `NUMERIC_FEATURES` trong training script.
 
 ---
 
@@ -100,7 +100,7 @@ Thang điểm importance: **Cực cao** ≥ 900 | **Cao** 400–899 | **Trung b�
 | `prev_avg_term` | `CNT_PAYMENT` | ⭐ thấp | Kỳ hạn trung bình các khoản vay trước |
 | `prev_reject_reason_hc` | `CODE_REJECT_REASON` | ⭐⭐ trung bình | Tỉ lệ từng bị HC reject vì lý do nội bộ (HC = Home Credit reject) |
 
-**Cách thêm vào:** Thêm cột vào `PREV_COLS` trong `etl/load_bronze.py` → mở rộng `prev_stats` CTE trong `database/transform_gold_homecredit.sql`.
+**Cách thêm vào:** Thêm cột vào `PREV_COLS` trong `machinelearning/etl/load_bronze.py` → mở rộng `prev_stats` CTE trong `machinelearning/database/transform_gold_homecredit.sql`.
 
 ---
 
@@ -116,7 +116,7 @@ Thang điểm importance: **Cực cao** ≥ 900 | **Cao** 400–899 | **Trung b�
 | `pct_months_on_time` | COUNT(STATUS='0') / COUNT(*) | ⭐⭐⭐ cao | Tỉ lệ % tháng trả đúng hạn — payment discipline score |
 | `has_recent_dpd_12m` | MAX(STATUS!='0' AND STATUS!='C' WHERE MONTHS_BALANCE >= -12) | ⭐⭐⭐ cao | Có quá hạn trong 12 tháng gần nhất — recency effect mạnh hơn lịch sử xa |
 
-**Cách thêm vào:** Thêm load `bureau_balance.csv` vào `etl/load_bronze.py` → tạo thêm CTE `bureau_balance_stats` trong Gold SQL (join qua `bureau.csv`).
+**Cách thêm vào:** Thêm load `bureau_balance.csv` vào `machinelearning/etl/load_bronze.py` → tạo thêm CTE `bureau_balance_stats` trong Gold SQL (join qua `bureau.csv`).
 
 ---
 
@@ -133,7 +133,7 @@ Thang điểm importance: **Cực cao** ≥ 900 | **Cao** 400–899 | **Trung b�
 | `num_underpayments` | COUNT(AMT_PAYMENT < AMT_INSTALMENT × 0.95) | ⭐⭐ trung bình | Số lần trả thiếu 5%+ |
 | `recent_late_count_12m` | COUNT late payments WHERE DAYS_INSTALMENT >= -365 | ⭐⭐⭐ cao | Số lần trễ trong 12 tháng gần nhất — recency |
 
-**Cách thêm vào:** Thêm load `installments_payments.csv` vào `etl/load_bronze.py` → tạo CTE `installments_stats` trong Gold SQL.
+**Cách thêm vào:** Thêm load `installments_payments.csv` vào `machinelearning/etl/load_bronze.py` → tạo CTE `installments_stats` trong Gold SQL.
 
 ---
 

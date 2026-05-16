@@ -4,7 +4,7 @@ Gold transformer — Home Credit dataset.
 Source : silver.home_credit_cleansed
 Target : gold.hc_features_v1  (DuckDB local)
 
-Run: python -m etl.etl_gold
+Run: python -m machinelearning.etl.etl_gold
 """
 import sys
 from pathlib import Path
@@ -12,10 +12,11 @@ from pathlib import Path
 from sqlalchemy import text
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = BASE_DIR.parent
 SQL_PATH = BASE_DIR / "database" / "transform_gold_homecredit.sql"
 
-sys.path.insert(0, str(BASE_DIR))
-from utils.db_connection import get_engine
+sys.path.insert(0, str(PROJECT_ROOT))
+from machinelearning.utils.db_connection import get_engine
 
 
 def main():

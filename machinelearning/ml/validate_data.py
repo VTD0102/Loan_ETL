@@ -2,7 +2,7 @@
 Data Validation — chạy trước khi train.
 Kiểm tra silver.home_credit_cleansed có đủ chuẩn để train model không.
 
-Run: python -m ml.validate_data
+Run: python -m machinelearning.ml.validate_data
 """
 import sys
 from pathlib import Path
@@ -10,8 +10,9 @@ from pathlib import Path
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE_DIR))
-from utils.db_connection import get_engine
+PROJECT_ROOT = BASE_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from machinelearning.utils.db_connection import get_engine
 
 REQUIRED_COLUMNS = {
     "stated_monthly_income", "loan_original_amount", "term", "employment_status",

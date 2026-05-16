@@ -168,7 +168,7 @@ Trả về mảng sessions để UI có thể hiển thị sidebar "conversation
 
 ## 6. Database Schema bổ sung
 
-Thêm vào `database/init_chat.sql` (file mới):
+Thêm vào `backend/db/init_chat.sql` (file mới):
 
 ```sql
 -- Mỗi khách có thể có nhiều cuộc hội thoại
@@ -277,21 +277,22 @@ backend/
 │   └── knowledge/
 │       ├── policy.md            # chính sách vay, tiêu chí rủi ro
 │       └── faq.md               # ~20 Q&A thường gặp
-└── utils/
-    └── db_connection.py         # TÁI SỬ DỤNG file hiện có
+└── machinelearning/
+    └── utils/
+        └── db_connection.py     # TÁI SỬ DỤNG file hiện có
 ```
 
-**Nguyên tắc**: reuse `utils/db_connection.py` (singleton engine) — không tạo connection mới trong `rag/`.
+**Nguyên tắc**: reuse `machinelearning/utils/db_connection.py` (singleton engine) — không tạo connection mới trong `rag/`.
 
 ---
 
-## 9. Dependencies cần thêm vào `requirements.txt`
+## 9. Dependencies cần thêm vào `backend/requirements-rag.txt`
 
 ```
 langchain>=0.3.0,<0.4.0
 langchain-community>=0.3.0,<0.4.0
 langchain-openai>=0.2.0,<0.3.0
-pinecone-client>=5.0.0,<6.0.0
+pinecone>=6.0.0
 python-dotenv>=1.0.0
 slowapi>=0.1.9                   # rate limit FastAPI
 ```
@@ -325,7 +326,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] Đăng ký Pinecone, tạo index `creditintel-kb` (dim=1536, metric=cosine, serverless)
 - [ ] Đăng ký OpenRouter, nạp credit (~5 USD đủ test), verify access `gemini-flash-1.5` + `text-embedding-3-small`
 - [ ] Thêm env vars vào `.env`, verify `.gitignore` đã loại trừ `.env`
-- [ ] Thêm 6 packages vào `requirements.txt`, chạy `pip install -r requirements.txt`
+- [ ] Thêm RAG packages vào `backend/requirements-rag.txt`, chạy `pip install -r backend/requirements-rag.txt`
 
 ### Giai đoạn B — Knowledge Base
 - [ ] Viết `backend/rag/knowledge/policy.md` — lấy thresholds từ `docs/ml_md/ml_1.md`, thêm tiêu chí auto-reject, rule business
@@ -334,14 +335,14 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] Chạy `python -m backend.rag.ingest` → kiểm tra Pinecone có ~200–400 vectors
 
 ### Giai đoạn C — Database
-- [ ] Viết `database/init_chat.sql` với 2 bảng ở §6
+- [ ] Viết `backend/db/init_chat.sql` với 2 bảng ở §6
 - [ ] Chạy SQL trên Supabase
 - [ ] Enable extension `pgcrypto` cho `gen_random_uuid()` nếu chưa có
 
 ### Giai đoạn D — Backend
 - [ ] `backend/rag/config.py` — load env
 - [ ] `backend/rag/retriever.py` — PineconeVectorStore + as_retriever(top_k)
-- [ ] `backend/rag/memory.py` — PostgresChatMessageHistory, reuse `utils/db_connection.py`
+- [ ] `backend/rag/memory.py` — PostgresChatMessageHistory, reuse `machinelearning/utils/db_connection.py`
 - [ ] `backend/rag/context_builder.py` — query `loan_applications` + `core.risk_assessment` cho user_id
 - [ ] `backend/rag/prompts.py` — system template ở §7
 - [ ] `backend/rag/chain.py` — ConversationalRetrievalChain

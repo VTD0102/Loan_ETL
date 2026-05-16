@@ -2,13 +2,13 @@
 Validate the customer risk model artifact contract.
 
 Run from project root:
-    python -m ml.check_customer_model_contract
+    python -m machinelearning.ml.check_customer_model_contract
 """
 from __future__ import annotations
 
 import joblib
 
-from ml.retrain_customer_model import ALL_FEATURES, MODEL_PATH
+from machinelearning.ml.retrain_customer_model import ALL_FEATURES, MODEL_PATH
 
 REQUIRED_KEYS = {
     "pipeline",

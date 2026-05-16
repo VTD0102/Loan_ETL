@@ -1,5 +1,5 @@
 -- CreditIntel App Tables
--- Run once on Supabase SQL Editor after init_database.sql
+-- Run once on Supabase SQL Editor when creating backend app tables manually.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS loan_applications (
     listing_category    VARCHAR(50),
     credit_score        NUMERIC(6,2),
     -- Optional inputs for the current customer risk model
-    ext_source_1        NUMERIC(8,6),
-    ext_source_3        NUMERIC(8,6),
+    occupation_type     VARCHAR(100),
+    years_employed      NUMERIC(5,2),
     num_bureau_records  INT,
     num_active_credit   INT,
     total_overdue_amount NUMERIC(15,2),

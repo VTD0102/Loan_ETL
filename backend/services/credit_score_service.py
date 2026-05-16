@@ -16,6 +16,8 @@ Feature mapping from Supabase application data → HC-style scorecard features:
 - num_previous_loans     : prior APPROVED applications for this user
 - previous_default_rate  : fraction of prior applications that were rejected
 - employment_status_grouped: normalised employment category
+- years_employed, bureau, demographic fields, occupation_type: user inputs from
+  the latest application, with conservative defaults for legacy rows.
 """
 import math
 import joblib
@@ -28,7 +30,7 @@ from sqlalchemy.orm import Session
 from core.scoring import pd_to_credit_score, score_to_band
 from models.user import User
 
-SCORECARD_PATH = Path(__file__).parents[2] / "ml" / "models" / "scorecard_model.pkl"
+SCORECARD_PATH = Path(__file__).parents[2] / "machinelearning" / "ml" / "models" / "scorecard_model.pkl"
 
 NUMERIC_FEATURES     = [
     "credit_score_midpoint", "debt_to_income_ratio", "loan_amount_to_income",
@@ -36,11 +38,11 @@ NUMERIC_FEATURES     = [
     "income_verifiable_flag", "high_dti_flag",
     "payment_to_income", "num_previous_loans", "previous_default_rate",
     "num_bureau_records", "num_active_credit", "total_overdue_amount",
-    "max_credit_overdue_days", "has_bad_debt", "ext_source_1", "ext_source_3",
+    "max_credit_overdue_days", "has_bad_debt", "years_employed",
     "age_years", "gender_male_flag", "education_ordinal", "cnt_children",
     "cnt_fam_members", "is_married_flag",
 ]
-CATEGORICAL_FEATURES = ["employment_status_grouped"]
+CATEGORICAL_FEATURES = ["employment_status_grouped", "occupation_type"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 # HC rating bands (derived from EXT_SOURCE_2 → credit_score thresholds)
@@ -82,6 +84,23 @@ def _employment_group(status: str) -> str:
     return _EMPLOYMENT_GROUP.get(status, "Other/Unknown")
 
 
+def _value(obj, name: str, default):
+    value = getattr(obj, name, default)
+    return default if value is None else value
+
+
+def _number(obj, name: str, default=0.0) -> float:
+    return float(_value(obj, name, default))
+
+
+def _int(obj, name: str, default=0) -> int:
+    return int(_value(obj, name, default))
+
+
+def _flag(obj, name: str, default=False) -> int:
+    return int(bool(_value(obj, name, default)))
+
+
 def _build_features(app, num_previous_loans: int, previous_default_rate: float,
                     dti_p75: float) -> pd.DataFrame:
     mi   = float(app.monthly_income)
@@ -95,9 +114,14 @@ def _build_features(app, num_previous_loans: int, previous_default_rate: float,
     rating_ord        = _rating_ordinal(cs)
     homeowner_flag    = 1 if app.is_homeowner else 0
     emp_status        = str(app.employment_status)
-    income_verifiable = 1 if emp_status in ("Employed", "Self-employed") else 0
+    income_verifiable = _flag(
+        app,
+        "income_verifiable_flag",
+        emp_status in ("Employed", "Self-employed"),
+    )
     high_dti_flag     = 1 if hc_dti > dti_p75 else 0
     emp_grouped       = _employment_group(emp_status)
+    occupation_type   = str(_value(app, "occupation_type", "Unknown") or "Unknown")
 
     return pd.DataFrame([{
         "credit_score_midpoint":  cs,
@@ -111,20 +135,20 @@ def _build_features(app, num_previous_loans: int, previous_default_rate: float,
         "payment_to_income":      hc_dti,
         "num_previous_loans":     num_previous_loans,
         "previous_default_rate":  previous_default_rate,
-        "num_bureau_records":     0,
-        "num_active_credit":      0,
-        "total_overdue_amount":   0.0,
-        "max_credit_overdue_days": 0,
-        "has_bad_debt":           0,
-        "ext_source_1":           cs / 850,
-        "ext_source_3":           cs / 850,
-        "age_years":              35,
-        "gender_male_flag":       0,
-        "education_ordinal":      3,
-        "cnt_children":           0,
-        "cnt_fam_members":        1,
-        "is_married_flag":        0,
+        "num_bureau_records":     _int(app, "num_bureau_records", 0),
+        "num_active_credit":      _int(app, "num_active_credit", 0),
+        "total_overdue_amount":   _number(app, "total_overdue_amount", 0.0),
+        "max_credit_overdue_days": _int(app, "max_credit_overdue_days", 0),
+        "has_bad_debt":           _flag(app, "has_bad_debt", False),
+        "years_employed":         _number(app, "years_employed", 0.0),
+        "age_years":              _int(app, "age_years", 35),
+        "gender_male_flag":       _flag(app, "gender_male_flag", False),
+        "education_ordinal":      _int(app, "education_ordinal", 3),
+        "cnt_children":           _int(app, "cnt_children", 0),
+        "cnt_fam_members":        _int(app, "cnt_fam_members", 1),
+        "is_married_flag":        _flag(app, "is_married_flag", False),
         "employment_status_grouped": emp_grouped,
+        "occupation_type":        occupation_type,
     }])
 
 
@@ -151,7 +175,13 @@ def get_credit_score(user_id: str, db: Session) -> dict:
     app = db.execute(
         text("""
             SELECT monthly_income, loan_amount, term, employment_status,
-                   is_homeowner, credit_score
+                   is_homeowner, credit_score,
+                   occupation_type, years_employed,
+                   num_bureau_records, num_active_credit,
+                   total_overdue_amount, max_credit_overdue_days,
+                   has_bad_debt, income_verifiable_flag,
+                   age_years, gender_male_flag, education_ordinal,
+                   cnt_children, cnt_fam_members, is_married_flag
             FROM loan_applications
             WHERE user_id = :uid
               AND status != 'DRAFT'

@@ -4,7 +4,7 @@ Bronze loader — Home Credit Default Risk dataset.
 Source : data/home_credit/application_train.csv  (download từ Kaggle)
 Target : bronze.home_credit_raw  (DuckDB local)
 
-Run: python -m etl.load_bronze
+Run: python -m machinelearning.etl.load_bronze
 """
 import sys
 from pathlib import Path
@@ -13,12 +13,13 @@ import duckdb
 import pandas as pd
 
 BASE_DIR        = Path(__file__).resolve().parents[1]
+PROJECT_ROOT    = BASE_DIR.parent
 CSV_PATH        = BASE_DIR / "data" / "home_credit" / "application_train.csv"
 PREV_CSV_PATH   = BASE_DIR / "data" / "home_credit" / "previous_application.csv"
 BUREAU_CSV_PATH = BASE_DIR / "data" / "home_credit" / "bureau.csv"
 
-sys.path.insert(0, str(BASE_DIR))
-from utils.db_connection import _ETL_ENV_FILE, _read_file
+sys.path.insert(0, str(PROJECT_ROOT))
+from machinelearning.utils.db_connection import _ETL_ENV_FILE, _read_file
 
 COLS = [
     "SK_ID_CURR", "TARGET",

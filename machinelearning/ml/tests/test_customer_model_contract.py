@@ -3,11 +3,11 @@ from pathlib import Path
 
 import joblib
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from ml.check_customer_model_contract import validate_artifact_contract
-from ml.retrain_customer_model import ALL_FEATURES, MODEL_PATH
+from machinelearning.ml.check_customer_model_contract import validate_artifact_contract
+from machinelearning.ml.retrain_customer_model import ALL_FEATURES, MODEL_PATH
 
 
 def test_customer_model_artifact_contract():

@@ -139,12 +139,12 @@
   <thead><tr><th>Artifact</th><th>Trạng thái</th><th>Nhận xét</th></tr></thead>
   <tbody>
     <tr>
-      <td><code>ml/models/customer_risk_model.pkl</code></td>
+      <td><code>machinelearning/ml/models/customer_risk_model.pkl</code></td>
       <td><span class="pill ok">Có file</span></td>
       <td>File khoảng 27MB. Code training dùng LightGBM và threshold Low &lt; 0.2, High &gt; 0.4.</td>
     </tr>
     <tr>
-      <td><code>ml/models/scorecard_model.pkl</code></td>
+      <td><code>machinelearning/ml/models/scorecard_model.pkl</code></td>
       <td><span class="pill ok">Có file</span></td>
       <td>Dùng cho endpoint <code>/credit-score</code>, chuyển P(default) thành score 300-850.</td>
     </tr>
@@ -211,7 +211,7 @@
 <h3>5.1. Contract giữa training và inference có dấu hiệu lệch</h3>
 <div class="card danger">
   <p>
-    <code>ml/retrain_customer_model.py</code> hiện định nghĩa nhiều feature Gold/Home Credit như
+    <code>machinelearning/ml/retrain_customer_model.py</code> hiện định nghĩa nhiều feature Gold/Home Credit như
     <code>ext_source_1</code>, <code>num_previous_loans</code>, <code>num_bureau_records</code>, <code>age_years</code>,
     <code>education_ordinal</code> và các demographic flags. Trong khi đó <code>backend/services/ml_service.py</code>
     chỉ gửi 8 field từ form khách hàng.
@@ -318,7 +318,7 @@ previous application features, demographic features...</code></pre>
 
 <h3>7.3. Câu lệnh kiểm tra đề xuất</h3>
 <pre><code># 1. Kiểm tra artifact schema
-python -c "import joblib; a=joblib.load('ml/models/customer_risk_model.pkl'); print(a.keys()); print(a['feature_cols']); print(a['thresholds'])"
+python -c "import joblib; a=joblib.load('machinelearning/ml/models/customer_risk_model.pkl'); print(a.keys()); print(a['feature_cols']); print(a['thresholds'])"
 
 # 2. Ingest knowledge base
 cd backend

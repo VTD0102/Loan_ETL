@@ -20,10 +20,10 @@ CreditIntel là hệ thống Data Engineering + Machine Learning phục vụ **q
 | Gold | `gold.loan_features_v1` + 5 views | Feature engineering cho ML & Dashboard |
 
 **ML Model hiện tại:**
-- **Risk model**: LightGBM trained by `ml/retrain_customer_model.py`
-- **Risk artifact**: `ml/models/customer_risk_model.pkl`
-- **Scorecard model**: Logistic Regression trained by `ml/train_scorecard.py`
-- **Scorecard artifact**: `ml/models/scorecard_model.pkl`
+- **Risk model**: LightGBM trained by `machinelearning/ml/retrain_customer_model.py`
+- **Risk artifact**: `machinelearning/ml/models/customer_risk_model.pkl`
+- **Scorecard model**: Logistic Regression trained by `machinelearning/ml/train_scorecard.py`
+- **Scorecard artifact**: `machinelearning/ml/models/scorecard_model.pkl`
 - **Ngưỡng rủi ro**: Low < 0.2, Medium 0.2–0.4, High > 0.4
 - **Output**: Risk level (Low/Medium/High), risk score, đề xuất hạn mức & kỳ hạn; scorecard trả FICO-style credit score.
 

@@ -13,10 +13,10 @@ Feature count: 28
   DB history (2): num_previous_loans, previous_default_rate
 
 Source : gold.hc_features_v1 (DuckDB local, after running etl.pipeline)
-Output : ml/models/customer_risk_model.pkl
+Output : machinelearning/ml/models/customer_risk_model.pkl
 
 Run from project root:
-    python -m ml.retrain_customer_model
+    python -m machinelearning.ml.retrain_customer_model
 """
 import sys
 from datetime import datetime, timezone
@@ -32,9 +32,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BASE_DIR))
-from utils.db_connection import get_engine
-from ml.validate_data import validate
+PROJECT_ROOT = BASE_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+from machinelearning.utils.db_connection import get_engine
+from machinelearning.ml.validate_data import validate
 
 MODEL_PATH    = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
 MODEL_VERSION = "customer_lgbm_v3"

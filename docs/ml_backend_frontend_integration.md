@@ -1,10 +1,10 @@
 # ML Backend Frontend Integration
 
-Ngay 2026-05-13, da ket noi lai cac model hien co trong `ml/models` voi backend va frontend.
+Ngay 2026-05-13, da ket noi lai cac model hien co trong `machinelearning/ml/models` voi backend va frontend.
 
 ## Da thuc hien
 
-- Cap nhat `backend/services/ml_service.py` de dung truc tiep `ml/models/customer_risk_model.pkl`, bo fallback mock cu.
+- Cap nhat `backend/services/ml_service.py` de dung truc tiep `machinelearning/ml/models/customer_risk_model.pkl`, bo fallback mock cu.
 - Chuan hoa input tu form frontend sang schema model:
   - `dti` nhap dang phan tram se duoc doi ve ty le 0-1 khi predict.
   - `listing_category` ho tro ca label frontend va ma so model.

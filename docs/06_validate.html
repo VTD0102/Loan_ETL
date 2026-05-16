@@ -62,7 +62,7 @@
   <p class="subtitle">Gate kiểm tra chất lượng dữ liệu trước khi train model — 6 checks tự động</p>
   <div class="meta">
     <span><strong>Module:</strong> ML — Pre-training</span>
-    <span><strong>Code:</strong> <code>ml/validate_data.py</code></span>
+    <span><strong>Code:</strong> <code>machinelearning/ml/validate_data.py</code></span>
     <span><strong>Ngày:</strong> 13/05/2026</span>
   </div>
 </header>
@@ -82,7 +82,7 @@
 <h2 id="s1"><span class="num">1.</span>Tóm tắt báo cáo</h2>
 <div class="card info">
   <p>
-    Validate là <strong>gate bắt buộc</strong> trước khi train model. Script <code>ml/validate_data.py</code> chạy 6 checks trên
+    Validate là <strong>gate bắt buộc</strong> trước khi train model. Script <code>machinelearning/ml/validate_data.py</code> chạy 6 checks trên
     <code>silver.home_credit_cleansed</code>, raise <code>ValidationError</code> nếu bất kỳ check nào fail — ngăn train trên data hỏng.
   </p>
   <p>
@@ -229,7 +229,7 @@ def validate():
 <h2 id="s5"><span class="num">5.</span>Tích hợp vào training pipeline</h2>
 
 <h3>5.1. Standalone</h3>
-<pre><code>$ python -m ml.validate_data
+<pre><code>$ python -m machinelearning.ml.validate_data
 
 =======================================================
   DATA VALIDATION — silver.home_credit_cleansed
@@ -266,7 +266,7 @@ def validate():
 =======================================================</code></pre>
 
 <h3>5.2. Tích hợp vào train script</h3>
-<pre><code>from ml.validate_data import validate
+<pre><code>from machinelearning.ml.validate_data import validate
 
 def train():
     validate()    # &lt;-- gate đầu tiên, raise nếu fail
