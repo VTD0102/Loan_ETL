@@ -90,7 +90,7 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 | Nguồn | Đường dẫn | Chunk strategy | Ghi chú |
 |---|---|---|---|
 | Policy tự viết | `backend/rag/knowledge/policy.md` *(tạo mới)* | `RecursiveCharacterTextSplitter`, chunk 800 ký tự, overlap 100 | Tiêu chí phê duyệt, ngưỡng rủi ro, rule business |
-| Data dictionary | `docs/data_dictionary/*.md` (3 file) | Same | Giải thích chỉ số: DTI, credit_score, listing_category,... |
+| ML docs | `docs/ml/*.md` | Same | Giải thích chỉ số: DTI, credit_score, listing_category, feature và model |
 | FAQ | `backend/rag/knowledge/faq.md` *(tạo mới)* | Q-A pair splitter (mỗi Q+A = 1 chunk) | ~20 câu hỏi thường gặp |
 | Per-user prediction | `core.risk_assessment` + `loan_applications` | **KHÔNG embed** — query live tại request time, inject vào prompt | Cá nhân hóa, không đưa vào Pinecone |
 
@@ -329,7 +329,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] Thêm RAG packages vào `backend/requirements-rag.txt`, chạy `pip install -r backend/requirements-rag.txt`
 
 ### Giai đoạn B — Knowledge Base
-- [ ] Viết `backend/rag/knowledge/policy.md` — lấy thresholds từ `docs/ml_md/ml_1.md`, thêm tiêu chí auto-reject, rule business
+- [ ] Viết `backend/rag/knowledge/policy.md` — lấy thresholds từ `docs/ml/ML_FEATURES.md`, thêm tiêu chí auto-reject, rule business
 - [ ] Viết `backend/rag/knowledge/faq.md` — ~20 Q&A (cách giảm DTI, ý nghĩa các risk level, các bước sau khi được duyệt, v.v.)
 - [ ] Implement `backend/rag/ingest.py`
 - [ ] Chạy `python -m backend.rag.ingest` → kiểm tra Pinecone có ~200–400 vectors

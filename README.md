@@ -137,10 +137,10 @@ python -m machinelearning.ml.check_customer_model_contract
 |---|---|
 | Backend Architecture | [`backend/README.md`](backend/README.md) |
 | Frontend Guide | [`frontend/README.md`](frontend/README.md) |
-| Data Dictionary | [`docs/data_dictionary/`](docs/data_dictionary/) |
-| ML Documentation | [`docs/ml_md/`](docs/ml_md/) |
-| Project Overview | [`docs/overall/`](docs/overall/) |
-| Admin Guide | [`docs/ADMIN_GUIDE.md`](docs/ADMIN_GUIDE.md) |
+| Overall Documentation | [`docs/overall/`](docs/overall/) |
+| ML Documentation | [`docs/ml/`](docs/ml/) |
+| RAG Documentation | [`docs/rag/`](docs/rag/) |
+| Admin Guide | [`docs/overall/ADMIN_GUIDE.md`](docs/overall/ADMIN_GUIDE.md) |
 
 ## Phạm Vi Theo Nhóm
 

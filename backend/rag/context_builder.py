@@ -2,7 +2,7 @@
 context_builder.py
 
 Build structured JSON context + RAG prompt text từ loan application + ML results.
-Tuân theo: docs/rag_ml_context_requirements.md (4 blocks: form, ML, advisory, quality).
+Tuân theo: docs/rag/rag_ml_context_requirements.md (4 blocks: form, ML, advisory, quality).
 """
 from __future__ import annotations
 

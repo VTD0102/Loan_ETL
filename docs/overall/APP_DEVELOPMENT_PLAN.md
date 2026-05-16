@@ -288,7 +288,7 @@ RAG tìm trong knowledge base → trả lời cá nhân hóa
 | Nguồn | Nội dung |
 |-------|----------|
 | File chính sách tự viết | Tiêu chí phê duyệt, mức rủi ro |
-| Data dictionary hiện có (`docs/data_dictionary/`) | Giải thích các chỉ số tài chính |
+| Tài liệu ML hiện có (`docs/ml/`) | Giải thích các chỉ số tài chính, feature và kết quả model |
 | FAQ tự tổng hợp | Câu hỏi thường gặp về khoản vay |
 | Kết quả prediction của chính khách hàng | Giải thích cá nhân hóa theo profile |
 

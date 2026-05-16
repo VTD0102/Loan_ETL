@@ -52,30 +52,20 @@ Dự án được tổ chức theo kiến trúc modular với các thư mục ch
 
 ## Thư mục docs/
 
-### data_dictionary/core_data_dictionary.md
-- **Chức năng:** Tài liệu về schema Core.
-- **Mục đích:** Mô tả chi tiết các bảng và thuộc tính trong core.
-- **Cách hoạt động:** Markdown với bảng dimension và fact tables.
+### overall/
+- **Chức năng:** Tài liệu tổng quan dự án, kiến trúc app, module/file map, admin guide và lịch sử rebuild.
+- **Mục đích:** Giúp người đọc nắm bối cảnh hệ thống end-to-end trước khi đi vào ML hoặc RAG.
+- **File chính:** `overall.md`, `PROJECT_OVERVIEW.md`, `APP_DEVELOPMENT_PLAN.md`, `MODULES_AND_FILES.md`, `ADMIN_GUIDE.md`, `REBUILD_2026.md`.
 
-### data_dictionary/gold_data_dictionary.md
-- **Chức năng:** Tài liệu về schema Gold.
-- **Mục đích:** Mô tả gold.loan_features_v1 và analytical views.
-- **Cách hoạt động:** Giải thích grain, vai trò và data dictionary.
+### ml/
+- **Chức năng:** Tài liệu dataset, feature, model, scorecard và tích hợp ML với backend/frontend.
+- **Mục đích:** Gom toàn bộ nội dung phục vụ ETL/ML training, model contract và credit scoring.
+- **File chính:** `ML_FEATURES.md`, `02_dataset_lua_chon.html`, `ml_backend_frontend_integration.md`, `2026-05-12-credit-score.md`.
 
-### data_dictionary/silver_data_dictionary.md.md
-- **Chức năng:** Tài liệu về schema Silver.
-- **Mục đích:** Mô tả silver.prosper_loans_cleansed.
-- **Cách hoạt động:** Phân nhóm thuộc tính (khóa, thời gian, trạng thái, v.v.).
-
-### ml_md/init_core.md
-- **Chức năng:** Tài liệu về bảng risk_assessment.
-- **Mục đích:** Mô tả schema và cách tạo bảng core.risk_assessment.
-- **Cách hoạt động:** Chứa SQL CREATE TABLE và comments.
-
-### ml_md/ml_1.md
-- **Chức năng:** Tài liệu về ML pipeline.
-- **Mục đích:** Mô tả vai trò, files và actions trong ML system.
-- **Cách hoạt động:** Overview về training và prediction.
+### rag/
+- **Chức năng:** Tài liệu thiết kế, context requirement và đánh giá readiness cho RAG chatbot.
+- **Mục đích:** Gom toàn bộ nội dung liên quan chatbot, knowledge base, context builder và tư vấn khoản vay.
+- **File chính:** `RAG_chatbot_plan.md`, `rag_ml_context_requirements.md`, `rag_system_overview.md`, `10_danh_gia_model_rag.html`.
 
 ## Thư mục machinelearning/ml/
 

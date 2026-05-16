@@ -186,13 +186,9 @@ Loan_ETL/
 │                               # ApplicationList, ApplicationDetail, PersonalInfoView
 │
 ├── docs/
-│   ├── ADMIN_GUIDE.md
-│   ├── 01_muc_tieu_project.html → 09_van_de_can_giai_quyet.html
-│   ├── data_dictionary/
-│   ├── ml_md/
-│   ├── overall/                # File tài liệu tổng quan (thư mục này)
-│   ├── superpowers/
-│   └── task/
+│   ├── overall/                # Tổng quan dự án, kiến trúc, admin, rebuild
+│   ├── ml/                     # Dataset, feature, model, scorecard, ML integration
+│   └── rag/                    # RAG chatbot, context requirements, readiness
 │
 ├── machinelearning/            # ETL, SQL, data, notebooks, ML training
 │   ├── requirements.txt        # ML/ETL dependencies

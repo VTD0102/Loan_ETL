@@ -67,7 +67,7 @@ backend/rag/
 | Thư mục | Nội dung | Định dạng |
 |---|---|---|
 | `backend/rag/knowledge/` | FAQ + Chính sách cho vay | `.md` |
-| `docs/data_dictionary/` | Data dictionary (nếu tồn tại) | `.md` |
+| `docs/ml/` | ML feature/model docs | `.md`, `.html` |
 
 **Tài liệu cụ thể:**
 - `faq.md` — 17 câu hỏi & trả lời về quy trình vay, DTI, credit score, trạng thái đơn
