@@ -1,14 +1,13 @@
 """
-Retrain customer risk model (LightGBM) — v5.0
+Retrain customer risk model (Random Forest) — v6.0
 
-Converted from XGBoost v4.3 to LightGBM.
+Random Forest version for customer risk prediction.
 
-Main design:
+Design:
   - Keep current 28 features.
-  - Tune scale_pos_weight instead of blindly using neg/pos ratio.
-  - Early stopping optimizes validation ROC-AUC.
-  - Select best scale_pos_weight by validation ROC-AUC.
-  - Retrain final model on train + val using best_iteration.
+  - Tune multiple RandomForest configurations.
+  - Select best config by validation ROC-AUC.
+  - Retrain final model on train + val.
   - Evaluate on untouched test set.
   - Save artifact as:
         {
@@ -17,20 +16,19 @@ Main design:
             ...
         }
 
-Why LightGBM:
-  - Usually fast on large tabular datasets.
-  - Strong performance for credit-risk style tabular ML.
-  - Handles non-linear interactions well.
-  - Good candidate to compare with XGBoost.
+Why Random Forest:
+  - Strong baseline for tabular data.
+  - Less sensitive than boosting.
+  - Useful benchmark against XGBoost / LightGBM.
+  - Easier to explain with feature importance.
 
 Source : gold.hc_features_v1
-Output : ml/models/customer_risk_model.pkl
+Output : ml/models/customer_risk_model_rf.pkl
 
 Run from project root:
     python -m ml.retrain_customer_model
 """
 
-import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,9 +36,8 @@ from pathlib import Path
 import joblib
 import pandas as pd
 
-from lightgbm import LGBMClassifier, early_stopping, log_evaluation
-
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     average_precision_score,
     brier_score_loss,
@@ -63,8 +60,12 @@ sys.path.insert(0, str(BASE_DIR))
 from utils.db_connection import get_engine  # noqa: E402
 
 
-MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
-MODEL_VERSION = "customer_lgbm_v5.0_spw_tuned"
+# Để không ghi đè model chính XGBoost/LightGBM, bản Random Forest lưu riêng.
+# Nếu muốn biến RF thành model chính, đổi thành:
+# MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
+MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model_rf.pkl"
+
+MODEL_VERSION = "customer_rf_v6.0_tuned"
 
 LOW_THRESHOLD = 0.2
 HIGH_THRESHOLD = 0.4
@@ -72,28 +73,58 @@ HIGH_THRESHOLD = 0.4
 RANDOM_STATE = 42
 TARGET_RECALL = 0.75
 
-EARLY_STOPPING_METRIC_NAME = "auc"
 
-SCALE_POS_WEIGHT_CANDIDATES = [
-    1.0,
-    3.0,
-    5.0,
-    7.0,
-    9.0,
-    None,  # use neg / pos ratio
+# ─────────────────────────────────────────────────────────────────────────────
+# Random Forest candidates
+# ─────────────────────────────────────────────────────────────────────────────
+
+RF_CANDIDATES = [
+    {
+        "name": "rf_balanced_depth10_leaf50",
+        "n_estimators": 500,
+        "max_depth": 10,
+        "min_samples_leaf": 50,
+        "min_samples_split": 100,
+        "max_features": "sqrt",
+        "class_weight": "balanced",
+    },
+    {
+        "name": "rf_balanced_depth14_leaf30",
+        "n_estimators": 600,
+        "max_depth": 14,
+        "min_samples_leaf": 30,
+        "min_samples_split": 60,
+        "max_features": "sqrt",
+        "class_weight": "balanced",
+    },
+    {
+        "name": "rf_balanced_depth18_leaf20",
+        "n_estimators": 700,
+        "max_depth": 18,
+        "min_samples_leaf": 20,
+        "min_samples_split": 40,
+        "max_features": "sqrt",
+        "class_weight": "balanced",
+    },
+    {
+        "name": "rf_subsample_depth14_leaf30",
+        "n_estimators": 600,
+        "max_depth": 14,
+        "min_samples_leaf": 30,
+        "min_samples_split": 60,
+        "max_features": 0.7,
+        "class_weight": "balanced_subsample",
+    },
+    {
+        "name": "rf_subsample_depth18_leaf20",
+        "n_estimators": 700,
+        "max_depth": 18,
+        "min_samples_leaf": 20,
+        "min_samples_split": 40,
+        "max_features": 0.7,
+        "class_weight": "balanced_subsample",
+    },
 ]
-
-LGBM_BASE_PARAMS = {
-    "n_estimators": 3000,
-    "learning_rate": 0.02,
-    "num_leaves": 31,
-    "max_depth": -1,
-    "min_child_samples": 50,
-    "subsample": 0.85,
-    "colsample_bytree": 0.85,
-    "reg_alpha": 0.1,
-    "reg_lambda": 1.0,
-}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -238,23 +269,23 @@ EMPLOYMENT_CATEGORIES = [
 
 def train() -> None:
     """
-    Train customer risk model and save artifact.
+    Train Random Forest customer risk model and save artifact.
 
     Process:
       1. Validate data
       2. Load gold.hc_features_v1
       3. Split 70/10/20 train/val/test
       4. Fit preprocessor on train
-      5. Tune scale_pos_weight using validation ROC-AUC
-      6. Retrain final LightGBM model on train + val
-      7. Evaluate final model on untouched test set
+      5. Tune Random Forest configs on validation ROC-AUC
+      6. Retrain final model on train + val
+      7. Evaluate on untouched test set
       8. Save artifact
     """
 
     _run_validation_safely()
 
     print("\n" + "=" * 64)
-    print("  CUSTOMER RISK MODEL — RETRAIN (LightGBM v5.0)")
+    print("  CUSTOMER RISK MODEL — RETRAIN (Random Forest v6.0)")
     print("=" * 64)
 
     # ── 1. Fetch data ────────────────────────────────────────────────────
@@ -321,66 +352,26 @@ def train() -> None:
     X_train_enc = preprocessor.transform(X_train)
     X_val_enc = preprocessor.transform(X_val)
 
-    negative_count = int((y_train == 0).sum())
-    positive_count = int((y_train == 1).sum())
-    ratio_scale_pos_weight = negative_count / max(positive_count, 1)
-    sqrt_scale_pos_weight = math.sqrt(ratio_scale_pos_weight)
+    print(f"  Encoded train shape : {X_train_enc.shape}")
+    print(f"  Encoded val shape   : {X_val_enc.shape}")
 
-    candidate_spw = []
-    for value in SCALE_POS_WEIGHT_CANDIDATES:
-        if value is None:
-            candidate_spw.append(ratio_scale_pos_weight)
-        else:
-            candidate_spw.append(float(value))
-
-    candidate_spw.append(float(sqrt_scale_pos_weight))
-    candidate_spw = _unique_float_list(candidate_spw)
-
-    print(f"  neg={negative_count:,} / pos={positive_count:,}")
-    print(f"  neg/pos scale_pos_weight : {ratio_scale_pos_weight:.4f}")
-    print(f"  sqrt scale_pos_weight    : {sqrt_scale_pos_weight:.4f}")
-    print(f"  candidates               : {[round(v, 4) for v in candidate_spw]}")
-
-    # ── 5. Tune scale_pos_weight ─────────────────────────────────────────
-    print("\n[5/8] Tuning scale_pos_weight with early stopping...")
-    print(f"  early stopping metric: {EARLY_STOPPING_METRIC_NAME}")
+    # ── 5. Tune Random Forest configs ────────────────────────────────────
+    print("\n[5/8] Tuning Random Forest candidates...")
 
     tuning_results = []
 
-    best_clf = None
-    best_spw = None
-    best_iteration = None
+    best_config = None
     best_val_auc = -1.0
     best_val_pr_auc = -1.0
     best_val_brier = None
 
-    for spw in candidate_spw:
+    for candidate in RF_CANDIDATES:
         print("\n" + "-" * 64)
-        print(f"  Training candidate scale_pos_weight={spw:.4f}")
+        print(f"  Training candidate: {candidate['name']}")
 
-        clf = build_lgbm_classifier(
-            n_estimators=LGBM_BASE_PARAMS["n_estimators"],
-            learning_rate=LGBM_BASE_PARAMS["learning_rate"],
-            num_leaves=LGBM_BASE_PARAMS["num_leaves"],
-            max_depth=LGBM_BASE_PARAMS["max_depth"],
-            min_child_samples=LGBM_BASE_PARAMS["min_child_samples"],
-            subsample=LGBM_BASE_PARAMS["subsample"],
-            colsample_bytree=LGBM_BASE_PARAMS["colsample_bytree"],
-            reg_alpha=LGBM_BASE_PARAMS["reg_alpha"],
-            reg_lambda=LGBM_BASE_PARAMS["reg_lambda"],
-            scale_pos_weight=spw,
-        )
+        clf = build_rf_classifier(candidate)
 
-        clf.fit(
-            X_train_enc,
-            y_train,
-            eval_set=[(X_val_enc, y_val)],
-            eval_metric="auc",
-            callbacks=[
-                early_stopping(stopping_rounds=100, verbose=False),
-                log_evaluation(period=100),
-            ],
-        )
+        clf.fit(X_train_enc, y_train)
 
         val_prob = clf.predict_proba(X_val_enc)[:, 1]
 
@@ -388,18 +379,9 @@ def train() -> None:
         val_pr_auc = average_precision_score(y_val, val_prob)
         val_brier = brier_score_loss(y_val, val_prob)
 
-        current_best_iteration = int(
-            clf.best_iteration_
-            if getattr(clf, "best_iteration_", None) is not None
-            else LGBM_BASE_PARAMS["n_estimators"]
-        )
-
         result = {
-            "scale_pos_weight": float(spw),
-            "best_iteration": current_best_iteration,
-            "best_score_from_lgbm": float(
-                clf.best_score_["valid_0"].get("auc", val_auc)
-            ),
+            "name": candidate["name"],
+            "params": _rf_params_for_artifact(candidate),
             "val_roc_auc": float(val_auc),
             "val_pr_auc": float(val_pr_auc),
             "val_brier": float(val_brier),
@@ -409,7 +391,6 @@ def train() -> None:
 
         print(
             f"  Candidate result | "
-            f"best_iter={result['best_iteration']} | "
             f"val_auc={val_auc:.4f} | "
             f"val_pr_auc={val_pr_auc:.4f} | "
             f"val_brier={val_brier:.4f}"
@@ -424,38 +405,34 @@ def train() -> None:
         )
 
         if is_better:
-            best_clf = clf
-            best_spw = float(spw)
-            best_iteration = current_best_iteration
+            best_config = candidate
             best_val_auc = float(val_auc)
             best_val_pr_auc = float(val_pr_auc)
             best_val_brier = float(val_brier)
 
-    if best_clf is None or best_spw is None or best_iteration is None:
-        raise RuntimeError("No LightGBM candidate was successfully trained.")
+    if best_config is None:
+        raise RuntimeError("No Random Forest candidate was successfully trained.")
 
     print("\n" + "=" * 64)
-    print("  SCALE_POS_WEIGHT TUNING SUMMARY")
+    print("  RANDOM FOREST TUNING SUMMARY")
     print("=" * 64)
 
     for result in sorted(tuning_results, key=lambda x: x["val_roc_auc"], reverse=True):
         print(
-            f"  spw={result['scale_pos_weight']:.4f} | "
-            f"best_iter={result['best_iteration']:4d} | "
+            f"  {result['name']:<32} | "
             f"val_auc={result['val_roc_auc']:.4f} | "
             f"val_pr_auc={result['val_pr_auc']:.4f} | "
             f"val_brier={result['val_brier']:.4f}"
         )
 
     print("\n  Selected candidate:")
-    print(f"  scale_pos_weight : {best_spw:.4f}")
-    print(f"  best_iteration   : {best_iteration}")
-    print(f"  val ROC-AUC      : {best_val_auc:.4f}")
-    print(f"  val PR-AUC       : {best_val_pr_auc:.4f}")
-    print(f"  val Brier        : {best_val_brier:.4f}")
+    print(f"  name       : {best_config['name']}")
+    print(f"  val ROC-AUC: {best_val_auc:.4f}")
+    print(f"  val PR-AUC : {best_val_pr_auc:.4f}")
+    print(f"  val Brier  : {best_val_brier:.4f}")
 
     # ── 6. Retrain final model on train + val ────────────────────────────
-    print("\n[6/8] Retraining final LightGBM model on train + val...")
+    print("\n[6/8] Retraining final Random Forest model on train + val...")
 
     X_final = pd.concat([X_train, X_val], axis=0)
     y_final = pd.concat([y_train, y_val], axis=0)
@@ -466,29 +443,12 @@ def train() -> None:
     X_final_enc = preprocessor_final.transform(X_final)
     X_test_enc = preprocessor_final.transform(X_test)
 
-    final_n_estimators = max(int(best_iteration), 1)
+    final_clf = build_rf_classifier(best_config)
 
-    print(f"  Final train rows       : {len(X_final):,}")
-    print(f"  Final n_estimators     : {final_n_estimators}")
-    print(f"  Final scale_pos_weight : {best_spw:.4f}")
+    print(f"  Final train rows : {len(X_final):,}")
+    print(f"  Final candidate  : {best_config['name']}")
 
-    final_clf = build_lgbm_classifier(
-        n_estimators=final_n_estimators,
-        learning_rate=LGBM_BASE_PARAMS["learning_rate"],
-        num_leaves=LGBM_BASE_PARAMS["num_leaves"],
-        max_depth=LGBM_BASE_PARAMS["max_depth"],
-        min_child_samples=LGBM_BASE_PARAMS["min_child_samples"],
-        subsample=LGBM_BASE_PARAMS["subsample"],
-        colsample_bytree=LGBM_BASE_PARAMS["colsample_bytree"],
-        reg_alpha=LGBM_BASE_PARAMS["reg_alpha"],
-        reg_lambda=LGBM_BASE_PARAMS["reg_lambda"],
-        scale_pos_weight=best_spw,
-    )
-
-    final_clf.fit(
-        X_final_enc,
-        y_final,
-    )
+    final_clf.fit(X_final_enc, y_final)
 
     pipeline = Pipeline([
         ("preprocessor", preprocessor_final),
@@ -530,10 +490,20 @@ def train() -> None:
     print(f"  Current HIGH threshold                         : "
           f"{HIGH_THRESHOLD:.4f}")
 
+    # Feature importance
+    feature_names_out = preprocessor_final.get_feature_names_out().tolist()
+    feature_importance = _extract_feature_importance(
+        feature_names_out=feature_names_out,
+        classifier=final_clf,
+        top_n=20,
+    )
+
+    print("\n  --- Top 20 Feature Importance ---")
+    for item in feature_importance:
+        print(f"  {item['feature']:<45} {item['importance']:.6f}")
+
     # ── 8. Save artifact ────────────────────────────────────────────────
     print("\n[8/8] Saving artifact...")
-
-    feature_names_out = preprocessor_final.get_feature_names_out().tolist()
 
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -550,47 +520,37 @@ def train() -> None:
         "dti_p75": dti_p75,
         "model_version": MODEL_VERSION,
         "trained_at": datetime.now(timezone.utc).isoformat(),
-        "best_iteration": int(best_iteration),
         "best_validation_score": {
-            "metric": EARLY_STOPPING_METRIC_NAME,
+            "metric": "roc_auc",
             "roc_auc": round(best_val_auc, 6),
             "pr_auc": round(best_val_pr_auc, 6),
             "brier": round(best_val_brier, 6),
         },
-        "selected_params": {
-            **LGBM_BASE_PARAMS,
-            "scale_pos_weight": round(float(best_spw), 6),
-            "n_estimators": int(final_n_estimators),
-            "eval_metric": EARLY_STOPPING_METRIC_NAME,
-        },
-        "scale_pos_weight_tuning_results": [
+        "selected_params": _rf_params_for_artifact(best_config),
+        "rf_tuning_results": [
             {
-                "scale_pos_weight": round(float(r["scale_pos_weight"]), 6),
-                "best_iteration": int(r["best_iteration"]),
-                "best_score_from_lgbm": round(float(r["best_score_from_lgbm"]), 6),
-                "val_roc_auc": round(float(r["val_roc_auc"]), 6),
-                "val_pr_auc": round(float(r["val_pr_auc"]), 6),
-                "val_brier": round(float(r["val_brier"]), 6),
+                "name": result["name"],
+                "params": result["params"],
+                "val_roc_auc": round(float(result["val_roc_auc"]), 6),
+                "val_pr_auc": round(float(result["val_pr_auc"]), 6),
+                "val_brier": round(float(result["val_brier"]), 6),
             }
-            for r in tuning_results
+            for result in tuning_results
         ],
+        "feature_importance_top20": feature_importance,
         "metrics": {
             "roc_auc": round(float(auc), 4),
             "pr_auc": round(float(pr_auc), 4),
             "brier": round(float(brier), 4),
             "default_rate": round(float(y.mean()), 4),
-            "scale_pos_weight_selected": round(float(best_spw), 4),
-            "scale_pos_weight_ratio": round(float(ratio_scale_pos_weight), 4),
-            "scale_pos_weight_sqrt_ratio": round(float(sqrt_scale_pos_weight), 4),
             "n_train": int(len(X_train)),
             "n_val": int(len(X_val)),
             "n_train_final": int(len(X_final)),
             "n_test": int(len(X_test)),
         },
         "training_config": {
-            "model": "LGBMClassifier",
+            "model": "RandomForestClassifier",
             "version": MODEL_VERSION,
-            "early_stopping_metric": EARLY_STOPPING_METRIC_NAME,
             "low_threshold": LOW_THRESHOLD,
             "high_threshold": HIGH_THRESHOLD,
             "target_recall": TARGET_RECALL,
@@ -599,8 +559,8 @@ def train() -> None:
                 "Select highest validation ROC-AUC; tie-break by PR-AUC."
             ),
             "note": (
-                "LightGBM version converted from XGBoost v4.3. "
-                "This version optimizes validation ROC-AUC and tunes scale_pos_weight."
+                "Random Forest benchmark version. "
+                "This model is mainly for comparison against XGBoost/LightGBM."
             ),
         },
     }
@@ -620,8 +580,8 @@ def build_preprocessor() -> ColumnTransformer:
     """
     Build preprocessing transformer.
 
-    Numeric features are passed through. Categorical features are ordinal-encoded
-    with safe handling for unknown categories.
+    Numeric features are passed through.
+    Categorical features are ordinal-encoded with safe handling for unknowns.
     """
     return ColumnTransformer([
         ("num", "passthrough", NUMERIC_FEATURES),
@@ -636,41 +596,38 @@ def build_preprocessor() -> ColumnTransformer:
     ])
 
 
-def build_lgbm_classifier(
-    *,
-    n_estimators: int,
-    learning_rate: float,
-    num_leaves: int,
-    max_depth: int,
-    min_child_samples: int,
-    subsample: float,
-    colsample_bytree: float,
-    reg_alpha: float,
-    reg_lambda: float,
-    scale_pos_weight: float,
-) -> LGBMClassifier:
+def build_rf_classifier(config: dict) -> RandomForestClassifier:
     """
-    Build LightGBM classifier.
+    Build RandomForestClassifier from a config dictionary.
     """
-    return LGBMClassifier(
-        n_estimators=n_estimators,
-        learning_rate=learning_rate,
-        num_leaves=num_leaves,
-        max_depth=max_depth,
-        min_child_samples=min_child_samples,
-        subsample=subsample,
-        subsample_freq=1,
-        colsample_bytree=colsample_bytree,
-        reg_alpha=reg_alpha,
-        reg_lambda=reg_lambda,
-        scale_pos_weight=scale_pos_weight,
-        objective="binary",
-        boosting_type="gbdt",
+    return RandomForestClassifier(
+        n_estimators=config["n_estimators"],
+        max_depth=config["max_depth"],
+        min_samples_leaf=config["min_samples_leaf"],
+        min_samples_split=config["min_samples_split"],
+        max_features=config["max_features"],
+        class_weight=config["class_weight"],
+        bootstrap=True,
+        oob_score=False,
         random_state=RANDOM_STATE,
         n_jobs=-1,
-        verbosity=-1,
-        force_col_wise=True,
+        verbose=0,
     )
+
+
+def _rf_params_for_artifact(config: dict) -> dict:
+    """
+    Keep only serializable RF params for artifact metadata.
+    """
+    return {
+        "name": config["name"],
+        "n_estimators": config["n_estimators"],
+        "max_depth": config["max_depth"],
+        "min_samples_leaf": config["min_samples_leaf"],
+        "min_samples_split": config["min_samples_split"],
+        "max_features": config["max_features"],
+        "class_weight": config["class_weight"],
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -769,6 +726,32 @@ def find_threshold_for_recall(
     return float(best_threshold)
 
 
+def _extract_feature_importance(
+    *,
+    feature_names_out: list[str],
+    classifier: RandomForestClassifier,
+    top_n: int = 20,
+) -> list[dict]:
+    """
+    Extract top feature importances from Random Forest.
+    """
+    importances = classifier.feature_importances_
+
+    pairs = sorted(
+        zip(feature_names_out, importances),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+
+    return [
+        {
+            "feature": str(feature),
+            "importance": float(importance),
+        }
+        for feature, importance in pairs[:top_n]
+    ]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -797,20 +780,6 @@ def _python_scalar(value):
     if hasattr(value, "item"):
         return value.item()
     return value
-
-
-def _unique_float_list(values: list[float]) -> list[float]:
-    """
-    Remove near-duplicate float values while preserving order.
-    """
-    unique = []
-
-    for value in values:
-        value = float(value)
-        if not any(abs(value - seen) < 1e-9 for seen in unique):
-            unique.append(value)
-
-    return unique
 
 
 def _run_validation_safely() -> None:
