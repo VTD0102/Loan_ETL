@@ -20,6 +20,7 @@ env/
 
 # ─── Data & Models (file lớn, KHÔNG push lên Git) ────────────────────────────
 data/raw/*.csv
+qdrant_storage/
 
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────

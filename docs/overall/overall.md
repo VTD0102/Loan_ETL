@@ -83,7 +83,7 @@ Xử lý Prosper Loan Data thông qua script SQL chạy trên Supabase:
 ### 2.4. RAG Chatbot (LangChain + Qdrant)
 
 - Nhúng tài liệu từ `backend/rag/knowledge/` lên Qdrant collection.
-- `ConversationalRetrievalChain` dùng OpenAI/OpenRouter LLM.
+- LCEL chain dùng OpenRouter LLM và Qdrant retriever.
 - Lịch sử chat lưu vào PostgreSQL (`chat_messages`, `chat_sessions`).
 - Context builder tổng hợp thông tin đơn vay hiện tại của user vào prompt.
 
@@ -139,7 +139,7 @@ Loan_ETL/
 │   │   └── credit_score_service.py  # FICO scorecard inference + SHAP
 │   ├── rag/                    # RAG Chatbot module
 │   │   ├── ingest.py           # Embed docs lên Qdrant
-│   │   ├── chain.py            # ConversationalRetrievalChain
+│   │   ├── chain.py            # LCEL chain
 │   │   ├── retriever.py        # Qdrant retriever setup
 │   │   ├── memory.py           # Chat history management
 │   │   ├── context_builder.py  # Build user context từ DB
@@ -321,7 +321,7 @@ python -m machinelearning.etl.etl_gold
 | Module | Chức năng |
 |---|---|
 | `rag/ingest.py` | Embed tài liệu markdown → Qdrant collection |
-| `rag/chain.py` | ConversationalRetrievalChain setup |
+| `rag/chain.py` | LCEL chain + source documents |
 | `rag/retriever.py` | Kết nối Qdrant retriever |
 | `rag/memory.py` | Quản lý lịch sử hội thoại |
 | `rag/context_builder.py` | Tổng hợp context từ đơn vay hiện tại của user |
@@ -350,9 +350,11 @@ python -m machinelearning.etl.etl_gold
 ```env
 DATABASE_URL=postgresql://...          # Supabase connection string
 SECRET_KEY=...                         # JWT signing key
-OPENAI_API_KEY=...                     # Hoặc OpenRouter key
+OPENROUTER_API_KEY=sk-or-...           # OpenRouter key cho LLM + embeddings
+RAG_LLM_MODEL=google/gemini-2.5-flash
+RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
 QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=
+QDRANT_API_KEY=                        # Để trống khi chạy Qdrant local Docker
 QDRANT_COLLECTION=creditintel-kb
 ```
 

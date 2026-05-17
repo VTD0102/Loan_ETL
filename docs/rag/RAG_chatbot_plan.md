@@ -31,10 +31,10 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 
 | Hạng mục | Lựa chọn | Lý do |
 |---|---|---|
-| Framework | **LangChain** (Python) | Có sẵn `ConversationalRetrievalChain`, `PostgresChatMessageHistory`, tích hợp Qdrant gọn |
+| Framework | **LangChain** (Python) | LCEL chain + Qdrant retriever, dễ thay model và fallback khi vector store chưa sẵn sàng |
 | Vector store | **Qdrant** (local Docker/server) | Chạy local không cần cloud vector DB key, vẫn có đường nâng cấp sang server/cloud về sau |
 | LLM provider | **OpenRouter** | 1 API key cho nhiều model, dễ chuyển đổi, OpenAI-compatible SDK |
-| LLM model | **`google/gemini-flash-1.5`** | Rẻ, nhanh, tiếng Việt tốt, context 1M tokens |
+| LLM model | **`google/gemini-2.5-flash`** | Rẻ, nhanh, tiếng Việt tốt, đang có endpoint OpenRouter ổn định |
 | Embedding provider | **OpenRouter** (cùng API key) | Không cần tạo thêm tài khoản OpenAI riêng |
 | Embedding model | **`openai/text-embedding-3-small`** | 1536 dims, rẻ, đủ chất lượng cho KB <1000 chunks |
 | Chat memory | **PostgreSQL** — bảng `chat_messages` | Persistent, refresh trang vẫn còn lịch sử; reuse Supabase đang có |
@@ -60,11 +60,11 @@ RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DE
 │     • Latest loan_applications → form inputs              │
 │     • core.risk_assessment → probability, risk_level      │
 │  3. Load chat history cho session (top 10 turns)          │
-│  4. LangChain ConversationalRetrievalChain                │
+│  4. LangChain LCEL chain                                  │
 │     ┌──────────────────────────────────────┐             │
 │     │  Retriever → Qdrant (top-k=4)       │             │
-│     │  LLM → OpenRouter gemini-flash-1.5   │             │
-│     │  Memory → PostgresChatMessageHistory │             │
+│     │  LLM → OpenRouter gemini-2.5-flash   │             │
+│     │  History → chat_messages             │             │
 │     └──────────────────────────────────────┘             │
 │  5. Persist user_msg + assistant_reply vào chat_messages  │
 │  6. Return {answer, sources[], session_id}                │
@@ -270,7 +270,7 @@ backend/
 │   ├── config.py                # load OPENROUTER_API_KEY, QDRANT_* từ env
 │   ├── ingest.py                # script chạy 1 lần để build index
 │   ├── retriever.py             # Qdrant retriever factory
-│   ├── chain.py                 # ConversationalRetrievalChain builder
+│   ├── chain.py                 # LCEL chain builder
 │   ├── memory.py                # PostgresChatMessageHistory wrapper
 │   ├── context_builder.py       # build {user_context} từ DB cho 1 user
 │   ├── prompts.py               # system prompt template
@@ -312,7 +312,7 @@ Thêm vào `.env` (đã gitignored):
 | `QDRANT_URL` | URL Qdrant server local/Docker | `http://localhost:6333` |
 | `QDRANT_API_KEY` | API key nếu dùng Qdrant Cloud; để trống khi local | `` |
 | `QDRANT_COLLECTION` | Tên collection | `creditintel-kb` |
-| `RAG_LLM_MODEL` | Model chat | `google/gemini-flash-1.5` |
+| `RAG_LLM_MODEL` | Model chat | `google/gemini-2.5-flash` |
 | `RAG_EMBEDDING_MODEL` | Model embedding | `openai/text-embedding-3-small` |
 | `RAG_TOP_K` | Số chunks retrieve | `4` |
 
@@ -323,8 +323,10 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 ## 11. Checklist triển khai (Tuần 2)
 
 ### Giai đoạn A — Hạ tầng
-- [ ] Chạy Qdrant local server: `docker run -p 6333:6333 -v "$(pwd)/qdrant_storage:/qdrant/storage" qdrant/qdrant`
-- [ ] Đăng ký OpenRouter, nạp credit (~5 USD đủ test), verify access `gemini-flash-1.5` + `text-embedding-3-small`
+- [ ] Chạy Docker daemon: `pkexec systemctl start docker` hoặc `sudo systemctl start docker`
+- [ ] Chạy Qdrant local server: `pkexec docker run -d --name creditintel-qdrant -p 6333:6333 -v "$(pwd)/qdrant_storage:/qdrant/storage" qdrant/qdrant`
+- [ ] Nếu chạy Docker không cần quyền admin, thêm user vào group: `sudo usermod -aG docker "$USER"` rồi logout/login
+- [ ] Đăng ký OpenRouter, nạp credit (~5 USD đủ test), verify access `google/gemini-2.5-flash` + `openai/text-embedding-3-small`
 - [ ] Thêm env vars vào `.env`, verify `.gitignore` đã loại trừ `.env`
 - [ ] Thêm RAG packages vào `backend/requirements-rag.txt`, chạy `pip install -r backend/requirements-rag.txt`
 
@@ -332,7 +334,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] Viết `backend/rag/knowledge/policy.md` — lấy thresholds từ `docs/ml/ML_FEATURES.md`, thêm tiêu chí auto-reject, rule business
 - [ ] Viết `backend/rag/knowledge/faq.md` — ~20 Q&A (cách giảm DTI, ý nghĩa các risk level, các bước sau khi được duyệt, v.v.)
 - [ ] Implement `backend/rag/ingest.py`
-- [ ] Chạy `python -m backend.rag.ingest` → kiểm tra Qdrant có ~200–400 vectors
+- [ ] Chạy `cd backend && PYTHONPATH=. ../.venv/bin/python -m rag.ingest` → kiểm tra `curl http://127.0.0.1:6333/collections`
 
 ### Giai đoạn C — Database
 - [ ] Viết `backend/db/init_chat.sql` với 2 bảng ở §6
@@ -345,7 +347,7 @@ Load qua `python-dotenv` trong `backend/rag/config.py`.
 - [ ] `backend/rag/memory.py` — PostgresChatMessageHistory, reuse `machinelearning/utils/db_connection.py`
 - [ ] `backend/rag/context_builder.py` — query `loan_applications` + `core.risk_assessment` cho user_id
 - [ ] `backend/rag/prompts.py` — system template ở §7
-- [ ] `backend/rag/chain.py` — ConversationalRetrievalChain
+- [ ] `backend/rag/chain.py` — LCEL chain + Qdrant retrieval + source documents
 - [ ] `backend/api/routers/chat.py` — 3 endpoints với JWT guard + slowapi rate limit
 
 ### Giai đoạn E — Frontend
@@ -386,7 +388,7 @@ Giả định: 50 customer active, mỗi người 10 tin/ngày, mỗi tin ~500 t
 
 | Khoản mục | Ước tính/tháng |
 |---|---|
-| OpenRouter LLM (gemini-flash-1.5) | ~15,000 tin × 800 tokens × $0.075/1M = **~$0.9** |
+| OpenRouter LLM (`google/gemini-2.5-flash`) | Chi phí phụ thuộc bảng giá OpenRouter hiện tại và usage thực tế |
 | OpenRouter embeddings (ingest 1 lần) | 400 chunks × 500 tokens × $0.02/1M = **~$0.004** |
 | Qdrant local Docker | **$0** |
 | **Tổng** | **< $1 / tháng** |
@@ -410,4 +412,4 @@ Với scale lớn hơn (1000+ user), xem xét chuyển sang Qdrant Cloud/self-ho
 
 ---
 
-> Tài liệu được tạo ngày 2026-04-22, mở rộng từ Mục 8 của `APP_DEVELOPMENT_PLAN.md`. Các quyết định stack (LangChain + Qdrant + OpenRouter + gemini-flash-1.5 + text-embedding-3-small + persistent chat history) đã được chốt trong phiên thảo luận cùng ngày.
+> Tài liệu được tạo ngày 2026-04-22, mở rộng từ Mục 8 của `APP_DEVELOPMENT_PLAN.md`. Cấu hình runtime hiện tại dùng LangChain + Qdrant + OpenRouter + `google/gemini-2.5-flash` + `openai/text-embedding-3-small` + persistent chat history.

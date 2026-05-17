@@ -127,7 +127,9 @@ def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> None
 
 
 def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
-    return ApplicationCreate(
+    # Persisted rows can predate the current request validators, so build the
+    # internal ML payload without re-validating user-input-only constraints.
+    return ApplicationCreate.model_construct(
         monthly_income=app.monthly_income,
         loan_amount=app.loan_amount,
         term=app.term,

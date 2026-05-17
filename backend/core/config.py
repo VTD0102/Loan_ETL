@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # OpenRouter
     openrouter_api_key: str
-    rag_llm_model: str = "google/gemini-flash-1.5"
+    rag_llm_model: str = "google/gemini-2.5-flash"
     rag_embedding_model: str = "openai/text-embedding-3-small"
     rag_top_k: int = 4
 

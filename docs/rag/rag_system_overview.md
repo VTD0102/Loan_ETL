@@ -31,10 +31,10 @@ Câu hỏi người dùng
                           └────────────────────────┘
 ```
 
-**Mô hình LLM:** `google/gemini-flash-1.5` (qua OpenRouter)  
-**Embedding Model:** `openai/text-embedding-3-small` (1536 chiều)  
-**Vector Store:** Qdrant local server/Docker (`http://localhost:6333`)  
-**Framework:** LangChain `ConversationalRetrievalChain`
+**Mô hình LLM:** `google/gemini-2.5-flash` (qua OpenRouter)
+**Embedding Model:** `openai/text-embedding-3-small` (1536 chiều)
+**Vector Store:** Qdrant local server/Docker (`http://localhost:6333`)
+**Framework:** LangChain LCEL (`chat_prompt | llm | StrOutputParser`)
 
 ---
 
@@ -48,7 +48,7 @@ backend/rag/
 ├── retriever.py         # Kết nối Qdrant, tạo retriever top-K
 ├── context_builder.py   # Build context từ DB: hồ sơ vay của user
 ├── prompts.py           # Định nghĩa System Prompt tiếng Việt
-├── chain.py             # Khởi tạo ConversationalRetrievalChain (singleton)
+├── chain.py             # Khởi tạo LCEL chain (singleton)
 ├── memory.py            # Đọc/ghi chat history từ PostgreSQL
 └── knowledge/
     ├── faq.md           # Tài liệu FAQ: 17 câu hỏi thường gặp
@@ -107,16 +107,52 @@ Chia văn bản theo thứ tự ưu tiên: `\n\n` → `\n` → ` ` → ký tự 
 | `chunk_size` | 800 | Đủ ngắn để embed chính xác, đủ dài để giữ ngữ cảnh |
 | `chunk_overlap` | 100 | Tránh mất thông tin tại biên chunk |
 
-### 3.5 Chạy lại Ingest
+### 3.5 Chạy Qdrant local
+
+Khi chạy Qdrant bằng Docker local, `QDRANT_API_KEY` để trống. API key chỉ cần khi dùng Qdrant Cloud hoặc server Qdrant có bật auth.
+
+```bash
+# Chạy từ root project
+pkexec systemctl start docker   # hoặc: sudo systemctl start docker
+
+pkexec docker run -d \
+  --name creditintel-qdrant \
+  -p 6333:6333 \
+  -v "$(pwd)/qdrant_storage:/qdrant/storage" \
+  qdrant/qdrant
+
+curl http://127.0.0.1:6333/
+```
+
+Nếu `docker ...` báo `permission denied` với `/var/run/docker.sock`, dùng `pkexec docker ...` hoặc thêm user vào group `docker` rồi logout/login lại:
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+Nếu `docker ...` báo `Cannot connect to the Docker daemon` hoặc thiếu `/var/run/docker.sock`, Docker daemon chưa chạy:
+
+```bash
+pkexec systemctl start docker
+```
+
+Kiểm tra collection:
+
+```bash
+curl http://127.0.0.1:6333/collections
+```
+
+### 3.6 Chạy lại Ingest
 
 ```bash
 cd backend
-python -m rag.ingest
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest
 ```
 
 Output: `Ingested N chunks into Qdrant collection 'creditintel-kb'`
 
 > ⚠️ Script sẽ **xóa toàn bộ collection cũ** trước khi nạp lại.
+> Với knowledge base hiện tại, số chunks có thể nhỏ, ví dụ `19 chunks`.
 
 ---
 
@@ -180,12 +216,12 @@ Input:
   chat_history = [HumanMessage, AIMessage, ...]  ← 10 turns gần nhất
 
               │
-              ▼ [ConversationalRetrievalChain]
+              ▼ [LangChain LCEL chain]
 ┌─────────────────────────────────────────────┐
-│  STEP 1: Question Rephrasing                 │
-│  LLM refine câu hỏi dựa trên chat_history   │
-│  → "standalone question" không phụ thuộc    │
-│    vào ngữ cảnh hội thoại trước             │
+│  STEP 1: Retrieve documents                  │
+│  Câu hỏi gốc được gửi tới Qdrant retriever  │
+│  Nếu Qdrant chưa sẵn sàng, fallback context │
+│  rỗng để chatbot vẫn trả lời bằng hồ sơ user│
 └───────────────────┬─────────────────────────┘
                     │
                     ▼ [Retriever — Qdrant cosine search]
@@ -208,11 +244,11 @@ Input:
 │  [Human]   = câu hỏi gốc                   │
 └───────────────────┬─────────────────────────┘
                     │
-                    ▼ [LLM: google/gemini-flash-1.5]
+                    ▼ [LLM: google/gemini-2.5-flash]
 ┌─────────────────────────────────────────────┐
 │  STEP 4: Generation                          │
 │  temperature = 0.3 (ít sáng tạo, ổn định)  │
-│  API: OpenRouter → Gemini Flash 1.5         │
+│  API: OpenRouter → Gemini 2.5 Flash         │
 │  Output: answer (str) + source_documents    │
 └─────────────────────────────────────────────┘
 ```
@@ -389,7 +425,7 @@ Content-Type: application/json
 
 | Thư viện | Phiên bản | Vai trò |
 |---|---|---|
-| `langchain` | ≥0.2 | ConversationalRetrievalChain, TextSplitter, Prompts |
+| `langchain` | ≥0.2 | LCEL chain, TextSplitter, Prompts |
 | `langchain-openai` | ≥0.1 | ChatOpenAI, OpenAIEmbeddings |
 | `langchain-qdrant` | ≥0.1 | QdrantVectorStore |
 | `langchain-community` | ≥0.2 | DirectoryLoader, TextLoader |
@@ -408,7 +444,7 @@ Content-Type: application/json
 ```env
 # OpenRouter (LLM + Embeddings)
 OPENROUTER_API_KEY=sk-or-...
-RAG_LLM_MODEL=google/gemini-flash-1.5
+RAG_LLM_MODEL=google/gemini-2.5-flash
 RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
 RAG_TOP_K=4
 
@@ -417,6 +453,8 @@ QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION=creditintel-kb
 ```
+
+`QDRANT_API_KEY` để trống khi dùng Qdrant local Docker.
 
 ---
 

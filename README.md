@@ -83,7 +83,50 @@ npm run mock     # chạy UI với mock API
 npm run build    # production build
 ```
 
-### 4. ETL Pipeline
+### 4. RAG Chatbot + Qdrant
+
+Backend chat dùng OpenRouter cho LLM/embeddings và Qdrant local cho vector search.
+Khi chạy local bằng Docker, `QDRANT_API_KEY` để trống.
+
+```bash
+# Chạy từ root project
+pkexec systemctl start docker   # hoặc: sudo systemctl start docker
+
+pkexec docker run -d \
+  --name creditintel-qdrant \
+  -p 6333:6333 \
+  -v "$(pwd)/qdrant_storage:/qdrant/storage" \
+  qdrant/qdrant
+
+curl http://127.0.0.1:6333/
+```
+
+Nếu user của bạn đã thuộc group `docker`, có thể bỏ `pkexec`. Nếu chưa, thêm quyền rồi logout/login lại:
+
+```bash
+sudo usermod -aG docker "$USER"
+```
+
+Nạp tài liệu vào collection `creditintel-kb`:
+
+```bash
+cd backend
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest
+curl http://127.0.0.1:6333/collections
+```
+
+Env cần có trong `backend/.env`:
+
+```env
+OPENROUTER_API_KEY=sk-or-...
+RAG_LLM_MODEL=google/gemini-2.5-flash
+RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+QDRANT_COLLECTION=creditintel-kb
+```
+
+### 5. ETL Pipeline
 
 Đặt các file Home Credit CSV vào `machinelearning/data/home_credit/`, ví dụ:
 
@@ -106,7 +149,7 @@ python -m machinelearning.etl.etl_silver
 python -m machinelearning.etl.etl_gold
 ```
 
-### 5. Machine Learning
+### 6. Machine Learning
 
 ```bash
 python -m machinelearning.ml.validate_data
@@ -129,7 +172,7 @@ python -m machinelearning.ml.check_customer_model_contract
 | Database | PostgreSQL/Supabase, DuckDB local cho ETL |
 | ETL | Python, pandas, SQLAlchemy, DuckDB |
 | ML | LightGBM, scikit-learn, pandas, joblib |
-| RAG Chatbot | LangChain, OpenRouter/OpenAI-compatible LLM, Pinecone |
+| RAG Chatbot | LangChain, OpenRouter/OpenAI-compatible LLM, Qdrant |
 
 ## Tài Liệu
 
