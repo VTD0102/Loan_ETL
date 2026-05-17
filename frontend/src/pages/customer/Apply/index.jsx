@@ -13,9 +13,14 @@ const EMPLOYMENT_OPTIONS = [
   'Employed', 'Self-employed', 'Retired', 'Not employed', 'Other',
 ]
 
-const CATEGORY_OPTIONS = [
-  'Debt Consolidation', 'Home Improvement', 'Business', 'Personal Loan',
-  'Auto/Vehicle', 'Medical/Dental', 'Education', 'Other',
+const LOAN_PURPOSE_OPTIONS = [
+  { value: 'Education',  label: 'Giáo dục' },
+  { value: 'Home',       label: 'Nhà ở / Bất động sản' },
+  { value: 'Car',        label: 'Ô tô / Phương tiện' },
+  { value: 'Business',   label: 'Kinh doanh' },
+  { value: 'Medical',    label: 'Y tế / Sức khỏe' },
+  { value: 'Personal',   label: 'Tiêu dùng cá nhân' },
+  { value: 'Revolving',  label: 'Tín dụng tuần hoàn (Revolving)' },
 ]
 
 const EDUCATION_OPTIONS = [
@@ -33,6 +38,14 @@ const OCCUPATION_OPTIONS = [
   'Sales staff', 'Secretaries', 'Security staff', 'Waiters/barmen staff',
   'Unknown / Không có nghề nghiệp cụ thể',
 ]
+
+// ── Credit score band helper ───────────────────────────────────────────────
+const scoreBand = (score) => {
+  if (score >= 740) return { label: 'Xuất sắc', color: 'text-success-700', bg: 'bg-success-50' }
+  if (score >= 670) return { label: 'Tốt', color: 'text-primary-700', bg: 'bg-primary-50' }
+  if (score >= 580) return { label: 'Trung bình', color: 'text-warning-700', bg: 'bg-warning-50' }
+  return { label: 'Yếu', color: 'text-danger-700', bg: 'bg-danger-50' }
+}
 
 // ── Helper components ──────────────────────────────────────────────────────
 const FieldRow = ({ label, hint, error, children }) => (
@@ -98,7 +111,6 @@ const ChatWidget = ({ context, onClose }) => {
 
   return (
     <div className="fixed bottom-4 right-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 flex flex-col" style={{ height: '420px' }}>
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-primary-600 rounded-t-2xl">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-400 rounded-full" />
@@ -110,7 +122,6 @@ const ChatWidget = ({ context, onClose }) => {
           </svg>
         </button>
       </div>
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -132,7 +143,6 @@ const ChatWidget = ({ context, onClose }) => {
         )}
         <div ref={messagesEndRef} />
       </div>
-      {/* Input */}
       <div className="flex gap-2 px-3 py-2 border-t border-gray-100">
         <input
           className="input flex-1 text-xs py-1.5"
@@ -163,6 +173,8 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
   const prob     = (evalResult.default_probability * 100).toFixed(1)
   const maxAmt   = evalResult.suggested_amount
   const sugTerm  = evalResult.suggested_term
+  const cs       = evalResult.credit_score_computed
+  const csBand   = cs ? scoreBand(cs) : null
 
   const handleConfirm = async () => {
     const amt = parseFloat(confirmAmount)
@@ -199,16 +211,25 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
               : 'Khoản vay này có thể bị admin từ chối. Bạn nên xem xét điều chỉnh theo gợi ý.'}
           </p>
 
-          {/* Info grid */}
+          {/* Info grid — includes computed credit score */}
           <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-4 mb-5 text-sm">
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Xác suất vỡ nợ</p>
               <p className={`font-bold text-base ${isLow ? 'text-success-600' : 'text-warning-600'}`}>{prob}%</p>
             </div>
-            <div>
-              <p className="text-gray-500 text-xs mb-0.5">Khoản vay bạn chọn</p>
-              <p className="font-semibold text-gray-800">${Number(originalData?.loan_amount).toLocaleString()} / {originalData?.term}th</p>
-            </div>
+            {cs && csBand ? (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Điểm tín dụng tính toán</p>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold ${csBand.bg} ${csBand.color}`}>
+                  {cs} — {csBand.label}
+                </span>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-500 text-xs mb-0.5">Khoản vay bạn chọn</p>
+                <p className="font-semibold text-gray-800">${Number(originalData?.loan_amount).toLocaleString()} / {originalData?.term}th</p>
+              </div>
+            )}
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Gợi ý tối đa an toàn</p>
               <p className="font-bold text-primary-600">${maxAmt.toLocaleString()}</p>
@@ -270,7 +291,6 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
         </div>
       </div>
 
-      {/* Chat widget */}
       {chatOpen && <ChatWidget context={evalResult} onClose={() => setChatOpen(false)} />}
     </>
   )
@@ -280,7 +300,7 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
 const ApplyPage = () => {
   const navigate  = useNavigate()
   const [loading, setLoading]         = useState(false)
-  const [modal, setModal]             = useState(null)  // { type: 'rejected'|'suggestion'|'success', data }
+  const [modal, setModal]             = useState(null)
   const [originalFormData, setOriginalFormData] = useState(null)
   const [chatOpen, setChatOpen]       = useState(false)
 
@@ -288,11 +308,10 @@ const ApplyPage = () => {
     defaultValues: {
       term: 36,
       employment_status: 'Employed',
-      listing_category: 'Debt Consolidation',
+      loan_purpose: 'Personal',
       occupation_type: 'Unknown / Không có nghề nghiệp cụ thể',
       years_employed: 0,
       is_homeowner: 'false',
-      has_bad_debt: 'false',
       income_verifiable_flag: 'false',
       gender_male_flag: 'false',
       is_married_flag: 'false',
@@ -311,18 +330,15 @@ const ApplyPage = () => {
     loan_amount:             parseFloat(data.loan_amount),
     term:                    parseInt(data.term),
     employment_status:       data.employment_status,
-    dti:                     parseFloat(data.dti),
     is_homeowner:            data.is_homeowner === 'true' || data.is_homeowner === true,
-    listing_category:        data.listing_category,
-    credit_score:            parseInt(data.credit_score),
+    loan_purpose:            data.loan_purpose,
     occupation_type:         data.occupation_type.includes('Unknown') ? 'Unknown' : data.occupation_type,
     years_employed:          parseFloat(data.years_employed) || 0,
+    income_verifiable_flag:  data.income_verifiable_flag === 'true' || data.income_verifiable_flag === true,
     num_bureau_records:      parseInt(data.num_bureau_records) || 0,
     num_active_credit:       parseInt(data.num_active_credit) || 0,
     total_overdue_amount:    parseFloat(data.total_overdue_amount) || 0,
     max_credit_overdue_days: parseInt(data.max_credit_overdue_days) || 0,
-    has_bad_debt:            data.has_bad_debt === 'true' || data.has_bad_debt === true,
-    income_verifiable_flag:  data.income_verifiable_flag === 'true' || data.income_verifiable_flag === true,
     age_years:               parseInt(data.age_years),
     gender_male_flag:        data.gender_male_flag === 'true' || data.gender_male_flag === true,
     education_ordinal:       parseInt(data.education_ordinal),
@@ -336,7 +352,7 @@ const ApplyPage = () => {
     try {
       const payload = buildPayload(data)
       setOriginalFormData(payload)
-      const res   = await evaluateApplication(payload)
+      const res    = await evaluateApplication(payload)
       const result = res.data
 
       if (result.status === 'AUTO_REJECTED') {
@@ -344,13 +360,10 @@ const ApplyPage = () => {
         return
       }
 
-      // PENDING_REVIEW
       if (result.is_perfect_fit) {
-        // Auto-confirm — send directly to admin
         const confirmRes = await confirmApplication(payload)
         setModal({ type: 'success', data: confirmRes.data })
       } else {
-        // Show suggestion modal
         setModal({ type: 'suggestion', data: result })
       }
     } catch (err) {
@@ -387,14 +400,14 @@ const ApplyPage = () => {
             Quay lại Dashboard
           </button>
           <h1 className="text-2xl font-bold text-gray-900">Nộp đơn vay mới</h1>
-          <p className="text-gray-500 mt-1">Vui lòng điền đầy đủ tất cả thông tin. AI sẽ đánh giá hồ sơ trong vài giây.</p>
+          <p className="text-gray-500 mt-1">Vui lòng điền đầy đủ thông tin. Hệ thống AI sẽ tính điểm tín dụng và đánh giá rủi ro tự động.</p>
         </div>
 
         <div className="card p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
 
-            {/* ── Section 1: Tài chính ─────────────────────────── */}
-            <SectionTitle title="Thông tin tài chính" />
+            {/* ── Section 1: Thông tin khoản vay ──────────────────── */}
+            <SectionTitle title="Thông tin khoản vay" />
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Thu nhập hàng tháng (USD)" error={errors.monthly_income?.message}>
                 <input type="number" step="0.01" min="1" placeholder="5000"
@@ -414,19 +427,14 @@ const ApplyPage = () => {
                   {TERM_OPTIONS.map(t => <option key={t} value={t}>{t} tháng</option>)}
                 </select>
               </FieldRow>
-              <FieldRow label="Tỷ lệ nợ/Thu nhập (DTI %)" hint="Tổng nghĩa vụ nợ tháng ÷ thu nhập tháng × 100" error={errors.dti?.message}>
-                <input type="number" step="0.01" min="0" max="100" placeholder="20"
-                  className={`input ${errors.dti ? 'input-error' : ''}`}
-                  {...register('dti', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0%' }, max: { value: 100, message: 'Tối đa 100%' } })} />
+              <FieldRow label="Mục đích vay" error={errors.loan_purpose?.message}>
+                <select className={`input ${errors.loan_purpose ? 'input-error' : ''}`} {...register('loan_purpose', { required: 'Bắt buộc' })}>
+                  {LOAN_PURPOSE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </FieldRow>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Mục đích vay" error={errors.listing_category?.message}>
-                <select className={`input ${errors.listing_category ? 'input-error' : ''}`} {...register('listing_category', { required: 'Bắt buộc' })}>
-                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </FieldRow>
+            <div className="grid sm:grid-cols-1 gap-5">
               <FieldRow label="Có nhà riêng không?" error={errors.is_homeowner?.message}>
                 <select className={`input ${errors.is_homeowner ? 'input-error' : ''}`} {...register('is_homeowner', { required: 'Bắt buộc' })}>
                   <option value="false">Không</option>
@@ -456,10 +464,11 @@ const ApplyPage = () => {
                   className={`input ${errors.years_employed ? 'input-error' : ''}`}
                   {...register('years_employed', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' }, max: { value: 50, message: 'Tối đa 50' } })} />
               </FieldRow>
-              <FieldRow label="Điểm tín dụng (300–850)" error={errors.credit_score?.message}>
-                <input type="number" step="1" min="300" max="850" placeholder="680"
-                  className={`input ${errors.credit_score ? 'input-error' : ''}`}
-                  {...register('credit_score', { required: 'Bắt buộc', min: { value: 300, message: 'Tối thiểu 300' }, max: { value: 850, message: 'Tối đa 850' } })} />
+              <FieldRow label="Thu nhập có thể xác minh?" hint="Có hợp đồng lao động, payslip hoặc tài liệu chứng minh thu nhập" error={errors.income_verifiable_flag?.message}>
+                <select className={`input ${errors.income_verifiable_flag ? 'input-error' : ''}`} {...register('income_verifiable_flag', { required: 'Bắt buộc' })}>
+                  <option value="true">Có (hợp đồng lao động, payslip...)</option>
+                  <option value="false">Không</option>
+                </select>
               </FieldRow>
             </div>
 
@@ -532,21 +541,6 @@ const ApplyPage = () => {
               </FieldRow>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Có nợ xấu?" error={errors.has_bad_debt?.message}>
-                <select className={`input ${errors.has_bad_debt ? 'input-error' : ''}`} {...register('has_bad_debt', { required: 'Bắt buộc' })}>
-                  <option value="false">Không</option>
-                  <option value="true">Có</option>
-                </select>
-              </FieldRow>
-              <FieldRow label="Thu nhập có thể xác minh?" error={errors.income_verifiable_flag?.message}>
-                <select className={`input ${errors.income_verifiable_flag ? 'input-error' : ''}`} {...register('income_verifiable_flag', { required: 'Bắt buộc' })}>
-                  <option value="true">Có (hợp đồng lao động, payslip...)</option>
-                  <option value="false">Không</option>
-                </select>
-              </FieldRow>
-            </div>
-
             <div className="pt-2">
               <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
                 {loading && <LoadingSpinner size="sm" className="mr-2" />}
@@ -566,6 +560,17 @@ const ApplyPage = () => {
             </svg>
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">Đơn không đủ điều kiện</h3>
+          {modal?.data?.credit_score_computed && (() => {
+            const b = scoreBand(modal.data.credit_score_computed)
+            return (
+              <p className="text-sm text-gray-600 mb-2">
+                Điểm tín dụng tính toán:{' '}
+                <span className={`font-bold ${b.color}`}>
+                  {modal.data.credit_score_computed} ({b.label})
+                </span>
+              </p>
+            )
+          })()}
           <p className="text-gray-500 text-sm mb-3">
             Xác suất vỡ nợ: <strong className="text-danger-600">{((modal?.data?.default_probability || 0) * 100).toFixed(1)}%</strong> — vượt ngưỡng 40%.
           </p>

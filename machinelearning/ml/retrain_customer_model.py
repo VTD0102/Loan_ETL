@@ -1,19 +1,27 @@
 """
-Retrain customer risk model (LightGBM) — v3.
+Customer Risk Model (LightGBM) — Stage 2 of two-stage pipeline (v4).
 
-Changes vs v2:
-  - Removed ext_source_1, ext_source_3 (third-party scores, unavailable at inference)
-  - Added years_employed (from DAYS_EMPLOYED), occupation_type (18 HC categories)
-  - All 22 user-input features are now required — no median imputation at inference
-  - LightGBM handles NaN natively in training (Gold rows with sparse demographics)
+Stage 1: Scorecard (LR) computes credit_score_computed (300–850) from raw features.
+Stage 2: LightGBM uses credit_score_computed + other features for risk classification.
 
-Feature count: 28
-  User-input (22): 8 core + 6 bureau + 6 demographics + years_employed + occupation_type
-  Auto-computed (4): log_monthly_income, loan_amount_to_income, rating_ordinal, high_dti_flag
-  DB history (2): num_previous_loans, previous_default_rate
+Changes vs v3:
+  - Removed: credit_score (self-reported — replaced by credit_score_computed from Stage 1)
+  - Removed: rating_ordinal (derived from credit_score — same source of leakage)
+  - Removed: listing_category (was hardcoded constant 1 — zero variance)
+  - Removed: has_bad_debt (near-zero variance — 18/300k samples positive)
+  - Added: credit_score_computed (OOF Stage 1 predictions — FICO 300–850)
+  - Added: loan_type (1=Cash, 0=Revolving)
+  - OOF predictions loaded from models/oof_stage1.csv (produced by train_scorecard.py)
 
-Source : gold.hc_features_v1 (DuckDB local, after running etl.pipeline)
-Output : machinelearning/ml/models/customer_risk_model.pkl
+Feature count: 26
+  Numeric (24): dti, monthly_income, loan_amount, term, is_homeowner, years_employed,
+                num_previous_loans, previous_default_rate, num_bureau_records,
+                num_active_credit, total_overdue_amount, max_credit_overdue_days,
+                income_verifiable_flag, high_dti_flag, log_monthly_income,
+                loan_amount_to_income, age_years, gender_male_flag, education_ordinal,
+                cnt_children, cnt_fam_members, is_married_flag, credit_score_computed,
+                loan_type
+  Categorical (2): employment_status, occupation_type
 
 Run from project root:
     python -m machinelearning.ml.retrain_customer_model
@@ -38,71 +46,74 @@ from machinelearning.utils.db_connection import get_engine
 from machinelearning.ml.validate_data import validate
 
 MODEL_PATH    = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
-MODEL_VERSION = "customer_lgbm_v3"
+OOF_PATH      = BASE_DIR / "ml" / "models" / "oof_stage1.csv"
+MODEL_VERSION = "customer_lgbm_v4"
 
 LOW_THRESHOLD  = 0.2
 HIGH_THRESHOLD = 0.4
 
 _QUERY = """
 SELECT
-    -- ── Core loan features (8) ────────────────────────────────────────────
-    stated_monthly_income                                       AS monthly_income,
-    loan_original_amount                                        AS loan_amount,
-    term,
-    employment_status_grouped                                   AS employment_status,
-    debt_to_income_ratio                                        AS dti,
-    is_homeowner_flag                                           AS is_homeowner,
-    1                                                           AS listing_category,
-    credit_score_midpoint                                       AS credit_score,
+    f.listing_key,
 
-    -- ── v3 new: years_employed + occupation_type ─────────────────────────
-    years_employed,
-    occupation_type,
+    -- ── Core loan features ────────────────────────────────────────────────
+    f.stated_monthly_income                                     AS monthly_income,
+    f.loan_original_amount                                      AS loan_amount,
+    f.term,
+    f.employment_status_grouped                                 AS employment_status,
+    f.debt_to_income_ratio                                      AS dti,
+    f.is_homeowner_flag                                         AS is_homeowner,
+    f.loan_type,
 
-    -- ── Bureau / credit history features (6) ─────────────────────────────
-    num_previous_loans, previous_default_rate,
-    num_bureau_records, num_active_credit,
-    total_overdue_amount, max_credit_overdue_days, has_bad_debt,
+    -- ── Employment & occupation ───────────────────────────────────────────
+    f.years_employed,
+    f.occupation_type,
 
-    -- ── Derived flags (4) ─────────────────────────────────────────────────
-    income_verifiable_flag, high_dti_flag, rating_ordinal,
-    log_monthly_income, loan_amount_to_income,
+    -- ── Bureau / credit history ───────────────────────────────────────────
+    f.num_previous_loans, f.previous_default_rate,
+    f.num_bureau_records, f.num_active_credit,
+    f.total_overdue_amount, f.max_credit_overdue_days,
 
-    -- ── Demographics (6) ─────────────────────────────────────────────────
-    age_years, gender_male_flag, education_ordinal,
-    cnt_children, cnt_fam_members, is_married_flag,
+    -- ── Derived flags ─────────────────────────────────────────────────────
+    f.income_verifiable_flag, f.high_dti_flag,
+    f.log_monthly_income, f.loan_amount_to_income,
 
-    is_default
-FROM gold.hc_features_v1
-WHERE credit_score_midpoint   IS NOT NULL
-  AND stated_monthly_income   IS NOT NULL
-  AND loan_original_amount    IS NOT NULL
-  AND debt_to_income_ratio    IS NOT NULL
-  AND years_employed          IS NOT NULL
-  AND occupation_type         IS NOT NULL
+    -- ── Demographics ─────────────────────────────────────────────────────
+    f.age_years, f.gender_male_flag, f.education_ordinal,
+    f.cnt_children, f.cnt_fam_members, f.is_married_flag,
+
+    f.is_default
+FROM gold.hc_features_v1 f
+WHERE f.debt_to_income_ratio    IS NOT NULL
+  AND f.stated_monthly_income   IS NOT NULL
+  AND f.loan_original_amount    IS NOT NULL
+  AND f.years_employed          IS NOT NULL
+  AND f.occupation_type         IS NOT NULL
 """
 
 NUMERIC_FEATURES = [
-    # Core 8
-    "monthly_income", "loan_amount", "term", "dti",
-    "is_homeowner", "listing_category", "credit_score",
-    # v3 new
+    # Core
+    "monthly_income", "loan_amount", "term", "dti", "is_homeowner",
+    # Employment
     "years_employed",
     # Bureau/history
     "num_previous_loans", "previous_default_rate",
     "num_bureau_records", "num_active_credit",
-    "total_overdue_amount", "max_credit_overdue_days", "has_bad_debt",
+    "total_overdue_amount", "max_credit_overdue_days",
     # Derived
-    "income_verifiable_flag", "high_dti_flag", "rating_ordinal",
+    "income_verifiable_flag", "high_dti_flag",
     "log_monthly_income", "loan_amount_to_income",
     # Demographics
     "age_years", "gender_male_flag", "education_ordinal",
     "cnt_children", "cnt_fam_members", "is_married_flag",
+    # Stage 1 output (OOF)
+    "credit_score_computed",
+    # Loan type
+    "loan_type",
 ]
 CATEGORICAL_FEATURES = ["employment_status", "occupation_type"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
-# All 18 HC occupation types + Unknown for NULL rows in training data
 OCCUPATION_CATEGORIES = [
     "Accountants", "Cleaning staff", "Cooking staff", "Core staff", "Drivers",
     "HR staff", "High skill tech staff", "IT staff", "Laborers", "Low-skill Laborers",
@@ -118,21 +129,35 @@ def train():
     validate()
 
     print("\n" + "=" * 55)
-    print("  CUSTOMER RISK MODEL — RETRAIN (v3)")
+    print("  CUSTOMER RISK MODEL — RETRAIN (v4)")
     print("=" * 55)
 
-    # ── 1. Connect & fetch ───────────────────────────────────────────────
-    print("\n[1/6] Fetching data from gold.hc_features_v1...")
+    # ── 1. Load Stage 1 OOF predictions ─────────────────────────────────────
+    print(f"\n[1/7] Loading Stage 1 OOF predictions from {OOF_PATH.name}...")
+    if not OOF_PATH.exists():
+        raise FileNotFoundError(
+            f"{OOF_PATH} not found. Run train_scorecard.py first to generate OOF predictions."
+        )
+    oof_df = pd.read_csv(OOF_PATH, dtype={"listing_key": str})
+    print(f"  OOF rows: {len(oof_df):,}")
+    print(f"  credit_score_computed range: {oof_df['credit_score_computed'].min()} – {oof_df['credit_score_computed'].max()}")
+
+    # ── 2. Fetch gold data ───────────────────────────────────────────────────
+    print("\n[2/7] Fetching data from gold.hc_features_v1...")
     engine = get_engine()
     df = pd.read_sql(_QUERY, engine)
-    print(f"  Rows: {len(df):,}  |  Features: {len(ALL_FEATURES)}")
+    print(f"  Rows: {len(df):,}  |  Features (before OOF merge): {len(ALL_FEATURES) - 1}")
 
-    # ── 2. Clean ─────────────────────────────────────────────────────────
-    print("\n[2/6] Cleaning data...")
+    # ── 3. Merge OOF predictions ─────────────────────────────────────────────
+    print("\n[3/7] Merging OOF credit_score_computed...")
+    df = df.merge(oof_df[["listing_key", "credit_score_computed"]], on="listing_key", how="inner")
+    print(f"  Rows after merge: {len(df):,}")
+
+    # ── 4. Clean ─────────────────────────────────────────────────────────────
+    print("\n[4/7] Cleaning data...")
     df["employment_status"] = df["employment_status"].fillna("Other/Unknown")
     df["occupation_type"]   = df["occupation_type"].fillna("Unknown")
-    # LightGBM handles NaN natively for numeric columns — no median fill
-    df = df.dropna(subset=["is_default", "monthly_income", "loan_amount", "credit_score"])
+    df = df.dropna(subset=["is_default", "monthly_income", "loan_amount"])
     print(f"  Rows after dropna: {len(df):,}")
     print(f"  Default rate: {df['is_default'].mean():.2%}")
 
@@ -141,15 +166,15 @@ def train():
     feature_defaults = _feature_defaults(X)
     dti_p75 = float(df["dti"].quantile(0.75))
 
-    # ── 3. Split 80/20 ───────────────────────────────────────────────────
-    print("\n[3/6] Splitting 80/20 (stratified by is_default)...")
+    # ── 5. Split 80/20 ───────────────────────────────────────────────────────
+    print("\n[5/7] Splitting 80/20 (stratified by is_default)...")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
     print(f"  Train: {len(X_train):,} rows | Test: {len(X_test):,} rows")
 
-    # ── 4. Build pipeline ────────────────────────────────────────────────
-    print("\n[4/6] Building pipeline (LightGBM)...")
+    # ── 6. Build pipeline ────────────────────────────────────────────────────
+    print("\n[6/7] Building pipeline (LightGBM)...")
     preprocessor = ColumnTransformer([
         ("num", "passthrough", NUMERIC_FEATURES),
         ("cat", OrdinalEncoder(
@@ -158,7 +183,6 @@ def train():
             unknown_value=-1,
         ), CATEGORICAL_FEATURES),
     ])
-
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("classifier", LGBMClassifier(
@@ -178,12 +202,9 @@ def train():
         )),
     ])
     print("  Pipeline: passthrough numeric + OrdinalEncoder(2 cats) → LightGBM")
-
-    # ── 5. Train ─────────────────────────────────────────────────────────
-    print("\n[5/6] Training...")
     pipeline.fit(X_train, y_train)
 
-    # ── 6. Evaluate ──────────────────────────────────────────────────────
+    # ── 7. Evaluate ──────────────────────────────────────────────────────────
     y_pred = pipeline.predict(X_test)
     y_prob = pipeline.predict_proba(X_test)[:, 1]
     auc    = roc_auc_score(y_test, y_prob)
@@ -192,38 +213,43 @@ def train():
     print(f"  ROC-AUC : {auc:.4f}")
     print(classification_report(y_test, y_pred, target_names=["No Default", "Default"]))
 
-    # Threshold suggestions
     _print_threshold_analysis(y_test, y_prob)
 
-    # ── 7. Save artifact ─────────────────────────────────────────────────
-    feature_names_out = (
-        pipeline.named_steps["preprocessor"].get_feature_names_out().tolist()
+    # Feature importance
+    lgbm = pipeline.named_steps["classifier"]
+    feat_names = pipeline.named_steps["preprocessor"].get_feature_names_out().tolist()
+    importances = lgbm.feature_importances_
+    imp_df = (
+        pd.DataFrame({"feature": feat_names, "importance": importances})
+        .sort_values("importance", ascending=False)
+        .head(15)
     )
+    print("\n  Top-15 feature importances:")
+    print(imp_df.to_string(index=False))
 
+    # ── 8. Save artifact ─────────────────────────────────────────────────────
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({
         "pipeline"          : pipeline,
         "feature_cols"      : ALL_FEATURES,
-        "feature_names_out" : feature_names_out,
+        "feature_names_out" : feat_names,
         "feature_defaults"  : feature_defaults,
         "thresholds"        : {"low": LOW_THRESHOLD, "high": HIGH_THRESHOLD},
         "dti_p75"           : dti_p75,
         "model_version"     : MODEL_VERSION,
         "trained_at"        : datetime.now(timezone.utc).isoformat(),
+        "metrics"           : {"roc_auc": float(auc)},
     }, MODEL_PATH)
     print(f"\n  Saved → {MODEL_PATH}")
     print("=" * 55)
 
 
 def _print_threshold_analysis(y_test, y_prob):
-    from sklearn.metrics import precision_recall_curve
-    precisions, recalls, thresholds = precision_recall_curve(y_test, y_prob)
     print("\n  --- Threshold Analysis ---")
     for t in [0.15, 0.20, 0.25, 0.30, 0.35, 0.40]:
-        mask     = y_prob >= t
-        pred     = mask.astype(int)
-        rejected = mask.sum()
-        recall   = float(y_test[mask].sum()) / max(y_test.sum(), 1)
+        mask      = y_prob >= t
+        rejected  = int(mask.sum())
+        recall    = float(y_test[mask].sum()) / max(y_test.sum(), 1)
         precision = float(y_test[mask].mean()) if mask.sum() > 0 else 0
         print(f"  threshold={t:.2f} | rejected={rejected:,} "
               f"| recall(default)={recall:.2%} | precision={precision:.2%}")

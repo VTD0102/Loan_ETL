@@ -1,6 +1,6 @@
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, Literal, Any, Union
+from typing import Optional, Literal, Any
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, field_validator
 from .personal_info import PersonalInfoRead
@@ -10,31 +10,35 @@ ApplicationStatus = Literal[
     "AWAITING_INFO", "INFO_SUBMITTED", "APPROVED", "REJECTED", "PENDING"
 ]
 
+# v4 loan purpose options (Direction B — rich categories)
+LOAN_PURPOSE_OPTIONS = [
+    "Education", "Home", "Car", "Business", "Medical", "Personal", "Revolving",
+]
+
 
 class ApplicationBase(BaseModel):
-    # ── Core loan features (8) — always required ───────────────────────────
+    # ── Core loan features — user input ────────────────────────────────────
     monthly_income: Decimal
     loan_amount: Decimal
     term: int
     employment_status: str
-    dti: Decimal
     is_homeowner: bool
-    listing_category: Union[str, int]
-    credit_score: int
 
-    # ── v3: new required features ──────────────────────────────────────────
+    # ── v4: loan_purpose replaces listing_category + dti removed (now computed) ─
+    loan_purpose: str
+
+    # ── v3: required features ──────────────────────────────────────────────
     occupation_type: str     # 18 HC categories + 'Unknown'
     years_employed: Decimal  # 0–50
+    income_verifiable_flag: bool
 
-    # ── Credit bureau features — now required ──────────────────────────────
+    # ── Credit bureau features — required ─────────────────────────────────
     num_bureau_records: int
     num_active_credit: int
     total_overdue_amount: Decimal
     max_credit_overdue_days: int
-    has_bad_debt: bool
-    income_verifiable_flag: bool
 
-    # ── Demographics — now required ────────────────────────────────────────
+    # ── Demographics — required ────────────────────────────────────────────
     age_years: int
     gender_male_flag: bool
     education_ordinal: int
@@ -49,11 +53,11 @@ class ApplicationBase(BaseModel):
             raise ValueError("term phải là 12, 36 hoặc 60")
         return v
 
-    @field_validator("credit_score")
+    @field_validator("loan_purpose")
     @classmethod
-    def validate_credit_score(cls, v):
-        if not (300 <= v <= 850):
-            raise ValueError("credit_score phải từ 300 đến 850")
+    def validate_loan_purpose(cls, v):
+        if v not in LOAN_PURPOSE_OPTIONS:
+            raise ValueError(f"loan_purpose phải là một trong: {LOAN_PURPOSE_OPTIONS}")
         return v
 
     @field_validator("education_ordinal")
@@ -88,10 +92,12 @@ class ApplicationRead(BaseModel):
     loan_amount: Decimal
     term: int
     employment_status: str
-    dti: Decimal
     is_homeowner: bool
-    listing_category: Union[str, int]
-    credit_score: int
+
+    # v4: loan_purpose (nullable với row cũ), credit_score/dti now system-computed
+    loan_purpose: Optional[str] = None
+    credit_score: Optional[int] = None    # system-computed by Stage 1
+    dti: Optional[Decimal] = None         # system-computed HC-style DTI
 
     # v3 (nullable với row cũ)
     occupation_type: Optional[str] = None
@@ -102,7 +108,6 @@ class ApplicationRead(BaseModel):
     num_active_credit: Optional[int] = None
     total_overdue_amount: Optional[Decimal] = None
     max_credit_overdue_days: Optional[int] = None
-    has_bad_debt: Optional[bool] = None
     income_verifiable_flag: Optional[bool] = None
 
     # Demographics (nullable với row cũ)
@@ -146,6 +151,7 @@ class ApplicationEvaluateResponse(BaseModel):
     default_probability: float
     risk_level: str                       # Low | Medium | High
     risk_score: int
+    credit_score_computed: int            # Stage 1 output — FICO 300–850
     is_perfect_fit: bool                  # True → tự submit thẳng cho admin
     suggested_amount: float
     suggested_term: int

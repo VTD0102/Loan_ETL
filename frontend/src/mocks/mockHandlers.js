@@ -59,40 +59,78 @@ export const mockHandlers = async (config) => {
     return [404, { detail: 'Not found' }]
   }
 
-  if (m === 'post' && url.endsWith('/applications')) {
-    const cs  = parseFloat(body.credit_score || 700)
-    const dti = parseFloat(body.dti || 20)
-    const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
-    // Simulate AI decision
-    const status = (cs < 600 || dti > 70) ? 'AUTO_REJECTED' : 'PENDING_REVIEW'
-    
-    const newApp = {
-      id: newId,
-      user_id: MOCK_USER.id,
-      user_email: MOCK_USER.email,
-      user_username: MOCK_USER.username,
-      monthly_income: parseFloat(body.monthly_income || 0),
-      loan_amount: parseFloat(body.loan_amount || 0),
-      term: parseInt(body.term || 12),
-      employment_status: body.employment_status || 'Employed',
-      dti,
-      is_homeowner: body.is_homeowner === 'true' || body.is_homeowner === true,
-      listing_category: body.listing_category || 'Other',
-      credit_score: cs,
-      status,
-      default_probability: status === 'AUTO_REJECTED' ? 0.8 : 0.15,
-      risk_level: status === 'AUTO_REJECTED' ? 'HIGH' : 'LOW',
-      risk_score: status === 'AUTO_REJECTED' ? 80 : 15,
-      recommended_amount: status === 'AUTO_REJECTED' ? null : parseFloat(body.loan_amount || 0) * 0.9,
-      recommended_term: status === 'AUTO_REJECTED' ? null : 36,
-      submitted_at: new Date().toISOString(),
-      reviewed_at: null,
-      reviewed_by: null,
-      admin_note: null
+  // Phase 1: evaluate (runs AI, returns score + suggestion, saves only if AUTO_REJECTED)
+  if (m === 'post' && url.endsWith('/applications/evaluate')) {
+    const income   = parseFloat(body.monthly_income || 5000)
+    const loanAmt  = parseFloat(body.loan_amount || 10000)
+    const term     = parseInt(body.term || 36)
+    // Mock credit score: derived from years_employed + bureau records (simulating Stage 1)
+    const yrsEmp   = parseFloat(body.years_employed || 0)
+    const bureau   = parseInt(body.num_bureau_records || 0)
+    const mockScore = Math.min(850, Math.max(300, 480 + yrsEmp * 8 + bureau * 15 + (body.is_homeowner ? 30 : 0)))
+    const mockProb  = Math.max(0.01, Math.min(0.99, 0.45 - (mockScore - 300) / 1100))
+    const riskLevel = mockProb < 0.20 ? 'Low' : mockProb < 0.40 ? 'Medium' : 'High'
+    const sugAmt    = Math.min(loanAmt * 1.2, income * 12 * 0.4)
+
+    if (mockProb > 0.40) {
+      const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
+      const newApp = {
+        id: newId, user_id: MOCK_USER.id, status: 'AUTO_REJECTED',
+        monthly_income: income, loan_amount: loanAmt, term,
+        employment_status: body.employment_status || 'Employed',
+        loan_purpose: body.loan_purpose || 'Personal',
+        credit_score: Math.round(mockScore), dti: (loanAmt / term) / income,
+        is_homeowner: body.is_homeowner === true || body.is_homeowner === 'true',
+        default_probability: mockProb, risk_level: 'High', risk_score: Math.round((1 - mockProb) * 100),
+        recommended_amount: Math.round(sugAmt / 100) * 100, recommended_term: 36,
+        submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, admin_note: null,
+      }
+      MOCK_ADMIN_APPS.unshift(newApp)
+      saveToStorage()
+      return [200, {
+        status: 'AUTO_REJECTED', application_id: String(newId),
+        default_probability: mockProb, risk_level: 'High', risk_score: Math.round((1 - mockProb) * 100),
+        credit_score_computed: Math.round(mockScore),
+        is_perfect_fit: false, suggested_amount: Math.round(sugAmt / 100) * 100, suggested_term: 36,
+      }]
     }
-    MOCK_ADMIN_APPS.unshift(newApp) // Push to top so Admin sees it first
+
+    return [200, {
+      status: 'PENDING_REVIEW', application_id: null,
+      default_probability: mockProb, risk_level: riskLevel, risk_score: Math.round((1 - mockProb) * 100),
+      credit_score_computed: Math.round(mockScore),
+      is_perfect_fit: loanAmt <= sugAmt * 0.9,
+      suggested_amount: Math.round(sugAmt / 100) * 100, suggested_term: term,
+    }]
+  }
+
+  // Phase 2: confirm (saves to DB)
+  if (m === 'post' && url.endsWith('/applications/confirm')) {
+    const income  = parseFloat(body.monthly_income || 5000)
+    const loanAmt = parseFloat(body.loan_amount || 10000)
+    const term    = parseInt(body.term || 36)
+    const yrsEmp  = parseFloat(body.years_employed || 0)
+    const bureau  = parseInt(body.num_bureau_records || 0)
+    const mockScore = Math.min(850, Math.max(300, 480 + yrsEmp * 8 + bureau * 15 + (body.is_homeowner ? 30 : 0)))
+    const mockProb  = Math.max(0.01, Math.min(0.99, 0.45 - (mockScore - 300) / 1100))
+    const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
+    const newApp = {
+      id: newId, user_id: MOCK_USER.id, status: 'PENDING_REVIEW',
+      monthly_income: income, loan_amount: loanAmt, term,
+      employment_status: body.employment_status || 'Employed',
+      loan_purpose: body.loan_purpose || 'Personal',
+      credit_score: Math.round(mockScore), dti: (loanAmt / term) / income,
+      is_homeowner: body.is_homeowner === true || body.is_homeowner === 'true',
+      default_probability: mockProb, risk_level: mockProb < 0.20 ? 'Low' : 'Medium',
+      risk_score: Math.round((1 - mockProb) * 100),
+      recommended_amount: loanAmt, recommended_term: term,
+      submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, admin_note: null,
+    }
+    MOCK_ADMIN_APPS.unshift(newApp)
     saveToStorage()
-    return [201, newApp]
+    return [201, { application_id: String(newId), status: 'PENDING_REVIEW', default_probability: mockProb,
+      risk_level: newApp.risk_level, risk_score: newApp.risk_score,
+      suggested_amount: loanAmt, suggested_term: term }]
   }
 
   if (m === 'post' && /\/applications\/\d+\/personal-info$/.test(url) && !url.includes('/admin/')) {
