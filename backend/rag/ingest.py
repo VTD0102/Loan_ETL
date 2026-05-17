@@ -50,7 +50,6 @@ def get_embeddings():
         openai_api_base=OPENROUTER_BASE_URL,
     )
 
-
 def upsert_to_qdrant(chunks, embeddings):
     from langchain_qdrant import QdrantVectorStore
     from qdrant_client import QdrantClient
@@ -58,7 +57,7 @@ def upsert_to_qdrant(chunks, embeddings):
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     if client.collection_exists(collection_name=QDRANT_COLLECTION):
         client.delete_collection(collection_name=QDRANT_COLLECTION)
-
+    
     QdrantVectorStore.from_documents(
         documents=chunks,
         embedding=embeddings,
