@@ -3,33 +3,326 @@
 > Dự án môn Hệ Quản Trị CSDL - Nhóm KH086  
 > FastAPI Backend + React Frontend + Home Credit ETL + Machine Learning + RAG Chatbot
 
-## Cấu Trúc Dự Án
+---
 
-Repo hiện được chia thành 3 thư mục chính để dễ quản lý:
+## Kiến Trúc Tổng Quan Hệ Thống
+
+```mermaid
+graph TB
+    %% ====== NGƯỜI DÙNG ======
+    User(("👤 Người dùng"))
+
+    User -->|"Tương tác"| FE_CHAT
+    User -->|"Nộp đơn / Xem kết quả"| FE_APP
+    User -->|"Đăng nhập / Đăng ký"| FE_AUTH
+
+    %% ====== GIAO DIỆN - FRONTEND ======
+    subgraph FRONTEND["🖥️ Giao diện (Frontend — React 18 + Vite + Tailwind)"]
+        direction TB
+        FE_AUTH["🔐 Login / Register"]
+        FE_APP["📋 Dashboard / Apply / History"]
+        FE_CHAT["💬 Giao diện Chat AI"]
+        FE_ADMIN["🛡️ Admin Panel"]
+    end
+
+    FE_AUTH  -->|"POST /auth/*"| API
+    FE_APP   -->|"REST API"| API
+    FE_CHAT  -->|"POST /chat"| API
+    FE_ADMIN -->|"REST /admin/*"| API
+
+    %% ====== XỬ LÝ - BACKEND ======
+    subgraph BACKEND["⚙️ Xử lý (FastAPI Backend)"]
+        direction TB
+        API["🌐 API Endpoints<br/>/auth · /applications · /admin<br/>/chat · /credit-score"]
+
+        subgraph SERVICES["📦 Business Logic (services/)"]
+            AUTH_SVC["auth_service<br/>JWT + bcrypt"]
+            APP_SVC["application_service<br/>CRUD đơn vay"]
+            ADMIN_SVC["admin_service<br/>Duyệt / Từ chối"]
+            ML_SVC["ml_service<br/>Dự đoán rủi ro"]
+            CREDIT_SVC["credit_score_service<br/>Chấm điểm tín dụng"]
+            CHAT_SVC["chat_service<br/>Điều phối RAG"]
+        end
+
+        API --> AUTH_SVC
+        API --> APP_SVC
+        API --> ADMIN_SVC
+        API --> ML_SVC
+        API --> CREDIT_SVC
+        API --> CHAT_SVC
+    end
+
+    %% ====== HỆ THỐNG RAG ======
+    subgraph RAG["🤖 Hệ thống RAG (backend/rag/)"]
+        direction TB
+        CHAIN["chain.py<br/>LangChain Pipeline"]
+        CTX["context_builder.py<br/>Xây dựng context 4 blocks"]
+        RETRIEVER["retriever.py<br/>Vector Search (top-k)"]
+        MEMORY["memory.py<br/>Lịch sử hội thoại"]
+        PROMPTS["prompts.py<br/>System Prompt tiếng Việt"]
+        INGEST["ingest.py<br/>Nạp tài liệu → chunks"]
+    end
+
+    CHAT_SVC --> CTX
+    CHAT_SVC --> CHAIN
+    CHAT_SVC --> MEMORY
+    CHAIN --> PROMPTS
+    CHAIN --> RETRIEVER
+    INGEST -->|"Chunk + Embed"| QDRANT
+
+    %% ====== ML MODELS ======
+    subgraph ML_MODELS["🧠 ML Models (machinelearning/ml/)"]
+        RISK_MODEL["customer_risk_model.pkl<br/>LightGBM — Dự đoán vỡ nợ"]
+        SCORECARD["scorecard_model.pkl<br/>LR Scorecard — Chấm điểm"]
+    end
+
+    ML_SVC -->|"Load artifact"| RISK_MODEL
+    CREDIT_SVC -->|"Load artifact"| SCORECARD
+
+    %% ====== LƯU TRỮ ======
+    subgraph STORAGE["💾 Lưu trữ (Database)"]
+        POSTGRES[("🐘 PostgreSQL / Supabase<br/>users · loan_applications<br/>chat_sessions · chat_messages<br/>personal_info")]
+        QDRANT[("🔷 Qdrant Vector DB<br/>Collection: creditintel-kb<br/>Embedding tài liệu RAG")]
+        DUCKDB[("🦆 DuckDB Local<br/>Bronze → Silver → Gold<br/>ETL Home Credit data")]
+    end
+
+    AUTH_SVC --> POSTGRES
+    APP_SVC --> POSTGRES
+    ADMIN_SVC --> POSTGRES
+    MEMORY --> POSTGRES
+    RETRIEVER -->|"Similarity search"| QDRANT
+
+    %% ====== DỊCH VỤ BÊN NGOÀI ======
+    subgraph EXTERNAL["☁️ Dịch vụ bên ngoài"]
+        OPENROUTER["OpenRouter API<br/>LLM: gemini-2.5-flash<br/>Embedding: text-embedding-3-small"]
+    end
+
+    CHAIN -->|"Generate answer"| OPENROUTER
+    RETRIEVER -->|"Tạo embedding query"| OPENROUTER
+    INGEST -->|"Tạo embedding chunks"| OPENROUTER
+
+    %% ====== STYLING ======
+    classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
+    classDef frontend fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef backend fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef ml fill:#10b981,stroke:#059669,color:#fff
+    classDef storage fill:#64748b,stroke:#475569,color:#fff
+    classDef external fill:#ec4899,stroke:#db2777,color:#fff
+
+    class User user
+    class FE_AUTH,FE_APP,FE_CHAT,FE_ADMIN frontend
+    class API,AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CREDIT_SVC,CHAT_SVC backend
+    class CHAIN,CTX,RETRIEVER,MEMORY,PROMPTS,INGEST rag
+    class RISK_MODEL,SCORECARD ml
+    class POSTGRES,QDRANT,DUCKDB storage
+    class OPENROUTER external
+```
+
+> **Chú thích tổng quan:**
+> - **Frontend** giao tiếp với Backend qua REST API (Axios).
+> - **Backend** xử lý authentication (JWT), CRUD đơn vay, duyệt admin, dự đoán ML, và điều phối RAG chatbot.
+> - **RAG** kết hợp context từ hồ sơ khách hàng + tài liệu vector search để trả lời câu hỏi.
+> - **ML Models** được train offline từ ETL pipeline, load runtime trong backend services.
+> - **PostgreSQL** lưu dữ liệu nghiệp vụ; **Qdrant** lưu vector embeddings; **DuckDB** dùng cho ETL offline.
+
+---
+
+## Luồng RAG Chatbot Chi Tiết
+
+```mermaid
+graph LR
+    U(("👤 Khách hàng")) -->|"Gửi câu hỏi"| CHAT_UI["💬 Chat UI<br/>(React)"]
+    CHAT_UI -->|"POST /chat"| CHAT_EP["API /chat<br/>(FastAPI)"]
+    CHAT_EP --> CHAT_SVC2["chat_service.send()"]
+
+    CHAT_SVC2 -->|"1. Rate limit check"| RL{{"≤ 20 msg/phút?"}}
+    RL -->|"Vượt"| ERR429["❌ 429 Too Many"]
+    RL -->|"OK"| ENSURE["2. Ensure ML prediction"]
+
+    ENSURE -->|"Chưa có prediction"| ML2["ml_service.predict()"]
+    ML2 -->|"Cập nhật đơn vay"| DB2[("PostgreSQL")]
+    ENSURE -->|"Đã có"| CTX2
+
+    CTX2["3. context_builder<br/>Build 4 blocks JSON"] --> RAG_CHAIN
+
+    subgraph RAG_CHAIN["🤖 RAG Chain"]
+        direction TB
+        HIST["memory.py<br/>Load 10 turns gần nhất"]
+        RET2["retriever.py<br/>Vector search Qdrant<br/>top-k=4 documents"]
+        PROMPT2["prompts.py<br/>System prompt + context"]
+        LLM2["LangChain → OpenRouter<br/>gemini-2.5-flash"]
+    end
+
+    RAG_CHAIN -->|"4. Trả answer + sources"| SAVE["5. Lưu transcript"]
+    SAVE --> DB2
+    SAVE -->|"Response JSON"| CHAT_UI
+
+    classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
+    classDef ui fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef svc fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef db fill:#64748b,stroke:#475569,color:#fff
+    classDef err fill:#ef4444,stroke:#dc2626,color:#fff
+
+    class U user
+    class CHAT_UI ui
+    class CHAT_EP,CHAT_SVC2,ENSURE,CTX2,SAVE svc
+    class HIST,RET2,PROMPT2,LLM2 rag
+    class DB2 db
+    class ERR429 err
+```
+
+> **Chú thích luồng RAG:**
+> 1. **Rate Limit**: Giới hạn 20 câu hỏi/phút/user để tránh lạm dụng API.
+> 2. **Ensure Prediction**: Nếu đơn vay chưa có kết quả ML → tự động chạy `ml_service.predict()` và cập nhật DB.
+> 3. **Context Builder**: Xây dựng 4 blocks — Form context, ML context, Advisory context, Data quality.
+> 4. **RAG Chain**: Load lịch sử chat → vector search tài liệu → ghép prompt → gọi LLM sinh câu trả lời.
+> 5. **Lưu transcript**: Cả câu hỏi lẫn câu trả lời được lưu vào `chat_messages` để dùng cho lượt hỏi tiếp theo.
+
+---
+
+## Luồng ETL & Machine Learning
+
+```mermaid
+graph TB
+    subgraph DATA_SOURCE["📂 Nguồn dữ liệu"]
+        CSV["Home Credit CSV Files<br/>application_train.csv<br/>previous_application.csv<br/>bureau.csv"]
+    end
+
+    subgraph ETL_PIPELINE["🔄 ETL Pipeline (machinelearning/etl/)"]
+        direction TB
+        BRONZE["🥉 load_bronze.py<br/>Load CSV → DuckDB raw tables"]
+        SILVER["🥈 etl_silver.py<br/>Clean + transform<br/>SQL: transform_silver_homecredit.sql"]
+        GOLD["🥇 etl_gold.py<br/>Feature engineering<br/>SQL: transform_gold_homecredit.sql"]
+    end
+
+    CSV --> BRONZE
+    BRONZE -->|"Raw data"| SILVER
+    SILVER -->|"Clean data"| GOLD
+
+    subgraph ML_TRAINING["🧠 ML Training (machinelearning/ml/)"]
+        direction TB
+        VALIDATE["validate_data.py<br/>Kiểm tra chất lượng data"]
+        TRAIN_RISK["retrain_customer_model.py<br/>LightGBM risk prediction"]
+        TRAIN_SCORE["train_scorecard.py<br/>LR credit scorecard"]
+    end
+
+    GOLD -->|"gold.hc_features_v1"| VALIDATE
+    VALIDATE --> TRAIN_RISK
+    VALIDATE --> TRAIN_SCORE
+
+    subgraph ARTIFACTS["📦 Model Artifacts"]
+        PKL_RISK["customer_risk_model.pkl<br/>pipeline + thresholds<br/>+ feature_cols"]
+        PKL_SCORE["scorecard_model.pkl<br/>pipeline + thresholds<br/>+ dti_p75"]
+    end
+
+    TRAIN_RISK -->|"Xuất model"| PKL_RISK
+    TRAIN_SCORE -->|"Xuất model"| PKL_SCORE
+
+    subgraph RUNTIME["⚡ Runtime Inference (backend/services/)"]
+        ML_RT["ml_service.py<br/>predict() → risk level + suggestion"]
+        CS_RT["credit_score_service.py<br/>get_credit_score() → FICO score"]
+    end
+
+    PKL_RISK -->|"joblib.load()"| ML_RT
+    PKL_SCORE -->|"joblib.load()"| CS_RT
+
+    DUCKDB2[("🦆 DuckDB<br/>machinelearning/data/")]
+
+    BRONZE --> DUCKDB2
+    SILVER --> DUCKDB2
+    GOLD --> DUCKDB2
+
+    classDef source fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef etl fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef ml fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef artifact fill:#10b981,stroke:#059669,color:#fff
+    classDef runtime fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef db fill:#64748b,stroke:#475569,color:#fff
+
+    class CSV source
+    class BRONZE,SILVER,GOLD etl
+    class VALIDATE,TRAIN_RISK,TRAIN_SCORE ml
+    class PKL_RISK,PKL_SCORE artifact
+    class ML_RT,CS_RT runtime
+    class DUCKDB2 db
+```
+
+> **Chú thích ETL & ML:**
+> - **Bronze**: Load raw CSV vào DuckDB, giữ nguyên schema gốc.
+> - **Silver**: Làm sạch dữ liệu (xử lý null, chuẩn hóa kiểu dữ liệu, loại bỏ outliers) theo SQL transforms.
+> - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ nhiều bảng) → bảng `gold.hc_features_v1`.
+> - **Training**: 2 model được train: LightGBM cho dự đoán rủi ro vỡ nợ, Logistic Regression cho credit scorecard (FICO-style 300–850).
+> - **Runtime**: Backend load model artifacts bằng `joblib` và chạy inference real-time khi khách hàng nộp đơn.
+
+---
+
+## Cấu Trúc Dự Án
 
 ```text
 Loan_ETL/
-├── backend/              # FastAPI API, auth, services, DB models, RAG runtime
-├── frontend/             # React 18 + Vite + Tailwind customer/admin UI
-├── machinelearning/      # ETL, SQL transforms, data, notebooks, ML training
-├── docs/                 # Tài liệu dự án
-├── AGENTS.md             # Quy ước làm việc trong repo
-├── requirements.txt      # Aggregate: backend + machinelearning requirements
+├── backend/                  # FastAPI API server
+│   ├── main.py               # Entry point — mount routers, CORS
+│   ├── api/routers/          # Route handlers: auth, applications, admin, chat, credit_score
+│   ├── services/             # Business logic layer
+│   │   ├── auth_service.py           # JWT authentication + bcrypt
+│   │   ├── application_service.py    # CRUD đơn vay, submit workflow
+│   │   ├── admin_service.py          # Admin approve/reject đơn
+│   │   ├── ml_service.py             # Load LightGBM model, predict risk
+│   │   ├── credit_score_service.py   # Load scorecard, compute FICO score
+│   │   ├── chat_service.py           # Điều phối RAG chatbot
+│   │   ├── model_feature_builder.py  # Map form data → ML features
+│   │   ├── loan_suggestion_service.py # Binary search optimal loan
+│   │   └── document_service.py       # Upload/manage documents
+│   ├── rag/                  # RAG chatbot engine
+│   │   ├── chain.py          # LangChain chain: prompt → LLM → parse
+│   │   ├── retriever.py      # Qdrant vector similarity search
+│   │   ├── context_builder.py # Build 4-block context from DB
+│   │   ├── memory.py         # Load chat history from PostgreSQL
+│   │   ├── prompts.py        # System prompt template (Vietnamese)
+│   │   ├── ingest.py         # One-shot: load docs → chunk → embed → Qdrant
+│   │   ├── config.py         # RAG settings (model, collection, top-k)
+│   │   └── knowledge/        # Markdown knowledge base (faq.md, policy.md)
+│   ├── models/               # SQLAlchemy ORM models
+│   ├── schemas/              # Pydantic request/response schemas
+│   ├── core/                 # Config (env), security (JWT), scoring utils
+│   ├── db/                   # DB session, init SQL
+│   └── tests_local/          # Local integration tests
+│
+├── frontend/                 # React 18 + Vite + TailwindCSS
+│   └── src/
+│       ├── App.jsx           # Router: public, customer, admin routes
+│       ├── pages/
+│       │   ├── customer/     # Landing, Login, Register, Dashboard,
+│       │   │                 # Apply, Chat, History, ApplicationDetail
+│       │   └── admin/        # Dashboard, PendingList, ApplicationList,
+│       │                     # ApplicationDetail, PersonalInfoView
+│       ├── components/       # Reusable UI: Navbar, AdminLayout, ProtectedRoute
+│       ├── services/         # Axios API clients: api, auth, chat, applications, admin
+│       ├── store/            # Zustand state: authStore
+│       ├── hooks/            # Custom React hooks
+│       └── mocks/            # Mock data for offline dev
+│
+├── machinelearning/          # ETL + ML training (offline)
+│   ├── etl/                  # ETL scripts: load_bronze, etl_silver, etl_gold, pipeline
+│   ├── database/             # SQL transforms: silver + gold
+│   ├── ml/                   # Training: retrain_customer_model, train_scorecard
+│   │   └── models/           # Exported .pkl artifacts
+│   ├── data/                 # DuckDB + raw CSV files (Home Credit)
+│   ├── config/               # etl_db.env
+│   ├── notebooks/            # EDA / training notebooks
+│   └── utils/                # Shared DB connection helper
+│
+├── docs/                     # Project documentation
+│   ├── overall/              # Architecture notes, admin guide
+│   ├── ml/                   # ML documentation
+│   └── rag/                  # RAG design docs, benchmark results
+│
+├── qdrant_storage/           # Docker-mounted Qdrant persistent data
+├── AGENTS.md                 # Repository conventions
+├── requirements.txt          # Aggregate Python dependencies
 └── README.md
-```
-
-Chi tiết `machinelearning/`:
-
-```text
-machinelearning/
-├── requirements.txt              # Dependencies cho ETL + training
-├── config/etl_db.env             # Cấu hình DuckDB/Postgres cho ETL
-├── data/                         # DuckDB local + Home Credit CSV files
-├── database/                     # SQL transforms Bronze -> Silver -> Gold
-├── etl/                          # load_bronze, etl_silver, etl_gold, pipeline
-├── ml/                           # train LightGBM risk model + LR scorecard
-├── notebooks/                    # EDA/training notebooks
-└── utils/                        # Shared DB connection utility
 ```
 
 ## Khởi Chạy Nhanh
@@ -172,7 +465,8 @@ python -m machinelearning.ml.check_customer_model_contract
 | Database | PostgreSQL/Supabase, DuckDB local cho ETL |
 | ETL | Python, pandas, SQLAlchemy, DuckDB |
 | ML | LightGBM, scikit-learn, pandas, joblib |
-| RAG Chatbot | LangChain, OpenRouter/OpenAI-compatible LLM, Qdrant |
+| RAG Chatbot | LangChain, OpenRouter (Gemini 2.5 Flash), Qdrant Vector DB |
+| DevOps | Docker (Qdrant), Vite dev server, Uvicorn |
 
 ## Tài Liệu
 
