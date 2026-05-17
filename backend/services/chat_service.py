@@ -41,7 +41,10 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
                 chat_history.append(AIMessage(content=row.content))
 
         context = build_user_context(db, user.id)
-        response_payload = invoke(payload_message, context, chat_history)
+        response_payload = invoke(
+            payload_message, context, chat_history,
+            db=db, user_id=user.id,
+        )
         answer = response_payload.get("answer", "Xin lỗi, hiện tại tôi không thể kết nối tới lõi suy luận kiến thức.")
         sources = _extract_sources(response_payload.get("source_documents", []))
     except ImportError as ie:

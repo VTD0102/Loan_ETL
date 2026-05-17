@@ -79,7 +79,7 @@ db.close()
 print("\n[1.5] Tạo đơn vay giả lập để tạo ML Context...")
 mock_app_payload = {
     "loan_amount": 10000,
-    "term": 36,
+    "term": 60,
     "monthly_income": 5000,
     "dti": 41.5,
     "credit_score": 620,

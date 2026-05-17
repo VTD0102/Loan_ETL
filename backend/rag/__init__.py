@@ -11,6 +11,15 @@ _EXPORTS = {
     "load_documents": ("rag.ingest", "load_documents"),
     "split_documents": ("rag.ingest", "split_documents"),
     "upsert_to_qdrant": ("rag.ingest", "upsert_to_qdrant"),
+    # Routing
+    "classify_intent": ("rag.router", "classify_intent"),
+    "needs_retrieval": ("rag.router", "needs_retrieval"),
+    # Guardrails
+    "check_input": ("rag.guardrails", "check_input"),
+    "check_output": ("rag.guardrails", "check_output"),
+    # Personalization
+    "build_personalization": ("rag.personalizer", "build_personalization"),
+    "get_intent_instructions": ("rag.personalizer", "get_intent_instructions"),
 }
 
 
