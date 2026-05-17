@@ -6,9 +6,13 @@ Chạy từ thư mục backend/:
 """
 import json
 import time
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND_DIR))
+
+ROOT = BACKEND_DIR.parent
 DATASET_PATH = ROOT / "docs" / "rag_benchmark_dataset.json"
 RESULT_PATH  = ROOT / "docs" / "rag_benchmark_results.json"
 
@@ -58,6 +62,50 @@ TOKEN = resp.json()["access_token"]
 HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 print(f"✅ Đăng nhập thành công: {EMAIL}")
 
+from db.session import SessionLocal
+from models.user import User
+from models.application import LoanApplication
+
+# ── Xóa đơn vay cũ của test user ─────────────────────────────────────────────
+db = SessionLocal()
+test_user = db.query(User).filter(User.email == EMAIL).first()
+if test_user:
+    db.query(LoanApplication).filter(LoanApplication.user_id == test_user.id).delete()
+    db.commit()
+db.close()
+
+# ── 1.5 Auto Submit Application ────────────────────────────────────────────────
+print("\n[1.5] Tạo đơn vay giả lập để tạo ML Context...")
+mock_app_payload = {
+    "loan_amount": 10000,
+    "term": 36,
+    "monthly_income": 5000,
+    "dti": 41.5,
+    "credit_score": 620,
+    "employment_status": "Employed",
+    "occupation_type": "Laborers",
+    "years_employed": 2.5,
+    "is_homeowner": True,
+    "listing_category": "personal loan",
+    "num_bureau_records": 1,
+    "num_active_credit": 2,
+    "total_overdue_amount": 0,
+    "max_credit_overdue_days": 0,
+    "has_bad_debt": False,
+    "income_verifiable_flag": True,
+    "age_years": 32,
+    "gender_male_flag": True,
+    "education_ordinal": 3,
+    "cnt_children": 1,
+    "cnt_fam_members": 3,
+    "is_married_flag": True
+}
+submit_resp = client.post("/applications/confirm", json=mock_app_payload, headers=HEADERS)
+if submit_resp.status_code in (200, 201):
+    print("✅ Đã submit đơn vay thành công. ML Prediction đã sẵn sàng trong DB.")
+else:
+    print(f"⚠️ Warning: Submit đơn vay thất bại: {submit_resp.status_code} - {submit_resp.text}")
+
 # ── 2. Tải dataset ────────────────────────────────────────────────────────────
 with open(DATASET_PATH, encoding="utf-8") as f:
     dataset = json.load(f)
@@ -65,21 +113,15 @@ print(f"✅ Đã tải {len(dataset)} câu hỏi từ dataset")
 
 # ── 3. Chạy từng câu hỏi & Auto Evaluate ─────────────────────────────────────
 results = []
-session_id = None
-
 for i, item in enumerate(dataset, 1):
     print(f"\n[{i}/{len(dataset)}] [{item['id']}] {item['question'][:70]}...")
-
     payload = {"message": item["question"]}
-    if session_id:
-        payload["session_id"] = str(session_id)
 
     try:
         resp = client.post("/chat", json=payload, headers=HEADERS)
         data = resp.json()
         answer = data.get("response", "")
         sources = data.get("sources", [])
-        session_id = data.get("session_id")
         http_status = resp.status_code
         source_names = [s.get("source", "") for s in sources]
         print(f"   → HTTP {http_status} | Sources: {source_names}")

@@ -346,12 +346,12 @@ Overall Score       = 0.35×Faithfulness + 0.25×Relevance + 0.20×SourceRecall 
 
 ---
 
-✅ Đã lưu 31 kết quả → /Users/cuongvuthanh/Documents/HQTCSDL/Loan_ETL/docs/rag_benchmark_results.json
+Đã lưu 31 kết quả → /Users/cuongvuthanh/Documents/HQTCSDL/Loan_ETL/docs/rag_benchmark_results.json
 ============================================================
 📊 BÁO CÁO BENCHMARK TỰ ĐỘNG (LLM-AS-A-JUDGE)
-  - Faithfulness Score : 0.91
-  - Relevance Score    : 0.90
+  - Faithfulness Score : 0.95
+  - Relevance Score    : 0.97
   - Source Recall      : 0.58
   - Guardrail Rate     : 1.00
-  => OVERALL SCORE     : 0.86
+  => OVERALL SCORE     : 0.89
 ============================================================
