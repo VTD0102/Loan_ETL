@@ -7,7 +7,7 @@ from schemas.application import ApplicationBase
 from services.model_feature_builder import build_model_input, fetch_previous_applications
 from services.loan_suggestion_service import compute_suggestion
 
-MODEL_PATH = Path(__file__).parents[2] / "machinelearning" / "ml" / "models" / "customer_risk_model.pkl"
+MODEL_PATH = Path(__file__).parents[2] / "machinelearning" / "ml" / "models" / "customer_risk_model_2.pkl"
 
 _artifact = None
 

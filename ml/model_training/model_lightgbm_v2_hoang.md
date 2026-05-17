@@ -1,23 +1,3 @@
-"""
-Retrain customer risk model (LightGBM) — v3.
-
-Changes vs v2:
-  - Removed ext_source_1, ext_source_3 (third-party scores, unavailable at inference)
-  - Added years_employed (from DAYS_EMPLOYED), occupation_type (18 HC categories)
-  - All 22 user-input features are now required — no median imputation at inference
-  - LightGBM handles NaN natively in training (Gold rows with sparse demographics)
-
-Feature count: 28
-  User-input (22): 8 core + 6 bureau + 6 demographics + years_employed + occupation_type
-  Auto-computed (4): log_monthly_income, loan_amount_to_income, rating_ordinal, high_dti_flag
-  DB history (2): num_previous_loans, previous_default_rate
-
-Source : gold.hc_features_v1 (DuckDB local, after running etl.pipeline)
-Output : machinelearning/ml/models/customer_risk_model.pkl
-
-Run from project root:
-    python -m machinelearning.ml.retrain_customer_model
-"""
 import math
 import sys
 from datetime import datetime, timezone
@@ -40,11 +20,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = BASE_DIR.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-from machinelearning.utils.db_connection import get_engine
-from machinelearning.ml.validate_data import validate
+sys.path.insert(0, str(BASE_DIR))
 
+from utils.db_connection import get_engine  # noqa: E402
 
 MODEL_PATH = BASE_DIR / "ml" / "models" / "customer_risk_model.pkl"
 MODEL_VERSION = "customer_lgbm_v5.3_spw_tuned"
