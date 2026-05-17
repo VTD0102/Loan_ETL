@@ -62,6 +62,34 @@ _GREETING_PATTERNS = [
         r"^(tạm\s+biệt|bye|goodbye)[.!?\s]*$",
         r"^(bạn\s+)?khoẻ\s+không[?.\s]*$",
         r"^(bạn\s+)?là\s+ai[?.\s]*$",
+        r"^(giúp\s+với|help|help\s+me)[.!?\s]*$",
+    ]
+]
+
+_PERSONAL_RISK_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"xác\s+suất\s+vỡ\s+nợ\s+của\s+tôi",
+        r"hệ\s+thống\s+đề\s+xuất\s+tôi\s+vay",
+        r"điểm\s+mạnh\s+và\s+điểm\s+yếu\s+trong\s+hồ\s+sơ",
+        r"mức\s+vay\s+đề\s+xuất\s+.*(thấp\s+hơn|cao\s+hơn).*số\s+tiền\s+tôi\s+xin\s+vay",
+        r"với\s+mức\s+thu\s+nhập\s+và\s+nợ\s+hiện\s+tại",
+    ]
+]
+
+_POLICY_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"auto_rejected",
+        r"bị\s+từ\s+chối",
+        r"thu\s+nhập\s+.*cao\s+.*vẫn\s+bị\s+từ\s+chối",
+        r"awaiting_info",
+        r"dti\s+.*an\s+toàn",
+        r"low.*medium.*high\s+risk",
+        r"hạn\s+mức\s+vay\s+tối\s+đa",
+        r"admin\s+xét\s+duyệt",
+        r"quyết\s+định\s+của\s+ai",
+        r"thông\s+tin\s+cá\s+nhân\s+.*bảo\s+mật",
     ]
 ]
 
@@ -72,7 +100,7 @@ _OFF_TOPIC_PATTERNS = [
         r"(nấu\s+ăn|recipe|công\s+thức)",
         r"(phim\s+ảnh|movie|film)",
         r"(viết\s+code|programming|python|javascript)",
-        r"(bầu\s+trời|sao|vũ\s+trụ|universe|galaxy)",
+        r"(bầu\s+trời|\bsao\b|vũ\s+trụ|universe|galaxy)",
         r"(chính\s+trị|politics|bầu\s+cử|election)",
     ]
 ]
@@ -122,6 +150,15 @@ def classify_intent(question: str, chat_history: list[Any] | None = None) -> str
     for pattern in _GREETING_PATTERNS:
         if pattern.search(stripped):
             return "greeting"
+
+    # ── Fast-path: domain intents that should be deterministic ────────────
+    for pattern in _PERSONAL_RISK_PATTERNS:
+        if pattern.search(stripped):
+            return "risk_explanation"
+
+    for pattern in _POLICY_PATTERNS:
+        if pattern.search(stripped):
+            return "policy_question"
 
     # ── Fast-path: off-topic (only for short messages) ────────────────────
     if len(stripped) < 100:

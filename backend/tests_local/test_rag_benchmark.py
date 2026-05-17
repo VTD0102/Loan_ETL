@@ -7,6 +7,7 @@ Chạy từ thư mục backend/:
 import json
 import time
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -75,37 +76,57 @@ if test_user:
     db.commit()
 db.close()
 
-# ── 1.5 Auto Submit Application ────────────────────────────────────────────────
-print("\n[1.5] Tạo đơn vay giả lập để tạo ML Context...")
-mock_app_payload = {
-    "loan_amount": 10000,
-    "term": 60,
-    "monthly_income": 5000,
-    "dti": 41.5,
-    "credit_score": 620,
-    "employment_status": "Employed",
-    "occupation_type": "Laborers",
-    "years_employed": 2.5,
-    "is_homeowner": True,
-    "listing_category": "personal loan",
-    "num_bureau_records": 1,
-    "num_active_credit": 2,
-    "total_overdue_amount": 0,
-    "max_credit_overdue_days": 0,
-    "has_bad_debt": False,
-    "income_verifiable_flag": True,
-    "age_years": 32,
-    "gender_male_flag": True,
-    "education_ordinal": 3,
-    "cnt_children": 1,
-    "cnt_fam_members": 3,
-    "is_married_flag": True
-}
-submit_resp = client.post("/applications/confirm", json=mock_app_payload, headers=HEADERS)
-if submit_resp.status_code in (200, 201):
-    print("✅ Đã submit đơn vay thành công. ML Prediction đã sẵn sàng trong DB.")
-else:
-    print(f"⚠️ Warning: Submit đơn vay thất bại: {submit_resp.status_code} - {submit_resp.text}")
+# ── 1.5 Seed Application Context ─────────────────────────────────────────────
+print("\n[1.5] Tạo hồ sơ vay giả lập ổn định để benchmark personalized RAG...")
+db = SessionLocal()
+test_user = db.query(User).filter(User.email == EMAIL).first()
+if not test_user:
+    raise RuntimeError(f"Missing benchmark user: {EMAIL}")
+
+seed_app = LoanApplication(
+    user_id=test_user.id,
+    status="PENDING_REVIEW",
+    monthly_income=Decimal("5000"),
+    loan_amount=Decimal("10000"),
+    term=60,
+    employment_status="Employed",
+    dti=Decimal("0.415"),
+    is_homeowner=True,
+    listing_category="personal loan",
+    credit_score=620,
+    occupation_type="Laborers",
+    years_employed=Decimal("2.5"),
+    num_bureau_records=1,
+    num_active_credit=2,
+    total_overdue_amount=Decimal("0"),
+    max_credit_overdue_days=0,
+    has_bad_debt=False,
+    income_verifiable_flag=True,
+    age_years=32,
+    gender_male_flag=True,
+    education_ordinal=3,
+    cnt_children=1,
+    cnt_fam_members=3,
+    is_married_flag=True,
+    default_probability=Decimal("0.3028"),
+    risk_level="Medium",
+    risk_score=70,
+    recommended_amount=Decimal("8000"),
+    recommended_term=60,
+    model_version="benchmark_synthetic_v1",
+    feature_snapshot={
+        "monthly_income": 5000,
+        "loan_amount": 10000,
+        "term": 60,
+        "dti": 0.415,
+        "credit_score": 620,
+    },
+    imputed_features=[],
+)
+db.add(seed_app)
+db.commit()
+db.close()
+print("✅ Đã tạo hồ sơ benchmark: loan=$10,000, recommended=$8,000, default_probability=30.28%.")
 
 # ── 2. Tải dataset ────────────────────────────────────────────────────────────
 with open(DATASET_PATH, encoding="utf-8") as f:

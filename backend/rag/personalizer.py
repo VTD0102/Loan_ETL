@@ -103,7 +103,9 @@ _INTENT_INSTRUCTIONS: dict[str, str] = {
     "loan_inquiry": (
         "Khách hàng đang hỏi về khoản vay. Tập trung vào: số tiền vay, kỳ hạn, "
         "trạng thái đơn, so sánh với hạn mức đề xuất. Trích dẫn dữ liệu cụ thể "
-        "từ hồ sơ nếu có."
+        "từ hồ sơ nếu có. Chỉ nêu trạng thái đơn hiện tại khi khách hàng hỏi trực tiếp "
+        "về trạng thái hiện tại; nếu họ hỏi một tình huống/chính sách, hãy trả lời đúng "
+        "tình huống đó trước."
     ),
     "risk_explanation": (
         "Khách hàng muốn hiểu kết quả đánh giá rủi ro. Giải thích: xác suất vỡ nợ, "
@@ -114,7 +116,11 @@ _INTENT_INSTRUCTIONS: dict[str, str] = {
     "policy_question": (
         "Khách hàng hỏi về chính sách. Trả lời dựa trên tài liệu chính sách, "
         "trích dẫn rõ nguồn (ví dụ: 'Theo policy.md'). Nếu câu hỏi nằm ngoài "
-        "phạm vi tài liệu, nói rõ và gợi ý liên hệ hỗ trợ."
+        "phạm vi tài liệu, nói rõ và gợi ý liên hệ hỗ trợ. Với các câu hỏi về "
+        "AUTO_REJECTED, bị từ chối, AWAITING_INFO, DTI, hạn mức LOW/MEDIUM/HIGH, "
+        "hãy trả lời theo quy tắc/chính sách chung. Không được bác bỏ giả định của "
+        "người dùng bằng trạng thái hồ sơ hiện tại, trừ khi họ hỏi rõ 'trạng thái "
+        "đơn hiện tại của tôi là gì'."
     ),
     "personal_advice": (
         "Khách hàng muốn tư vấn cải thiện hồ sơ. Đưa ra khuyến nghị CỤ THỂ "
@@ -124,7 +130,9 @@ _INTENT_INSTRUCTIONS: dict[str, str] = {
     "greeting": (
         "Đây là lời chào / cảm ơn. Phản hồi thân thiện, ngắn gọn. "
         "Giới thiệu ngắn bản thân là trợ lý tín dụng CreditIntel. "
-        "Gợi ý những gì bạn có thể giúp."
+        "Gợi ý những gì bạn có thể giúp. Nếu tin nhắn chỉ là 'giúp với' hoặc quá "
+        "mơ hồ, hãy hỏi người dùng muốn hỗ trợ vấn đề gì về khoản vay/hồ sơ; không "
+        "tự phân tích trạng thái đơn hoặc chỉ số tài chính."
     ),
     "off_topic": (
         "Câu hỏi KHÔNG liên quan đến tài chính/tín dụng. "

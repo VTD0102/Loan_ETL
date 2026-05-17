@@ -40,6 +40,38 @@ def test_off_topic_fastpath():
         _assert(intent == "off_topic", f"'{msg}' → off_topic (got {intent})")
 
 
+def test_policy_fastpath():
+    """Common FAQ/policy questions should not depend on the LLM classifier."""
+    cases = [
+        "Tại sao đơn vay của tôi bị AUTO_REJECTED?",
+        "Đơn tôi bị AUTO_REJECTED, tôi có thể yêu cầu Admin xem xét lại không?",
+        "Tại sao thu nhập của tôi khá cao nhưng vẫn bị từ chối?",
+        "Sau khi đơn chuyển sang AWAITING_INFO tôi cần làm gì?",
+    ]
+    for msg in cases:
+        intent = classify_intent(msg)
+        _assert(intent == "policy_question", f"'{msg}' → policy_question (got {intent})")
+
+
+def test_personalized_fastpath():
+    """Questions about concrete user ML fields should be routed to personal context."""
+    cases = [
+        "Xác suất vỡ nợ của tôi là bao nhiêu?",
+        "Hệ thống đề xuất tôi vay bao nhiêu tiền với kỳ hạn bao lâu?",
+        "Điểm mạnh và điểm yếu trong hồ sơ tài chính của tôi là gì?",
+        "Tại sao mức vay đề xuất của tôi lại thấp hơn số tiền tôi xin vay?",
+    ]
+    for msg in cases:
+        intent = classify_intent(msg)
+        _assert(intent == "risk_explanation", f"'{msg}' → risk_explanation (got {intent})")
+
+
+def test_clarification_fastpath():
+    """Vague help messages should ask for clarification, not analyze the current loan."""
+    intent = classify_intent("giúp với")
+    _assert(intent == "greeting", f"'giúp với' → greeting (got {intent})")
+
+
 def test_valid_intents():
     """All defined intents should be in VALID_INTENTS."""
     expected = {"loan_inquiry", "risk_explanation", "policy_question",
@@ -61,6 +93,9 @@ if __name__ == "__main__":
     tests = [
         test_greeting_fastpath,
         test_off_topic_fastpath,
+        test_policy_fastpath,
+        test_personalized_fastpath,
+        test_clarification_fastpath,
         test_valid_intents,
         test_needs_retrieval,
     ]
