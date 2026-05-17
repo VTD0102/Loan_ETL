@@ -71,8 +71,10 @@ def get_engine() -> Engine:
 
 
 def reset_engine():
-    """Force re-create engine (e.g. after switching config)."""
+    """Close pooled connections and force re-create engine."""
     global _engine
+    if _engine is not None:
+        _engine.dispose()
     _engine = None
 
 

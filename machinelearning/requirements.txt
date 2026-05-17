@@ -10,5 +10,9 @@ scikit-learn>=1.4.0
 scipy>=1.11.0
 sqlalchemy>=2.0.0
 
+# Notebook analysis and visualizations
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
 # ML contract tests
 pytest>=8.0.0
