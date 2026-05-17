@@ -19,7 +19,7 @@ def test_notebook_exists_and_is_valid_json():
 
     assert notebook["nbformat"] == 4
     assert notebook["metadata"]["kernelspec"]["language"] == "python"
-    assert len(notebook["cells"]) == 3
+    assert len(notebook["cells"]) == 7
 
 
 def test_notebook_uses_existing_benchmark_artifacts():
@@ -31,6 +31,8 @@ def test_notebook_uses_existing_benchmark_artifacts():
 
     assert "docs/rag_benchmark_dataset.json" in source
     assert "docs/rag_benchmark_results.json" in source
+    assert "RUN_BENCHMARK" in source
+    assert "tests_local/test_rag_benchmark.py" in source
     assert "source_ok" in source
     assert "faithfulness" in source
     assert "guardrail_pass" in source

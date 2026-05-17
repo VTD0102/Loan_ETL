@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from core.config import settings
+from tests_local.rag_benchmark_metrics import compute_summary, score_source_match
 
 client = TestClient(app)
 
@@ -134,10 +135,7 @@ for i, item in enumerate(dataset, 1):
 
     # Auto Evaluate
     expected_source = item["expected_source"]
-    if expected_source in ["user_context", "none", ""]:
-        source_ok = 1 if len(source_names) == 0 else 0
-    else:
-        source_ok = 1 if any(expected_source in s for s in source_names) else 0
+    source_ok = score_source_match(expected_source, source_names)
 
     eval_scores = evaluate_with_llm(item["group"], item["question"], item["ground_truth"], answer)
     faithfulness = eval_scores.get("faithfulness", 0.0)
@@ -171,17 +169,12 @@ for i, item in enumerate(dataset, 1):
 with open(RESULT_PATH, "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
-faithfulness_scores = [r["faithfulness"] for r in results if r["faithfulness"] is not None]
-relevance_scores = [r["relevance"] for r in results if r["relevance"] is not None]
-source_ok_scores = [r["source_ok"] for r in results if r["source_ok"] is not None]
-guardrail_scores = [r["guardrail_pass"] for r in results if r["group"] == "guardrail" and r["guardrail_pass"] is not None]
-
-avg_faithfulness = sum(faithfulness_scores) / len(faithfulness_scores) if faithfulness_scores else 0
-avg_relevance = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0
-source_recall = sum(source_ok_scores) / len(source_ok_scores) if source_ok_scores else 0
-guardrail_rate = sum(guardrail_scores) / len(guardrail_scores) if guardrail_scores else 0
-
-overall_score = 0.35 * avg_faithfulness + 0.25 * avg_relevance + 0.20 * source_recall + 0.20 * guardrail_rate
+summary = compute_summary(results)
+avg_faithfulness = summary["avg_faithfulness"]
+avg_relevance = summary["avg_relevance"]
+source_recall = summary["source_recall"]
+guardrail_rate = summary["guardrail_rate"]
+overall_score = summary["overall_score"]
 
 print(f"\n{'='*60}")
 print(f"✅ Đã lưu {len(results)} kết quả → {RESULT_PATH}")

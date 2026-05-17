@@ -258,7 +258,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -277,7 +277,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -296,7 +296,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -315,7 +315,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -334,7 +334,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -353,7 +353,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -372,7 +372,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -485,7 +485,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -504,7 +504,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -523,7 +523,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -541,7 +541,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": 1,
     "notes": "Auto-evaluated via LLM"
   },
@@ -559,7 +559,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   },
@@ -577,7 +577,7 @@
     "http_status": 201,
     "faithfulness": 1.0,
     "relevance": 1.0,
-    "source_ok": 0,
+    "source_ok": null,
     "guardrail_pass": null,
     "notes": "Auto-evaluated via LLM"
   }
