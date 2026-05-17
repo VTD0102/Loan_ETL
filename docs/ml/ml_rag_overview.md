@@ -3,6 +3,8 @@
 > **Ngày cập nhật:** 2026-05-17  
 > **Phạm vi:** `machinelearning/ml/`, `backend/services/`, `backend/rag/`
 
+> **Lưu ý 18/05/2026:** Một số phần trong tài liệu này vẫn mô tả contract v3 có `credit_score`. Contract ML hiện tại là Stability v2/v4 và không dùng `credit_score` làm model input. Xem `docs/migration_v2_summary.md` để lấy thông tin migration mới nhất.
+
 ---
 
 ## 1. Tổng Quan Hệ Thống ML

@@ -1,8 +1,8 @@
 """
-LR Scorecard — Home Credit dataset.
+LR Scorecard — Home Credit v2 (Credit Risk Model Stability).
 
 Mục đích: Convert P(default) → FICO-style score 300–850, có breakdown từng feature.
-Source : gold.hc_features_v1 (12 engineered features)
+Source : gold.hc_features_v2 (NO credit_score_midpoint, NO rating_ordinal)
 Output : machinelearning/ml/models/scorecard_model.pkl
 
 FICO PDO (Points to Double the Odds):
@@ -50,49 +50,71 @@ _BASE_LOGIT = -math.log(BASE_ODDS_GOOD)
 LOW_THRESHOLD  = 0.20
 HIGH_THRESHOLD = 0.40
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# FEATURE DEFINITIONS — v2: No credit_score_midpoint, No rating_ordinal
+# ═══════════════════════════════════════════════════════════════════════════════
 NUMERIC_FEATURES = [
-    "credit_score_midpoint",
+    # Income & loan
     "debt_to_income_ratio",
     "loan_amount_to_income",
     "log_monthly_income",
-    "rating_ordinal",
+    "payment_to_income",
+    "high_dti_flag",
+    # Debt burden
+    "current_debt_ratio",
+    "total_debt_to_income",
+    # DPD features
+    "max_dpd_24m",
+    "avg_dpd_recent",
+    "num_installs_dpd10",
+    # Bureau aggregates
+    "num_bureau_records",
+    "num_active_credit",
+    "total_overdue_amount",
+    "max_credit_overdue_days",
+    "has_bad_debt",
+    "total_prolongations",
+    # Previous application
+    "num_previous_loans",
+    "previous_default_rate",
+    # CB queries
+    "cb_queries_30d",
+    "num_cb_queries",
+    # Demographics
     "is_homeowner_flag",
     "income_verifiable_flag",
-    "high_dti_flag",
-    "payment_to_income",
-    # Real prev-app aggregates
-    "num_previous_loans", "previous_default_rate",
-    # Bureau aggregates
-    "num_bureau_records", "num_active_credit",
-    "total_overdue_amount", "max_credit_overdue_days", "has_bad_debt",
-    # v3: years_employed thay thế ext_source_1/3
     "years_employed",
-    # Demographics
-    "age_years", "gender_male_flag", "education_ordinal",
-    "cnt_children", "cnt_fam_members", "is_married_flag",
+    "age_years",
+    "education_ordinal",
+    "is_married_flag",
+    # Missing indicators
+    "income_missing_flag",
+    "dti_missing_flag",
 ]
 CATEGORICAL_FEATURES = ["employment_status_grouped", "occupation_type"]
 ALL_FEATURES         = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 QUERY = """
 SELECT
-    credit_score_midpoint, debt_to_income_ratio, loan_amount_to_income,
-    log_monthly_income, rating_ordinal, is_homeowner_flag,
-    income_verifiable_flag, high_dti_flag, payment_to_income,
+    -- Numeric features
+    debt_to_income_ratio, loan_amount_to_income, log_monthly_income,
+    payment_to_income, high_dti_flag,
+    current_debt_ratio, total_debt_to_income,
+    max_dpd_24m, avg_dpd_recent, num_installs_dpd10,
+    num_bureau_records, num_active_credit, total_overdue_amount,
+    max_credit_overdue_days, has_bad_debt, total_prolongations,
     num_previous_loans, previous_default_rate,
-    num_bureau_records, num_active_credit,
-    total_overdue_amount, max_credit_overdue_days, has_bad_debt,
-    years_employed,
-    age_years, gender_male_flag, education_ordinal,
-    cnt_children, cnt_fam_members, is_married_flag,
-    employment_status_grouped,
-    occupation_type,
+    cb_queries_30d, num_cb_queries,
+    is_homeowner_flag, income_verifiable_flag,
+    years_employed, age_years, education_ordinal, is_married_flag,
+    income_missing_flag, dti_missing_flag,
+    -- Categorical features
+    employment_status_grouped, occupation_type,
+    -- Target
     is_default
-FROM gold.hc_features_v1
-WHERE credit_score_midpoint  IS NOT NULL
-  AND debt_to_income_ratio   IS NOT NULL
-  AND log_monthly_income     IS NOT NULL
-  AND loan_amount_to_income  IS NOT NULL
+FROM gold.hc_features_v2
+WHERE loan_amount_to_income  IS NOT NULL
+  AND age_years              IS NOT NULL
 """
 
 
@@ -107,20 +129,24 @@ def prob_to_score(p) -> np.ndarray:
 def train():
     validate()
 
-    print("\n" + "=" * 55)
-    print("  LR SCORECARD — TRAIN")
-    print("=" * 55)
+    print("\n" + "=" * 60)
+    print("  LR SCORECARD v2 — TRAIN (No credit_score_midpoint)")
+    print("=" * 60)
     print(f"  FICO params: base={BASE_SCORE}, odds_good={BASE_ODDS_GOOD}, PDO={PDO}")
+    print(f"  Features: {len(ALL_FEATURES)} ({len(NUMERIC_FEATURES)} numeric + "
+          f"{len(CATEGORICAL_FEATURES)} categorical)")
 
     engine = get_engine()
 
-    print("\n[1/6] Loading features from gold.hc_features_v1...")
+    print("\n[1/6] Loading features from gold.hc_features_v2...")
     df = pd.read_sql(QUERY, engine)
     df[NUMERIC_FEATURES]     = df[NUMERIC_FEATURES].fillna(df[NUMERIC_FEATURES].median())
     df[CATEGORICAL_FEATURES] = df[CATEGORICAL_FEATURES].fillna("Other/Unknown")
     print(f"  Rows: {len(df):,}  |  Default rate: {df['is_default'].mean():.2%}")
 
-    dti_p75 = float(np.percentile(df["debt_to_income_ratio"].dropna(), 75))
+    dti_p75 = float(np.percentile(
+        df["debt_to_income_ratio"].dropna(), 75
+    )) if df["debt_to_income_ratio"].notna().any() else 0.5
 
     X = df[ALL_FEATURES]
     y = df["is_default"]
@@ -193,7 +219,7 @@ def train():
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(artifact, MODEL_PATH)
     print(f"\n  Saved → {MODEL_PATH}")
-    print("=" * 55)
+    print("=" * 60)
 
 
 if __name__ == "__main__":

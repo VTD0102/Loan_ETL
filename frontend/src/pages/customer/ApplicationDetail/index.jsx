@@ -164,7 +164,6 @@ const ApplicationDetailPage = () => {
     { label: 'Kỳ hạn',              value: `${app.term} tháng`                 },
     { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income)  },
     { label: 'DTI',                 value: `${app.dti}%`                        },
-    { label: 'Điểm tín dụng',       value: app.credit_score                    },
     { label: 'Tình trạng nhà',      value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
     { label: 'Việc làm',            value: app.employment_status               },
     { label: 'Mục đích vay',        value: app.listing_category                },

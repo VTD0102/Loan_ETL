@@ -17,6 +17,65 @@ const saveToStorage = () => {
   localStorage.setItem('MOCK_PERSONAL_INFOS', JSON.stringify(MOCK_PERSONAL_INFOS))
 }
 
+const mockPrediction = (body) => {
+  const dtiRaw = parseFloat(body.dti || 0)
+  const dti = dtiRaw > 1 ? dtiRaw / 100 : dtiRaw
+  const income = parseFloat(body.monthly_income || 0)
+  const loan = parseFloat(body.loan_amount || 0)
+  const term = parseInt(body.term || 36)
+  const paymentToIncome = income > 0 && term > 0 ? (loan / term) / income : 0
+  const badDebtPenalty = body.has_bad_debt === true || body.has_bad_debt === 'true' ? 0.18 : 0
+  const prob = Math.min(0.85, Math.max(0.03, 0.05 + dti * 0.35 + paymentToIncome * 0.9 + badDebtPenalty))
+  const status = prob > 0.4 ? 'AUTO_REJECTED' : 'PENDING_REVIEW'
+  return {
+    status,
+    default_probability: Number(prob.toFixed(4)),
+    risk_level: prob > 0.4 ? 'High' : prob > 0.2 ? 'Medium' : 'Low',
+    risk_score: Math.round((1 - prob) * 100),
+    is_perfect_fit: prob < 0.2,
+    suggested_amount: status === 'AUTO_REJECTED' ? Math.round(loan * 0.75) : Math.round(loan * 0.9),
+    suggested_term: status === 'AUTO_REJECTED' ? 60 : term,
+    model_version: 'mock_lgbm_v4_stability',
+  }
+}
+
+const buildMockApplication = (body, prediction) => ({
+  id: Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1,
+  user_id: MOCK_USER.id,
+  user_email: MOCK_USER.email,
+  user_username: MOCK_USER.username,
+  monthly_income: parseFloat(body.monthly_income || 0),
+  loan_amount: parseFloat(body.loan_amount || 0),
+  term: parseInt(body.term || 12),
+  employment_status: body.employment_status || 'Employed',
+  dti: parseFloat(body.dti || 0),
+  is_homeowner: body.is_homeowner === 'true' || body.is_homeowner === true,
+  listing_category: body.listing_category || 'Other',
+  credit_score: body.credit_score ?? null,
+  occupation_type: body.occupation_type || 'OTHER',
+  years_employed: parseFloat(body.years_employed || 0),
+  num_bureau_records: parseInt(body.num_bureau_records || 0),
+  num_active_credit: parseInt(body.num_active_credit || 0),
+  total_overdue_amount: parseFloat(body.total_overdue_amount || 0),
+  max_credit_overdue_days: parseInt(body.max_credit_overdue_days || 0),
+  has_bad_debt: body.has_bad_debt === 'true' || body.has_bad_debt === true,
+  income_verifiable_flag: body.income_verifiable_flag === 'true' || body.income_verifiable_flag === true,
+  age_years: parseInt(body.age_years || 0),
+  education_ordinal: parseInt(body.education_ordinal || 3),
+  is_married_flag: body.is_married_flag === 'true' || body.is_married_flag === true,
+  status: prediction.status,
+  default_probability: prediction.default_probability,
+  risk_level: prediction.risk_level,
+  risk_score: prediction.risk_score,
+  recommended_amount: prediction.suggested_amount,
+  recommended_term: prediction.suggested_term,
+  model_version: prediction.model_version,
+  submitted_at: new Date().toISOString(),
+  reviewed_at: null,
+  reviewed_by: null,
+  admin_note: null
+})
+
 export const mockHandlers = async (config) => {
   const { method, url, data: rawData } = config
   const m = method.toLowerCase()
@@ -59,40 +118,25 @@ export const mockHandlers = async (config) => {
     return [404, { detail: 'Not found' }]
   }
 
-  if (m === 'post' && url.endsWith('/applications')) {
-    const cs  = parseFloat(body.credit_score || 700)
-    const dti = parseFloat(body.dti || 20)
-    const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
-    // Simulate AI decision
-    const status = (cs < 600 || dti > 70) ? 'AUTO_REJECTED' : 'PENDING_REVIEW'
-    
-    const newApp = {
-      id: newId,
-      user_id: MOCK_USER.id,
-      user_email: MOCK_USER.email,
-      user_username: MOCK_USER.username,
-      monthly_income: parseFloat(body.monthly_income || 0),
-      loan_amount: parseFloat(body.loan_amount || 0),
-      term: parseInt(body.term || 12),
-      employment_status: body.employment_status || 'Employed',
-      dti,
-      is_homeowner: body.is_homeowner === 'true' || body.is_homeowner === true,
-      listing_category: body.listing_category || 'Other',
-      credit_score: cs,
-      status,
-      default_probability: status === 'AUTO_REJECTED' ? 0.8 : 0.15,
-      risk_level: status === 'AUTO_REJECTED' ? 'HIGH' : 'LOW',
-      risk_score: status === 'AUTO_REJECTED' ? 80 : 15,
-      recommended_amount: status === 'AUTO_REJECTED' ? null : parseFloat(body.loan_amount || 0) * 0.9,
-      recommended_term: status === 'AUTO_REJECTED' ? null : 36,
-      submitted_at: new Date().toISOString(),
-      reviewed_at: null,
-      reviewed_by: null,
-      admin_note: null
-    }
+  if (m === 'post' && url.endsWith('/applications/evaluate')) {
+    const prediction = mockPrediction(body)
+    return [200, { ...prediction, application_id: null }]
+  }
+
+  if (m === 'post' && (url.endsWith('/applications/confirm') || url.endsWith('/applications'))) {
+    const prediction = mockPrediction(body)
+    const newApp = buildMockApplication(body, prediction)
     MOCK_ADMIN_APPS.unshift(newApp) // Push to top so Admin sees it first
     saveToStorage()
-    return [201, newApp]
+    return [200, {
+      application_id: String(newApp.id),
+      status: newApp.status,
+      default_probability: newApp.default_probability,
+      risk_level: newApp.risk_level,
+      risk_score: newApp.risk_score,
+      suggested_amount: newApp.recommended_amount,
+      suggested_term: newApp.recommended_term,
+    }]
   }
 
   if (m === 'post' && /\/applications\/\d+\/personal-info$/.test(url) && !url.includes('/admin/')) {

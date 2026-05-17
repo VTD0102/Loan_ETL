@@ -26,12 +26,13 @@ const EDUCATION_OPTIONS = [
   { value: 5, label: 'Sau đại học' },
 ]
 
-const OCCUPATION_OPTIONS = [
-  'Accountants', 'Cleaning staff', 'Cooking staff', 'Core staff', 'Drivers',
-  'HR staff', 'High skill tech staff', 'IT staff', 'Laborers', 'Low-skill Laborers',
-  'Managers', 'Medicine staff', 'Private service staff', 'Realty agents',
-  'Sales staff', 'Secretaries', 'Security staff', 'Waiters/barmen staff',
-  'Unknown / Không có nghề nghiệp cụ thể',
+const INCOME_TYPE_OPTIONS = [
+  { value: 'EMPLOYED', label: 'Nhân viên hưởng lương' },
+  { value: 'PRIVATE_SECTOR_EMPLOYEE', label: 'Nhân viên khu vực tư nhân' },
+  { value: 'SALARIED_GOVT', label: 'Công chức / nhà nước' },
+  { value: 'SELFEMPLOYED', label: 'Tự kinh doanh' },
+  { value: 'RETIRED_PENSIONER', label: 'Hưu trí' },
+  { value: 'OTHER', label: 'Khác / chưa xác định' },
 ]
 
 // ── Helper components ──────────────────────────────────────────────────────
@@ -289,16 +290,13 @@ const ApplyPage = () => {
       term: 36,
       employment_status: 'Employed',
       listing_category: 'Debt Consolidation',
-      occupation_type: 'Unknown / Không có nghề nghiệp cụ thể',
+      occupation_type: 'EMPLOYED',
       years_employed: 0,
       is_homeowner: 'false',
       has_bad_debt: 'false',
       income_verifiable_flag: 'false',
-      gender_male_flag: 'false',
       is_married_flag: 'false',
       education_ordinal: 4,
-      cnt_children: 0,
-      cnt_fam_members: 1,
       num_bureau_records: 0,
       num_active_credit: 0,
       total_overdue_amount: 0,
@@ -314,8 +312,7 @@ const ApplyPage = () => {
     dti:                     parseFloat(data.dti),
     is_homeowner:            data.is_homeowner === 'true' || data.is_homeowner === true,
     listing_category:        data.listing_category,
-    credit_score:            parseInt(data.credit_score),
-    occupation_type:         data.occupation_type.includes('Unknown') ? 'Unknown' : data.occupation_type,
+    occupation_type:         data.occupation_type,
     years_employed:          parseFloat(data.years_employed) || 0,
     num_bureau_records:      parseInt(data.num_bureau_records) || 0,
     num_active_credit:       parseInt(data.num_active_credit) || 0,
@@ -324,10 +321,7 @@ const ApplyPage = () => {
     has_bad_debt:            data.has_bad_debt === 'true' || data.has_bad_debt === true,
     income_verifiable_flag:  data.income_verifiable_flag === 'true' || data.income_verifiable_flag === true,
     age_years:               parseInt(data.age_years),
-    gender_male_flag:        data.gender_male_flag === 'true' || data.gender_male_flag === true,
     education_ordinal:       parseInt(data.education_ordinal),
-    cnt_children:            parseInt(data.cnt_children) || 0,
-    cnt_fam_members:         parseInt(data.cnt_fam_members) || 1,
     is_married_flag:         data.is_married_flag === 'true' || data.is_married_flag === true,
   })
 
@@ -443,9 +437,9 @@ const ApplyPage = () => {
                   {EMPLOYMENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </FieldRow>
-              <FieldRow label="Nghề nghiệp" error={errors.occupation_type?.message}>
+              <FieldRow label="Loại thu nhập" error={errors.occupation_type?.message}>
                 <select className={`input ${errors.occupation_type ? 'input-error' : ''}`} {...register('occupation_type', { required: 'Bắt buộc' })}>
-                  {OCCUPATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  {INCOME_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </FieldRow>
             </div>
@@ -456,24 +450,10 @@ const ApplyPage = () => {
                   className={`input ${errors.years_employed ? 'input-error' : ''}`}
                   {...register('years_employed', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' }, max: { value: 50, message: 'Tối đa 50' } })} />
               </FieldRow>
-              <FieldRow label="Điểm tín dụng (300–850)" error={errors.credit_score?.message}>
-                <input type="number" step="1" min="300" max="850" placeholder="680"
-                  className={`input ${errors.credit_score ? 'input-error' : ''}`}
-                  {...register('credit_score', { required: 'Bắt buộc', min: { value: 300, message: 'Tối thiểu 300' }, max: { value: 850, message: 'Tối đa 850' } })} />
-              </FieldRow>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Tuổi" error={errors.age_years?.message}>
                 <input type="number" step="1" min="18" max="100" placeholder="30"
                   className={`input ${errors.age_years ? 'input-error' : ''}`}
                   {...register('age_years', { required: 'Bắt buộc', min: { value: 18, message: 'Ít nhất 18 tuổi' }, max: { value: 100, message: 'Tối đa 100' } })} />
-              </FieldRow>
-              <FieldRow label="Giới tính" error={errors.gender_male_flag?.message}>
-                <select className={`input ${errors.gender_male_flag ? 'input-error' : ''}`} {...register('gender_male_flag', { required: 'Bắt buộc' })}>
-                  <option value="false">Nữ</option>
-                  <option value="true">Nam</option>
-                </select>
               </FieldRow>
             </div>
 
@@ -488,19 +468,6 @@ const ApplyPage = () => {
                   <option value="false">Chưa kết hôn</option>
                   <option value="true">Đã kết hôn</option>
                 </select>
-              </FieldRow>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Số con" error={errors.cnt_children?.message}>
-                <input type="number" step="1" min="0" max="20" placeholder="0"
-                  className={`input ${errors.cnt_children ? 'input-error' : ''}`}
-                  {...register('cnt_children', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' } })} />
-              </FieldRow>
-              <FieldRow label="Số thành viên gia đình" error={errors.cnt_fam_members?.message}>
-                <input type="number" step="1" min="1" max="20" placeholder="2"
-                  className={`input ${errors.cnt_fam_members ? 'input-error' : ''}`}
-                  {...register('cnt_fam_members', { required: 'Bắt buộc', min: { value: 1, message: 'Ít nhất 1' } })} />
               </FieldRow>
             </div>
 

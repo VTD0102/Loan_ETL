@@ -1,5 +1,7 @@
 # ML_FEATURES.md — Tài liệu đặc trưng & kết quả huấn luyện mô hình
 
+> **Lưu ý 18/05/2026:** Tài liệu này mô tả pipeline v3 cũ. Pipeline hiện tại đã chuyển sang Home Credit Stability v2/v4, bỏ `credit_score`, `credit_score_midpoint`, `rating_ordinal`, `gender_male_flag`, `cnt_children`, `cnt_fam_members`. Xem `docs/migration_v2_summary.md` để lấy contract và metric mới nhất.
+
 > **Phiên bản model:** customer_lgbm_v3 (LightGBM) + scorecard_v3 (LR Scorecard)  
 > **Ngày cập nhật:** Tháng 5 năm 2026  
 > **Dữ liệu huấn luyện:** 300,360 rows từ `gold.hc_features_v1` (Home Credit Default Risk)  

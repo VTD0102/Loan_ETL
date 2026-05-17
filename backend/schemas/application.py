@@ -20,7 +20,7 @@ class ApplicationBase(BaseModel):
     dti: Decimal
     is_homeowner: bool
     listing_category: Union[str, int]
-    credit_score: int
+    credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
 
     # ── v3: new required features ──────────────────────────────────────────
     occupation_type: str     # 18 HC categories + 'Unknown'
@@ -34,13 +34,15 @@ class ApplicationBase(BaseModel):
     has_bad_debt: bool
     income_verifiable_flag: bool
 
-    # ── Demographics — now required ────────────────────────────────────────
+    # ── Demographics used by v4 ────────────────────────────────────────────
     age_years: int
-    gender_male_flag: bool
     education_ordinal: int
-    cnt_children: int
-    cnt_fam_members: int
     is_married_flag: bool
+
+    # ── Deprecated v3 fields — accepted for backward compatibility only ───
+    gender_male_flag: Optional[bool] = None
+    cnt_children: Optional[int] = None
+    cnt_fam_members: Optional[int] = None
 
     @field_validator("term")
     @classmethod
@@ -52,7 +54,7 @@ class ApplicationBase(BaseModel):
     @field_validator("credit_score")
     @classmethod
     def validate_credit_score(cls, v):
-        if not (300 <= v <= 850):
+        if v is not None and not (300 <= v <= 850):
             raise ValueError("credit_score phải từ 300 đến 850")
         return v
 
@@ -91,7 +93,7 @@ class ApplicationRead(BaseModel):
     dti: Decimal
     is_homeowner: bool
     listing_category: Union[str, int]
-    credit_score: int
+    credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
 
     # v3 (nullable với row cũ)
     occupation_type: Optional[str] = None

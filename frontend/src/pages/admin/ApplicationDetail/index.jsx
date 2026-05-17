@@ -84,20 +84,16 @@ const AdminApplicationDetailPage = () => {
     { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income) },
     { label: 'DTI',                 value: app.dti != null ? `${app.dti}%` : '—' },
     { label: 'Tình trạng việc làm', value: app.employment_status },
-    { label: 'Nghề nghiệp',        value: app.occupation_type ?? '—' },
+    { label: 'Loại thu nhập',      value: app.occupation_type ?? '—' },
     { label: 'Năm kinh nghiệm',    value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
     { label: 'Tình trạng nhà',     value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
     { label: 'Mục đích vay',       value: app.listing_category },
-    { label: 'Điểm tín dụng',     value: app.credit_score },
   ]
 
   const demographicInfo = [
     { label: 'Tuổi',               value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
-    { label: 'Giới tính',          value: app.gender_male_flag != null ? (app.gender_male_flag ? 'Nam' : 'Nữ') : '—' },
     { label: 'Trình độ học vấn',   value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
     { label: 'Tình trạng hôn nhân',value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Độc thân') : '—' },
-    { label: 'Số con',             value: app.cnt_children ?? '—' },
-    { label: 'Số người trong gia đình', value: app.cnt_fam_members ?? '—' },
   ]
 
   const bureauInfo = [

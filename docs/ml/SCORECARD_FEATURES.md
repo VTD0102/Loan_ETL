@@ -1,5 +1,7 @@
 # SCORECARD_FEATURES.md — LR Scorecard v3: Đặc trưng & Phân tích kết quả
 
+> **Lưu ý 18/05/2026:** Tài liệu này là bản v3 legacy. Scorecard hiện tại dùng Stability v2, bỏ `credit_score_midpoint` và `rating_ordinal`, đồng thời train lại đạt ROC-AUC 0.7367. Xem `docs/migration_v2_summary.md` để lấy thông tin mới nhất.
+
 > **Phiên bản model:** scorecard_v3 (Logistic Regression)
 > **Ngày cập nhật:** Tháng 5 năm 2026
 > **File artifact:** `machinelearning/ml/models/scorecard_model.pkl`
