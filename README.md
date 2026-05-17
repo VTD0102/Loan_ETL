@@ -12,28 +12,36 @@ graph TB
     %% ====== NGƯỜI DÙNG ======
     User(("👤 Người dùng"))
 
-    User -->|"Tương tác"| FE_CHAT
-    User -->|"Nộp đơn / Xem kết quả"| FE_APP
-    User -->|"Đăng nhập / Đăng ký"| FE_AUTH
+    User -->|"1. Đăng nhập / Đăng ký"| FE_AUTH
+    FE_AUTH -->|"POST /auth/login · /auth/register"| AUTH_SVC
+    AUTH_SVC -->|"Trả JWT Token"| FE_AUTH
+    FE_AUTH -->|"2. Lưu token vào Zustand store"| TOKEN["🔑 JWT Token<br/>(authStore)"]
 
     %% ====== GIAO DIỆN - FRONTEND ======
     subgraph FRONTEND["🖥️ Giao diện (Frontend — React 18 + Vite + Tailwind)"]
         direction TB
-        FE_AUTH["🔐 Login / Register"]
-        FE_APP["📋 Dashboard / Apply / History"]
-        FE_CHAT["💬 Giao diện Chat AI"]
-        FE_ADMIN["🛡️ Admin Panel"]
+        FE_AUTH["🔐 Login / Register<br/>(Public — ai cũng truy cập được)"]
+        TOKEN
+        FE_APP["📋 Dashboard / Apply / History<br/>(Protected — cần JWT)"]
+        FE_CHAT["💬 Giao diện Chat AI<br/>(Protected — cần JWT)"]
+        FE_ADMIN["🛡️ Admin Panel<br/>(Protected — cần JWT + role=admin)"]
     end
 
-    FE_AUTH  -->|"POST /auth/*"| API
-    FE_APP   -->|"REST API"| API
-    FE_CHAT  -->|"POST /chat"| API
-    FE_ADMIN -->|"REST /admin/*"| API
+    TOKEN -.->|"3. Đính kèm Bearer token<br/>vào mọi request"| FE_APP
+    TOKEN -.->|"Bearer token"| FE_CHAT
+    TOKEN -.->|"Bearer token"| FE_ADMIN
+
+    FE_APP   -->|"REST + JWT Header"| API
+    FE_CHAT  -->|"POST /chat + JWT Header"| API
+    FE_ADMIN -->|"REST /admin/* + JWT Header"| API
 
     %% ====== XỬ LÝ - BACKEND ======
     subgraph BACKEND["⚙️ Xử lý (FastAPI Backend)"]
         direction TB
         API["🌐 API Endpoints<br/>/auth · /applications · /admin<br/>/chat · /credit-score"]
+        GUARD["🛂 Middleware xác thực<br/>require_customer / require_admin<br/>Verify JWT → extract user"]
+
+        API --> GUARD
 
         subgraph SERVICES["📦 Business Logic (services/)"]
             AUTH_SVC["auth_service<br/>JWT + bcrypt"]
@@ -44,12 +52,11 @@ graph TB
             CHAT_SVC["chat_service<br/>Điều phối RAG"]
         end
 
-        API --> AUTH_SVC
-        API --> APP_SVC
-        API --> ADMIN_SVC
-        API --> ML_SVC
-        API --> CREDIT_SVC
-        API --> CHAT_SVC
+        GUARD -->|"customer"| APP_SVC
+        GUARD -->|"customer"| CHAT_SVC
+        GUARD -->|"customer"| CREDIT_SVC
+        GUARD -->|"admin"| ADMIN_SVC
+        APP_SVC --> ML_SVC
     end
 
     %% ====== HỆ THỐNG RAG ======
@@ -109,10 +116,14 @@ graph TB
     classDef ml fill:#10b981,stroke:#059669,color:#fff
     classDef storage fill:#64748b,stroke:#475569,color:#fff
     classDef external fill:#ec4899,stroke:#db2777,color:#fff
+    classDef token fill:#f97316,stroke:#ea580c,color:#fff,stroke-width:2px
+    classDef guard fill:#ef4444,stroke:#dc2626,color:#fff
 
     class User user
     class FE_AUTH,FE_APP,FE_CHAT,FE_ADMIN frontend
+    class TOKEN token
     class API,AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CREDIT_SVC,CHAT_SVC backend
+    class GUARD guard
     class CHAIN,CTX,RETRIEVER,MEMORY,PROMPTS,INGEST rag
     class RISK_MODEL,SCORECARD ml
     class POSTGRES,QDRANT,DUCKDB storage
@@ -120,8 +131,11 @@ graph TB
 ```
 
 > **Chú thích tổng quan:**
-> - **Frontend** giao tiếp với Backend qua REST API (Axios).
-> - **Backend** xử lý authentication (JWT), CRUD đơn vay, duyệt admin, dự đoán ML, và điều phối RAG chatbot.
+> 1. **Phải đăng nhập trước**: Người dùng truy cập Login/Register (public) → Backend xác thực → trả **JWT Token**.
+> 2. **Token lưu ở Frontend**: Zustand `authStore` giữ token; `ProtectedRoute` chặn truy cập nếu chưa login.
+> 3. **Mọi request protected đều gửi kèm JWT**: Axios interceptor tự đính `Authorization: Bearer <token>` vào header.
+> 4. **Backend verify JWT**: Middleware `require_customer` / `require_admin` giải mã token, kiểm tra role trước khi cho phép truy cập service.
+> 5. **Admin cần role đặc biệt**: Ngoài JWT còn phải có `role = admin` mới vào được Admin Panel.
 > - **RAG** kết hợp context từ hồ sơ khách hàng + tài liệu vector search để trả lời câu hỏi.
 > - **ML Models** được train offline từ ETL pipeline, load runtime trong backend services.
 > - **PostgreSQL** lưu dữ liệu nghiệp vụ; **Qdrant** lưu vector embeddings; **DuckDB** dùng cho ETL offline.
