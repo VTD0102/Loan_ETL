@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     rag_embedding_max_retries: int = 2
     rag_qdrant_timeout_seconds: float = 5.0
 
+    # RAG memory (V1: window + summary buffer)
+    rag_memory_window_token_budget: int = 2000
+    rag_memory_summary_max_tokens: int = 500
+    rag_memory_min_messages_to_summarize: int = 6
+
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
