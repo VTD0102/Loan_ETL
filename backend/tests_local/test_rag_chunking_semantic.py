@@ -45,6 +45,71 @@ def test_heading_sections_become_parent_child_chunks():
     assert all(chunk.metadata.get("parent_content") for chunk in chunks)
     assert all(chunk.metadata.get("parent_id") for chunk in chunks)
     assert all(chunk.metadata.get("source_type") == "policy" for chunk in chunks)
+    assert all(chunk.metadata.get("document_title") == "Chính sách" for chunk in chunks)
+
+
+def test_h1_preamble_becomes_parent_when_h2_follows():
+    md = (
+        "# Chính sách cho vay\n\n"
+        "Phần giới thiệu chung.\n\n"
+        "## DTI\n\n"
+        "Nội dung DTI.\n\n"
+        "### Nested Criteria\n\n"
+        "Chi tiết phụ vẫn thuộc DTI.\n\n"
+        "## Credit Score\n\n"
+        "Nội dung credit score."
+    )
+    chunks = split_documents_semantically([
+        Document(page_content=md, metadata={"source": "policy.md"}),
+    ])
+
+    parents = expand_child_documents_to_parents(chunks)
+    titles = sorted(parent.metadata["section_title"] for parent in parents)
+    assert titles == ["Chính sách cho vay", "Credit Score", "DTI"]
+
+    preamble = next(
+        parent for parent in parents
+        if parent.metadata["section_title"] == "Chính sách cho vay"
+    )
+    assert "giới thiệu chung" in preamble.page_content
+    assert preamble.metadata["document_title"] == "Chính sách cho vay"
+
+    dti = next(parent for parent in parents if parent.metadata["section_title"] == "DTI")
+    assert "Nested Criteria" in dti.page_content
+    assert dti.metadata["document_title"] == "Chính sách cho vay"
+
+
+def test_document_without_h2_uses_h1_as_section_boundary():
+    md = "# Section A\n\nNội dung A.\n\n# Section B\n\nNội dung B."
+    chunks = split_documents_semantically([
+        Document(page_content=md, metadata={"source": "two-h1.md"}),
+    ])
+
+    parents = expand_child_documents_to_parents(chunks)
+    titles = sorted(parent.metadata["section_title"] for parent in parents)
+    assert titles == ["Section A", "Section B"]
+
+
+def test_document_without_headings_becomes_single_parent():
+    md = "Chỉ có nội dung.\n\nKhông có heading nào."
+    chunks = split_documents_semantically([
+        Document(page_content=md, metadata={"source": "plain.md"}),
+    ])
+
+    parents = expand_child_documents_to_parents(chunks)
+    assert len(parents) == 1
+    assert "Không có heading" in parents[0].page_content
+
+
+def test_children_inherit_document_title():
+    md = "# Doc Title\n\nIntro.\n\n## Section X\n\n" + ("Nội dung dài. " * 200)
+    chunks = split_documents_semantically([
+        Document(page_content=md, metadata={"source": "doc.md"}),
+    ])
+
+    assert chunks, "expected at least one child chunk"
+    for child in chunks:
+        assert child.metadata["document_title"] == "Doc Title"
 
 
 def test_faq_question_answer_block_stays_together():
@@ -122,6 +187,10 @@ def test_extract_h1_title_returns_none_when_absent():
 if __name__ == "__main__":
     test_enrich_document_metadata_infers_source_fields()
     test_heading_sections_become_parent_child_chunks()
+    test_h1_preamble_becomes_parent_when_h2_follows()
+    test_document_without_h2_uses_h1_as_section_boundary()
+    test_document_without_headings_becomes_single_parent()
+    test_children_inherit_document_title()
     test_faq_question_answer_block_stays_together()
     test_expand_child_documents_to_parents_deduplicates_by_parent_id()
     test_extract_h1_title_returns_first_h1_text()
