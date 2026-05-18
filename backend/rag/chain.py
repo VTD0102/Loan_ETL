@@ -57,6 +57,7 @@ def invoke(
     user_context: str,
     chat_history: list,
     personalization: "PersonalizationContext | None" = None,
+    conversation_summary: str | None = None,
 ) -> dict:
     """Full RAG pipeline: guardrail → route → retrieve → personalise → LLM → guardrail.
 
@@ -67,9 +68,11 @@ def invoke(
     user_context : str
         Pre-built textual context from ``context_builder.build_user_context``.
     chat_history : list
-        LangChain message objects for conversation memory.
+        LangChain message objects for the recent conversation window.
     personalization : PersonalizationContext, optional
         Pre-built personalization context. If ``None``, defaults are used.
+    conversation_summary : str, optional
+        Running summary of older turns. If ``None``, renders as ``(không có)``.
 
     Returns
     -------
@@ -118,6 +121,7 @@ def invoke(
             "user_display_name": personalization.user_display_name,
             "personalization_instructions": personalization.tone_instructions,
             "intent_instructions": intent_instructions,
+            "conversation_summary": conversation_summary or "(không có)",
         })
     except (openai.APITimeoutError, httpx.TimeoutException) as exc:
         raise RAGTimeoutError(f"LLM call timed out: {exc}") from exc

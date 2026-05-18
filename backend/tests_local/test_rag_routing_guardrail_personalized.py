@@ -57,14 +57,34 @@ def test_chain_injects_personalization_into_prompt_payload():
         result = chain.invoke(
             "Xin chào", "ctx", [],
             personalization=FakePersonalization(),
+            conversation_summary="Khách hỏi vay 50tr trước đó.",
         )
 
         assert result["intent"] == "greeting"
         assert captured_payload["user_display_name"] == "Minh"
         assert "kiểm thử cá nhân hóa" in captured_payload["personalization_instructions"]
         assert captured_payload["context"] == "Không tìm thấy tài liệu liên quan trong kho kiến thức."
+        assert captured_payload["conversation_summary"] == "Khách hỏi vay 50tr trước đó."
     finally:
         chain.get_chain = original_get_chain
+
+
+def test_chain_renders_no_summary_placeholder_when_missing():
+    captured_payload = {}
+
+    class FakeChain:
+        def invoke(self, payload):
+            captured_payload.update(payload)
+            return "ok"
+
+    original_get_chain = chain.get_chain
+    try:
+        chain.get_chain = lambda: FakeChain()
+        chain.invoke("Xin chào", "ctx", [])
+    finally:
+        chain.get_chain = original_get_chain
+
+    assert captured_payload["conversation_summary"] == "(không có)"
 
 
 if __name__ == "__main__":
@@ -73,4 +93,5 @@ if __name__ == "__main__":
     test_vietnamese_prompt_injection_is_blocked_before_rag()
     test_privacy_probe_is_blocked_before_rag()
     test_chain_injects_personalization_into_prompt_payload()
+    test_chain_renders_no_summary_placeholder_when_missing()
     print("RAG routing, guardrail, and personalization-focused checks passed.")
