@@ -52,7 +52,7 @@ Thu nhập ảnh hưởng trực tiếp đến năng lực trả nợ. Tuy nhiê
 Người sở hữu nhà thường được đánh giá có mức độ ổn định tài chính cao hơn, giúp cải thiện điểm đánh giá rủi ro.
 
 ### 4.5 Mục Đích Vay và Kỳ Hạn
-Mục đích vay (ví dụ: trả nợ, mua xe, học tập) và kỳ hạn vay (12, 36, hoặc 60 tháng) đều được xem xét trong mô hình đánh giá rủi ro tổng thể.
+Mục đích vay (ví dụ: trả nợ, mua xe, học tập) và kỳ hạn vay (12, 24, 36, 48 hoặc 60 tháng) đều được xem xét trong mô hình đánh giá rủi ro tổng thể.
 
 ---
 

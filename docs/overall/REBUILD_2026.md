@@ -129,7 +129,7 @@ status = INFO_SUBMITTED → admin xem xét → APPROVED / REJECTED
 |-----------|-------------|-------|
 | monthly_income | float | Nhập form |
 | loan_amount | float | Nhập form |
-| term | int (12/36/60) | Nhập form |
+| term | int (12/24/36/48/60) | Nhập form |
 | employment_status | phân loại (5 giá trị) | Dropdown form |
 | occupation_type | phân loại (19 giá trị) | Dropdown form |
 | years_employed | float | Nhập form (năm, không phải ngày) |
@@ -292,10 +292,10 @@ python -m machinelearning.ml.train_scorecard
 
 ## 6. Thuật toán Gợi ý Khoản Vay
 
-Backend sử dụng tìm kiếm nhị phân để tìm khoản vay tối đa an toàn cho mỗi trong 3 kỳ hạn chuẩn (12, 36, 60 tháng):
+Backend sử dụng tìm kiếm nhị phân để tìm khoản vay tối đa an toàn cho mỗi trong 5 kỳ hạn chuẩn (12, 24, 36, 48, 60 tháng):
 
 ```
-Với mỗi kỳ hạn trong [12, 36, 60]:
+Với mỗi kỳ hạn trong [12, 24, 36, 48, 60]:
     lo = 500, hi = 150_000
     Lặp 20 lần:
         mid = (lo + hi) / 2
@@ -450,7 +450,7 @@ VITE_API_URL=http://localhost:8000
 
 2. **Bucket Supabase phải tạo thủ công** — backend không tự tạo bucket `loan-documents`. Xem hướng dẫn ở phần 7.
 
-3. **Tìm kiếm nhị phân chạy ~63 lần gọi model** — 20 lần lặp × 3 kỳ hạn. Nhanh với LightGBM (~100ms tổng), nhưng nên thêm rate limiting nếu endpoint `/evaluate` có lượng truy cập cao.
+3. **Tìm kiếm nhị phân chạy ~105 lần gọi model** — 20 lần lặp × 5 kỳ hạn. Nhanh với LightGBM (~100ms tổng), nhưng nên thêm rate limiting nếu endpoint `/evaluate` có lượng truy cập cao.
 
 4. **occupation_type OrdinalEncoder unknown_value=-1** — nếu người dùng gửi loại nghề nghiệp mới không có trong tập huấn luyện, nó được ánh xạ về -1. LightGBM xử lý qua NaN propagation. Cần theo dõi đầu vào bất thường.
 

@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from api.dependencies import require_customer
@@ -23,6 +26,16 @@ def send_message(
     """
     result = chat_service.send(db, current_user["sub"], payload.message, payload.session_id)
     return ChatResponse(**result)
+
+
+@router.get("/history")
+def get_history(
+    session_id: Optional[UUID] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_customer),
+):
+    """Return messages for the requested chat session, or latest session if omitted."""
+    return chat_service.history(db, current_user["sub"], session_id)
 
 
 @router.get("/context")

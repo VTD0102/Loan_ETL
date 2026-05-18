@@ -38,7 +38,7 @@ A: Thu nhập cao là một yếu tố tích cực nhưng không đủ để đ�
 ---
 
 **Q: Kỳ hạn vay tôi chọn có ảnh hưởng đến kết quả xét duyệt không?**
-A: Có. Kỳ hạn vay (12, 36, hoặc 60 tháng) ảnh hưởng đến số tiền trả hàng tháng và do đó ảnh hưởng đến mức độ rủi ro tổng thể. Kỳ hạn dài hơn thường có khoản trả hàng tháng thấp hơn, có thể giúp cải thiện tỷ lệ khả năng trả nợ, nhưng kỳ hạn ngắn lại cho thấy cam kết trả nợ nhanh hơn. Hệ thống cân nhắc kỳ hạn cùng với các yếu tố khác.
+A: Có. Kỳ hạn vay (12, 24, 36, 48 hoặc 60 tháng) ảnh hưởng đến số tiền trả hàng tháng và do đó ảnh hưởng đến mức độ rủi ro tổng thể. Kỳ hạn dài hơn thường có khoản trả hàng tháng thấp hơn, có thể giúp cải thiện tỷ lệ khả năng trả nợ, nhưng kỳ hạn ngắn lại cho thấy cam kết trả nợ nhanh hơn. Hệ thống cân nhắc kỳ hạn cùng với các yếu tố khác.
 
 ---
 

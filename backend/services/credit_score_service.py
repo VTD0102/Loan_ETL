@@ -33,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from core.scoring import pd_to_credit_score, score_to_band
+from models.application import LoanApplication
 from models.user import User
 
 SCORECARD_PATH = Path(__file__).parents[2] / "machinelearning" / "ml" / "models" / "scorecard_model.pkl"
@@ -202,36 +203,7 @@ def _resolve_user(identifier: str, db: Session) -> User:
     raise ValueError(f"User '{identifier}' not found")
 
 
-def get_credit_score(user_id: str, db: Session) -> dict:
-    user = _resolve_user(user_id, db)
-    artifact    = _load()
-    pipeline    = artifact["pipeline"]
-    feat_cols   = artifact["feature_cols"]
-    dti_p75     = artifact.get("dti_p75", 0.5)
-
-    # Latest submitted application for this user
-    app = db.execute(
-        text("""
-            SELECT monthly_income, loan_amount, term, employment_status,
-                   is_homeowner,
-                   occupation_type, years_employed,
-                   num_bureau_records, num_active_credit,
-                   total_overdue_amount, max_credit_overdue_days,
-                   has_bad_debt, income_verifiable_flag,
-                   age_years, education_ordinal, is_married_flag
-            FROM loan_applications
-            WHERE user_id = :uid
-              AND status != 'DRAFT'
-            ORDER BY submitted_at DESC
-            LIMIT 1
-        """),
-        {"uid": user.id},
-    ).fetchone()
-
-    if app is None:
-        raise ValueError(f"No submitted application found for user '{user_id}'")
-
-    # Behavioural features — prior applications for this user
+def _previous_application_stats(app, db: Session) -> tuple[int, float]:
     prev = db.execute(
         text("""
             SELECT
@@ -242,15 +214,26 @@ def get_credit_score(user_id: str, db: Session) -> dict:
                 COUNT(*)                                              AS total
             FROM loan_applications
             WHERE user_id = :uid
+              AND id != :app_id
         """),
-        {"uid": user.id},
+        {"uid": app.user_id, "app_id": app.id},
     ).fetchone()
 
-    total              = int(prev.total) if prev else 0
-    num_prev_loans     = int(prev.num_approved) if prev else 0
-    prev_default_rate  = (
+    total = int(prev.total) if prev else 0
+    num_prev_loans = int(prev.num_approved) if prev else 0
+    prev_default_rate = (
         round(float(prev.num_rejected) / total, 4) if prev and total > 0 else 0.0
     )
+    return num_prev_loans, prev_default_rate
+
+
+def _score_application(app, db: Session) -> dict:
+    artifact = _load()
+    pipeline = artifact["pipeline"]
+    feat_cols = artifact["feature_cols"]
+    dti_p75 = artifact.get("dti_p75", 0.5)
+
+    num_prev_loans, prev_default_rate = _previous_application_stats(app, db)
 
     df = _build_features(app, num_prev_loans, prev_default_rate, dti_p75)
     df[NUMERIC_FEATURES]     = df[NUMERIC_FEATURES].fillna(0.0)
@@ -286,10 +269,40 @@ def get_credit_score(user_id: str, db: Session) -> dict:
         pass
 
     return {
-        "member_key":          str(user.id),
+        "member_key":          str(app.user_id),
         "credit_score":        credit_score,
         "score_band":          score_to_band(credit_score),
         "default_probability": round(pd_value, 4),
         "risk_level":          risk_level,
         "top_factors":         top_factors,
     }
+
+
+def get_credit_score(user_id: str, db: Session) -> dict:
+    user = _resolve_user(user_id, db)
+    app = (
+        db.query(LoanApplication)
+        .filter(LoanApplication.user_id == user.id)
+        .filter(LoanApplication.status != "DRAFT")
+        .order_by(LoanApplication.submitted_at.desc())
+        .first()
+    )
+    if app is None:
+        raise ValueError(f"No submitted application found for user '{user_id}'")
+    return _score_application(app, db)
+
+
+def get_credit_score_for_application(
+    app_id: str,
+    db: Session,
+    *,
+    user_id: str | None = None,
+) -> dict:
+    app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
+    if app is None:
+        raise ValueError(f"Application '{app_id}' not found")
+    if user_id is not None:
+        user = _resolve_user(user_id, db)
+        if str(app.user_id) != str(user.id):
+            raise PermissionError("Không có quyền truy cập điểm tín dụng của đơn này")
+    return _score_application(app, db)

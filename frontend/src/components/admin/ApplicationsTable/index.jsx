@@ -18,6 +18,11 @@ const RiskScoreBar = ({ score }) => {
   )
 }
 
+const getFriendlyApplicationCode = (id) => {
+  const compactId = String(id || '').replaceAll('-', '').toUpperCase()
+  return `APP-${compactId.slice(-6) || 'NEW'}`
+}
+
 /**
  * Pagination controls
  */
@@ -78,8 +83,8 @@ const ApplicationsTable = ({ items = [], showStatus = false, page = 1, pages = 1
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">ID</th>
-              <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+              <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mã hồ sơ</th>
+              <th className="text-left py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Khách hàng</th>
               <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Số tiền</th>
               <th className="text-center py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Kỳ hạn</th>
               <th className="text-right py-3 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden sm:table-cell">Thu nhập</th>
@@ -99,12 +104,15 @@ const ApplicationsTable = ({ items = [], showStatus = false, page = 1, pages = 1
                 className="hover:bg-gray-50 transition-colors duration-100 group"
               >
                 <td className="py-3 px-3">
-                  <span className="text-xs font-mono text-gray-400">#{app.id}</span>
+                  <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-600 ring-1 ring-inset ring-gray-200">
+                    {getFriendlyApplicationCode(app.id)}
+                  </span>
                 </td>
                 <td className="py-3 px-3">
                   <div>
-                    <p className="font-medium text-gray-900 text-sm truncate max-w-[150px]">{app.user_email}</p>
-                    <p className="text-xs text-gray-400">ID: {app.user_id}</p>
+                    <p className="font-medium text-gray-900 text-sm truncate max-w-[170px]">
+                      {app.user_email || app.user_username || 'Khách hàng'}
+                    </p>
                   </div>
                 </td>
                 <td className="py-3 px-3 text-right">

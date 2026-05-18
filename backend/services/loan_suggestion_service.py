@@ -2,7 +2,7 @@
 loan_suggestion_service.py
 
 Binary-search approach: finds the maximum loan_amount where default_prob stays
-below LOW_THRESHOLD (0.2), testing each valid term (12 / 36 / 60 months).
+below LOW_THRESHOLD (0.2), testing each valid term (12 / 24 / 36 / 48 / 60 months).
 
 Returns suggested_amount, suggested_term, and whether the user's original
 request is already a "perfect fit" (no improvement to suggest).
@@ -17,7 +17,7 @@ import pandas as pd
 
 _MIN_LOAN = 500.0
 _MAX_LOAN = 150_000.0
-_TERMS    = [12, 36, 60]
+_TERMS    = [12, 24, 36, 48, 60]
 _SEARCH_ITERATIONS = 20      # precision ≈ $0.1 over 150k range
 _PERFECT_FIT_TOLERANCE = 0.10  # within 10% of max safe = "perfect fit"
 

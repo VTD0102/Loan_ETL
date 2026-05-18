@@ -54,6 +54,9 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         answer = f"Lỗi truy vấn nội bộ RAG/LLM: {str(e)}"
         sources = []
 
+    if not session.title:
+        session.title = payload_message.strip()[:80]
+    session.updated_at = datetime.utcnow()
     db.add(ChatMessage(session_id=session.id, role="user", content=payload_message))
     db.add(ChatMessage(session_id=session.id, role="assistant", content=answer, sources=sources))
     db.commit()
@@ -62,6 +65,51 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         "response": answer,
         "session_id": session.id,
         "sources": sources,
+    }
+
+
+def history(db: Session, user_email: str, session_id: Any = None) -> dict:
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    if session_id is not None:
+        session = (
+            db.query(ChatSession)
+            .filter(ChatSession.id == session_id, ChatSession.user_id == user.id)
+            .first()
+        )
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+    else:
+        session = (
+            db.query(ChatSession)
+            .filter(ChatSession.user_id == user.id)
+            .order_by(ChatSession.updated_at.desc(), ChatSession.created_at.desc())
+            .first()
+        )
+
+    if not session:
+        return {"session_id": None, "messages": []}
+
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at.asc())
+        .all()
+    )
+
+    return {
+        "session_id": session.id,
+        "messages": [
+            {
+                "role": row.role,
+                "content": row.content,
+                "sources": row.sources or [],
+                "created_at": row.created_at,
+            }
+            for row in messages
+        ],
     }
 
 

@@ -47,8 +47,8 @@ class ApplicationBase(BaseModel):
     @field_validator("term")
     @classmethod
     def validate_term(cls, v):
-        if v not in (12, 36, 60):
-            raise ValueError("term phải là 12, 36 hoặc 60")
+        if v not in (12, 24, 36, 48, 60):
+            raise ValueError("term phải là 12, 24, 36, 48 hoặc 60")
         return v
 
     @field_validator("credit_score")

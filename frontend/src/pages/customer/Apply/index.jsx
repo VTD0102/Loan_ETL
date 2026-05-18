@@ -7,7 +7,7 @@ import Modal from '../../../components/common/Modal'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const TERM_OPTIONS = [12, 36, 60]
+const TERM_OPTIONS = [12, 24, 36, 48, 60]
 
 const EMPLOYMENT_OPTIONS = [
   'Employed', 'Self-employed', 'Retired', 'Not employed', 'Other',

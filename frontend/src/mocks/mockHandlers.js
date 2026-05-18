@@ -11,10 +11,24 @@ import {
 } from './mockData'
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
+const MOCK_CHAT_SESSION_ID = '00000000-0000-4000-8000-000000000001'
+const MOCK_CHAT_HISTORY_KEY = 'MOCK_CHAT_HISTORY'
 
 const saveToStorage = () => {
   localStorage.setItem('MOCK_ADMIN_APPS', JSON.stringify(MOCK_ADMIN_APPS))
   localStorage.setItem('MOCK_PERSONAL_INFOS', JSON.stringify(MOCK_PERSONAL_INFOS))
+}
+
+const getMockChatHistory = () => {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_CHAT_HISTORY_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+const saveMockChatHistory = (messages) => {
+  localStorage.setItem(MOCK_CHAT_HISTORY_KEY, JSON.stringify(messages))
 }
 
 const mockPrediction = (body) => {
@@ -36,6 +50,42 @@ const mockPrediction = (body) => {
     suggested_amount: status === 'AUTO_REJECTED' ? Math.round(loan * 0.75) : Math.round(loan * 0.9),
     suggested_term: status === 'AUTO_REJECTED' ? 60 : term,
     model_version: 'mock_lgbm_v4_stability',
+  }
+}
+
+const scoreBand = (score) => {
+  if (score >= 740) return 'Excellent'
+  if (score >= 670) return 'Good'
+  if (score >= 580) return 'Fair'
+  return 'Poor'
+}
+
+const mockScorecard = (app) => {
+  const prob = Number(app.default_probability ?? mockPrediction(app).default_probability)
+  const score = Math.max(300, Math.min(850, Math.round(820 - prob * 650)))
+  return {
+    member_key: String(app.user_id || MOCK_USER.id),
+    credit_score: score,
+    score_band: scoreBand(score),
+    default_probability: prob,
+    risk_level: prob > 0.4 ? 'High' : prob > 0.2 ? 'Medium' : 'Low',
+    top_factors: [
+      {
+        feature: 'payment_to_income',
+        direction: prob > 0.2 ? 'increases_risk' : 'decreases_risk',
+        impact: Number((prob * 0.8).toFixed(4)),
+      },
+      {
+        feature: 'has_bad_debt',
+        direction: app.has_bad_debt ? 'increases_risk' : 'decreases_risk',
+        impact: app.has_bad_debt ? 0.22 : -0.08,
+      },
+      {
+        feature: 'income_verifiable_flag',
+        direction: app.income_verifiable_flag ? 'decreases_risk' : 'increases_risk',
+        impact: app.income_verifiable_flag ? -0.12 : 0.1,
+      },
+    ],
   }
 }
 
@@ -111,11 +161,25 @@ export const mockHandlers = async (config) => {
     return [404, { detail: 'Not found' }]
   }
 
-  if (m === 'get' && /\/applications\/\d+$/.test(url) && !url.includes('/admin/')) {
+  if (m === 'get' && /\/applications\/\d+$/.test(url) && !url.includes('/admin/') && !url.includes('/credit-score/')) {
     const id = parseInt(url.split('/').pop())
     const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
     if (found && found.user_id === MOCK_USER.id) return [200, found]
     return [404, { detail: 'Not found' }]
+  }
+
+  if (m === 'get' && /\/credit-score\/applications\/\d+$/.test(url)) {
+    const id = parseInt(url.split('/').pop())
+    const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
+    if (found && found.user_id === MOCK_USER.id) return [200, mockScorecard(found)]
+    return [404, { detail: 'Application not found' }]
+  }
+
+  if (m === 'get' && /\/credit-score\/admin\/applications\/\d+$/.test(url)) {
+    const id = parseInt(url.split('/').pop())
+    const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
+    if (found) return [200, mockScorecard(found)]
+    return [404, { detail: 'Application not found' }]
   }
 
   if (m === 'post' && url.endsWith('/applications/evaluate')) {
@@ -164,7 +228,19 @@ export const mockHandlers = async (config) => {
   /* ── Chat ─────────────────────────────────────────── */
   if (m === 'post' && url.endsWith('/chat')) {
     await delay(600) // extra delay to simulate LLM
-    return [200, { reply: getNextChatResponse() }]
+    const reply = getNextChatResponse()
+    const history = getMockChatHistory()
+    const nextHistory = [
+      ...history,
+      { role: 'user', content: body.message || '' },
+      { role: 'assistant', content: reply, sources: [] },
+    ]
+    saveMockChatHistory(nextHistory)
+    return [200, { response: reply, reply, session_id: MOCK_CHAT_SESSION_ID, sources: [] }]
+  }
+
+  if (m === 'get' && url.includes('/chat/history')) {
+    return [200, { session_id: MOCK_CHAT_SESSION_ID, messages: getMockChatHistory() }]
   }
 
   if (m === 'get' && url.endsWith('/chat/sessions')) {

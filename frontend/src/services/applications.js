@@ -4,6 +4,7 @@ export const evaluateApplication = (data)     => api.post('/applications/evaluat
 export const confirmApplication  = (data)     => api.post('/applications/confirm', data)
 export const getMyApplication    = ()         => api.get('/applications/me')
 export const getApplicationById  = (id)       => api.get(`/applications/${id}`)
+export const getApplicationCreditScore = (id) => api.get(`/credit-score/applications/${id}`)
 export const submitPersonalInfo  = (id, data) => api.post(`/applications/${id}/personal-info`, data)
 export const uploadDocuments     = (id, form) =>
   api.post(`/applications/${id}/documents`, form, {

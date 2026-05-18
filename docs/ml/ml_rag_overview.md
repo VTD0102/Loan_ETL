@@ -136,7 +136,7 @@ ml_service.predict(payload, db, user_id)
     │
     └─ loan_suggestion_service.compute_suggestion()
            ├─ Binary search: tìm max loan_amount mà PD < LOW threshold
-           ├─ Thử 3 kỳ hạn: 12, 36, 60 tháng
+           ├─ Thử 5 kỳ hạn: 12, 24, 36, 48, 60 tháng
            ├─ 20 iterations, precision ~$0.1
            └─ Trả về: suggested_amount, suggested_term, is_perfect_fit
 ```
@@ -149,7 +149,7 @@ ml_service.predict(payload, db, user_id)
 | `risk_level` | `Low` / `Medium` / `High` |
 | `risk_score` | Điểm an toàn 0–100 (= (1 - prob) × 100) |
 | `suggested_amount` | Hạn mức vay tối đa an toàn (binary search) |
-| `suggested_term` | Kỳ hạn tối ưu (12/36/60 tháng) |
+| `suggested_term` | Kỳ hạn tối ưu (12/24/36/48/60 tháng) |
 | `is_perfect_fit` | Đơn hiện tại đã tối ưu chưa |
 | `model_version` | Phiên bản model (vd: `customer_lgbm_v5.3_spw_tuned`) |
 | `feature_snapshot` | Bản chụp feature đưa vào model |

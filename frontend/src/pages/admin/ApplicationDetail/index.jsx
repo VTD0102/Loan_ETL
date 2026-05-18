@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getAdminApplicationById } from '../../../services/admin'
+import { getAdminApplicationById, getAdminApplicationCreditScore } from '../../../services/admin'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import MLResultsDisplay from '../../../components/admin/MLResultsDisplay'
 import ApproveRejectButtons from '../../../components/admin/ApproveRejectButtons'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import CreditScorePanel from '../../../components/common/CreditScorePanel'
 import { formatCurrency, formatDateTime } from '../../../utils/format'
 
 /* ── Shared sub-components ──────────────────────── */
@@ -34,6 +35,7 @@ const AdminApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app,     setApp]     = useState(null)
+  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
@@ -43,6 +45,12 @@ const AdminApplicationDetailPage = () => {
     try {
       const res = await getAdminApplicationById(id)
       setApp(res.data)
+      try {
+        const scoreRes = await getAdminApplicationCreditScore(id)
+        setScorecard(scoreRes.data)
+      } catch {
+        setScorecard(null)
+      }
     } catch (err) {
       setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
     } finally {
@@ -172,6 +180,12 @@ const AdminApplicationDetailPage = () => {
           {(app.risk_level || app.default_probability != null) && (
             <SectionCard title="Kết quả phân tích ML">
               <MLResultsDisplay app={app} />
+            </SectionCard>
+          )}
+
+          {scorecard && (
+            <SectionCard title="Điểm tín dụng scorecard">
+              <CreditScorePanel scorecard={scorecard} />
             </SectionCard>
           )}
 

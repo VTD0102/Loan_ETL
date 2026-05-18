@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getApplicationById } from '../../../services/applications'
+import { getApplicationById, getApplicationCreditScore } from '../../../services/applications'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import CreditScorePanel from '../../../components/common/CreditScorePanel'
 import { formatCurrency, formatDateTime } from '../../../utils/format'
 
 /* ──────────────── Sub-sections ──────────────── */
@@ -127,6 +128,7 @@ const ApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app, setApp]       = useState(null)
+  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
 
@@ -135,6 +137,12 @@ const ApplicationDetailPage = () => {
       try {
         const res = await getApplicationById(id)
         setApp(res.data)
+        try {
+          const scoreRes = await getApplicationCreditScore(id)
+          setScorecard(scoreRes.data)
+        } catch {
+          setScorecard(null)
+        }
       } catch (err) {
         setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
       } finally {
@@ -224,6 +232,12 @@ const ApplicationDetailPage = () => {
                   <MLStat label="Đề xuất kỳ hạn" value={`${app.recommended_term} tháng`} accent="primary" />
                 )}
               </div>
+            </SectionCard>
+          )}
+
+          {scorecard && (
+            <SectionCard title="Điểm tín dụng scorecard">
+              <CreditScorePanel scorecard={scorecard} />
             </SectionCard>
           )}
 

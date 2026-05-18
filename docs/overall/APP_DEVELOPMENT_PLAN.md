@@ -304,7 +304,7 @@ RAG tìm trong knowledge base → trả lời cá nhân hóa
 |---------|-------|
 | `stated_monthly_income` | Khách điền |
 | `loan_original_amount` | Khách điền |
-| `term` | Khách chọn (12/36/60) |
+| `term` | Khách chọn (12/24/36/48/60) |
 | `employment_status` | Khách chọn |
 | `debt_to_income_ratio` | Khách điền hoặc tính toán |
 | `is_homeowner` | Khách chọn |
