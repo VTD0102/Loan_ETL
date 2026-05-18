@@ -71,8 +71,12 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             payload_message, context, chat_history,
             personalization=personalization,
         )
-        answer = response_payload.get("answer") or _RAG_ERROR_MESSAGE
+        answer = response_payload.get("answer") or ""
         sources = _extract_sources(response_payload.get("source_documents", []))
+        if not answer:
+            answer = _RAG_ERROR_MESSAGE
+            error_flag = True
+            sources = []
     except RAGError:
         logger.exception("RAG pipeline failed")
         answer = _RAG_ERROR_MESSAGE
