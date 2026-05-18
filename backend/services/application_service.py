@@ -53,6 +53,7 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "num_active_credit":       payload.num_active_credit,
         "total_overdue_amount":    payload.total_overdue_amount,
         "max_credit_overdue_days": payload.max_credit_overdue_days,
+        "has_bad_debt":            payload.has_bad_debt,
         "income_verifiable_flag":  payload.income_verifiable_flag,
         "age_years":               payload.age_years,
         "gender_male_flag":        payload.gender_male_flag,
@@ -62,7 +63,6 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "is_married_flag":         payload.is_married_flag,
         # System-computed by ML pipeline
         "credit_score":            prediction.get("credit_score_computed"),
-        "dti":                     Decimal(str(prediction.get("hc_dti", 0.0))),
     }
 
 
