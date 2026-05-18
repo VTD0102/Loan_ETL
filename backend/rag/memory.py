@@ -1,43 +1,24 @@
-from uuid import UUID
+"""
+memory.py - Conversation memory for the RAG pipeline.
 
-from langchain_core.messages import AIMessage, HumanMessage
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+V1: sliding window of recent turns + lazy summary buffer for older turns.
+Token-aware (rough char-based estimate). Per-session scope.
+"""
+from __future__ import annotations
 
-
-def load_chat_history(db: Session, session_id: UUID) -> list:
-    """Load last 10 turns from chat_messages and return as LangChain message objects."""
-    rows = db.execute(
-        text(
-            "SELECT role, content FROM chat_messages "
-            "WHERE session_id = :sid ORDER BY created_at DESC LIMIT 20"
-        ),
-        {"sid": str(session_id)},
-    ).fetchall()
-
-    messages = []
-    for row in reversed(rows):
-        if row.role == "user":
-            messages.append(HumanMessage(content=row.content))
-        else:
-            messages.append(AIMessage(content=row.content))
-    return messages
+from dataclasses import dataclass, field
 
 
-def get_or_create_session(db: Session, user_id: int, session_id: UUID | None) -> UUID:
-    if session_id is not None:
-        row = db.execute(
-            text("SELECT id FROM chat_sessions WHERE id = :sid AND user_id = :uid"),
-            {"sid": str(session_id), "uid": user_id},
-        ).fetchone()
-        if row is None:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="Session not found")
-        return session_id
-    else:
-        row = db.execute(
-            text("INSERT INTO chat_sessions (user_id) VALUES (:user_id) RETURNING id"),
-            {"user_id": user_id},
-        ).fetchone()
-        db.commit()
-        return row[0]
+@dataclass
+class MemoryContext:
+    """Result of a memory load - what to pass into the LLM prompt."""
+
+    summary: str | None = None
+    recent_messages: list = field(default_factory=list)
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough estimate: ``len(text) // 4``."""
+    if not text:
+        return 0
+    return len(text) // 4
