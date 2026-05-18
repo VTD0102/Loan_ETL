@@ -105,9 +105,25 @@ def test_expand_child_documents_to_parents_deduplicates_by_parent_id():
     assert parents[0].metadata["retrieval_unit"] == "parent"
 
 
+def test_extract_h1_title_returns_first_h1_text():
+    from rag.chunking import _extract_h1_title
+
+    md = "# Chính sách cho vay\n\nPhần intro.\n\n## DTI\nNội dung."
+    assert _extract_h1_title(md) == "Chính sách cho vay"
+
+
+def test_extract_h1_title_returns_none_when_absent():
+    from rag.chunking import _extract_h1_title
+
+    assert _extract_h1_title("## Only h2\n\nNội dung.") is None
+    assert _extract_h1_title("Không có heading.") is None
+
+
 if __name__ == "__main__":
     test_enrich_document_metadata_infers_source_fields()
     test_heading_sections_become_parent_child_chunks()
     test_faq_question_answer_block_stays_together()
     test_expand_child_documents_to_parents_deduplicates_by_parent_id()
+    test_extract_h1_title_returns_first_h1_text()
+    test_extract_h1_title_returns_none_when_absent()
     print("semantic chunking tests passed")

@@ -17,6 +17,7 @@ CHILD_MAX_CHARS = 700
 CHILD_OVERLAP_CHARS = 80
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
+_H1_PATTERN = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _FAQ_RE = re.compile(r"^\*\*Q:\s*(.+?)\*\*\s*$", re.MULTILINE)
 
 
@@ -110,6 +111,14 @@ def _extract_document_title(markdown: str, fallback: str) -> str:
         if stripped.startswith("# "):
             return stripped[2:].strip() or fallback
     return fallback
+
+
+def _extract_h1_title(markdown: str) -> str | None:
+    """Return the first ``# Heading`` text, or None if no level-1 heading exists."""
+    match = _H1_PATTERN.search(markdown)
+    if match is None:
+        return None
+    return match.group(1).strip()
 
 
 def _split_markdown_into_parent_sections(markdown: str, base_metadata: dict) -> list[dict[str, str]]:
