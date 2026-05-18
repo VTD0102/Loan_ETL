@@ -1,7 +1,11 @@
+"""Build / update the Qdrant knowledge base.
+
+Run:
+    python -m rag.ingest             # incremental upsert (default)
+    python -m rag.ingest --dry-run   # list docs + chunks, no writes
+    python -m rag.ingest --recreate  # destructive: delete collection first
 """
-One-shot script to build the Qdrant knowledge base.
-Run: python -m backend.rag.ingest
-"""
+import argparse
 from pathlib import Path
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
@@ -50,26 +54,69 @@ def get_embeddings():
         openai_api_base=OPENROUTER_BASE_URL,
     )
 
-def upsert_to_qdrant(chunks, embeddings):
+
+def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recreate=False):
+    """Upsert chunks into Qdrant.
+
+    With ``recreate=True``, deletes the collection first (destructive).
+    With ``recreate=False`` (default), appends to the existing collection.
+    """
     from langchain_qdrant import QdrantVectorStore
     from qdrant_client import QdrantClient
 
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-    if client.collection_exists(collection_name=QDRANT_COLLECTION):
-        client.delete_collection(collection_name=QDRANT_COLLECTION)
-    
-    QdrantVectorStore.from_documents(
-        documents=chunks,
+
+    if recreate and client.collection_exists(collection_name=collection_name):
+        client.delete_collection(collection_name=collection_name)
+
+    if recreate or not client.collection_exists(collection_name=collection_name):
+        QdrantVectorStore.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            url=QDRANT_URL,
+            api_key=QDRANT_API_KEY,
+            collection_name=collection_name,
+        )
+        return
+
+    store = QdrantVectorStore(
+        client=client,
+        collection_name=collection_name,
         embedding=embeddings,
-        url=QDRANT_URL,
-        api_key=QDRANT_API_KEY,
-        collection_name=QDRANT_COLLECTION,
     )
+    store.add_documents(chunks)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Ingest knowledge base into Qdrant")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="List documents & chunk count; do not call Qdrant or embeddings.")
+    parser.add_argument("--recreate", action="store_true",
+                        help="Delete the collection before upsert (destructive).")
+    parser.add_argument("--collection", default=QDRANT_COLLECTION,
+                        help="Override the Qdrant collection name.")
+    args = parser.parse_args()
+
+    docs = load_documents()
+    chunks = split_documents(docs)
+    print(f"Loaded {len(docs)} documents -> {len(chunks)} chunks")
+
+    if args.dry_run:
+        for i, chunk in enumerate(chunks[:2]):
+            source = chunk.metadata.get("source", "?")
+            print(f"--- Chunk {i + 1} ({source}) ---")
+            print(chunk.page_content[:200])
+        print(f"\nDry run: would upsert {len(chunks)} chunks to '{args.collection}'")
+        return
+
+    embeddings = get_embeddings()
+    if args.recreate:
+        print(f"Recreating collection '{args.collection}' (destructive)")
+    else:
+        print(f"Upserting (incremental) to '{args.collection}'")
+    upsert_to_qdrant(chunks, embeddings, collection_name=args.collection, recreate=args.recreate)
+    print(f"Done. Ingested {len(chunks)} chunks.")
 
 
 if __name__ == "__main__":
-    docs = load_documents()
-    chunks = split_documents(docs)
-    embeddings = get_embeddings()
-    upsert_to_qdrant(chunks, embeddings)
-    print(f"Ingested {len(chunks)} chunks into Qdrant collection '{QDRANT_COLLECTION}'")
+    main()
