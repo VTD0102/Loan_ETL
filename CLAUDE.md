@@ -144,9 +144,17 @@ docker run -d --name creditintel-qdrant \
   -v "$(pwd)/qdrant_storage:/qdrant/storage" \
   qdrant/qdrant
 
-# Ingest knowledge base into collection creditintel-kb
+# Ingest knowledge base into Qdrant
 cd backend
+
+# Dry run — list docs + chunks, no writes
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest --dry-run
+
+# Incremental upsert (default — keeps existing collection)
 PYTHONPATH=. ../.venv/bin/python -m rag.ingest
+
+# Recreate collection (destructive — deletes existing data)
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest --recreate
 ```
 
 ## Key Documentation
