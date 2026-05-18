@@ -1,9 +1,10 @@
 import rag.chain as chain
+from rag.exceptions import RetrievalError
 
 
 class FailingRetriever:
     def invoke(self, question):
-        raise ConnectionError("qdrant is down")
+        raise RetrievalError("qdrant is down")
 
 
 class FakeChain:

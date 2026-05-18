@@ -16,9 +16,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+import openai
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
+from qdrant_client.http.exceptions import UnexpectedResponse
+
 from core.config import settings
+from rag.exceptions import LLMError, RAGTimeoutError, RetrievalError
 from rag.config import LLM_MODEL, OPENROUTER_BASE_URL
 from rag.guardrails import check_input, check_output
 from rag.personalizer import PersonalizationContext, get_intent_instructions
@@ -91,8 +96,11 @@ def invoke(
     if needs_retrieval(intent):
         try:
             documents = _retrieve_documents(question)
-        except Exception:
+        except RetrievalError:
             logger.exception("Retrieval failed, continuing without docs")
+            documents = []
+        except RAGTimeoutError:
+            logger.warning("Retrieval timed out, continuing without docs")
             documents = []
 
     # ── Step 4: Personalization (caller-provided) ─────────────────────────
@@ -101,15 +109,20 @@ def invoke(
     intent_instructions = get_intent_instructions(intent)
 
     # ── Step 5: LLM call ─────────────────────────────────────────────────
-    answer = get_chain().invoke({
-        "question": question,
-        "user_context": user_context,
-        "context": _format_documents(documents),
-        "chat_history": chat_history,
-        "user_display_name": personalization.user_display_name,
-        "personalization_instructions": personalization.tone_instructions,
-        "intent_instructions": intent_instructions,
-    })
+    try:
+        answer = get_chain().invoke({
+            "question": question,
+            "user_context": user_context,
+            "context": _format_documents(documents),
+            "chat_history": chat_history,
+            "user_display_name": personalization.user_display_name,
+            "personalization_instructions": personalization.tone_instructions,
+            "intent_instructions": intent_instructions,
+        })
+    except (openai.APITimeoutError, httpx.TimeoutException) as exc:
+        raise RAGTimeoutError(f"LLM call timed out: {exc}") from exc
+    except (openai.APIConnectionError, openai.APIError) as exc:
+        raise LLMError(f"LLM call failed: {exc}") from exc
 
     # ── Step 6: Output guardrail ──────────────────────────────────────────
     output_check = check_output(answer)
@@ -128,9 +141,14 @@ def invoke(
 
 def _retrieve_documents(question: str) -> list[Any]:
     retriever = get_retriever()
-    if hasattr(retriever, "invoke"):
-        return retriever.invoke(question)
-    return retriever.get_relevant_documents(question)
+    try:
+        if hasattr(retriever, "invoke"):
+            return retriever.invoke(question)
+        return retriever.get_relevant_documents(question)
+    except (openai.APITimeoutError, httpx.TimeoutException) as exc:
+        raise RAGTimeoutError(f"Retrieval timed out: {exc}") from exc
+    except (openai.APIConnectionError, openai.APIError, UnexpectedResponse) as exc:
+        raise RetrievalError(f"Retrieval failed: {exc}") from exc
 
 
 def _format_documents(documents: list[Any]) -> str:

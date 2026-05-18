@@ -20,6 +20,9 @@ import logging
 import re
 from typing import Any
 
+import httpx
+import openai
+
 from langchain_openai import ChatOpenAI
 
 from core.config import settings
@@ -193,8 +196,11 @@ def classify_intent(question: str, chat_history: list[Any] | None = None) -> str
 
         return intent
 
-    except Exception:
-        logger.exception("Intent classification failed, using default")
+    except (openai.APITimeoutError, openai.APIError, httpx.TimeoutException) as exc:
+        logger.warning("Intent classifier upstream error: %s", exc)
+        return DEFAULT_INTENT
+    except json.JSONDecodeError as exc:
+        logger.info("Intent classifier returned non-JSON, defaulting (%s)", exc)
         return DEFAULT_INTENT
 
 
