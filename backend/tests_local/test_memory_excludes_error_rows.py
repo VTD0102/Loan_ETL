@@ -69,10 +69,10 @@ def test_error_rows_excluded_from_window_and_summary():
     )
     db = FakeDB(msgs)
 
-    captured = {}
+    summarize_calls = []
 
     def fake_summarize(db, sess, to_summarize, prev):
-        captured["to_summarize"] = list(to_summarize)
+        summarize_calls.append(list(to_summarize))
         sess.summary = "stub"
         sess.summary_covers_until_id = to_summarize[-1].id
         sess.summary_updated_at = datetime.utcnow()
@@ -88,8 +88,10 @@ def test_error_rows_excluded_from_window_and_summary():
     contents = [m.content for m in ctx.recent_messages]
     assert "ERR PLACEHOLDER" not in contents, "error row leaked into window"
 
-    assert "to_summarize" in captured, "test must exercise the summarize input path"
-    assert all(m.content != "ERR PLACEHOLDER" for m in captured["to_summarize"]), (
+    assert len(summarize_calls) == 1, (
+        f"expected exactly 1 summarize call, got {len(summarize_calls)}"
+    )
+    assert all(m.content != "ERR PLACEHOLDER" for m in summarize_calls[0]), (
         "error row leaked into summarize input"
     )
 
