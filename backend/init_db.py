@@ -5,6 +5,7 @@ from models import Base
 # Incremental column migrations (idempotent — safe to re-run)
 _COLUMN_MIGRATIONS = [
     "ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS loan_purpose VARCHAR",
+    "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS error BOOLEAN NOT NULL DEFAULT FALSE",
 ]
 
 

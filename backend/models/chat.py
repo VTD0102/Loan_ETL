@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -37,6 +37,7 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     sources: Mapped[Optional[list[dict]]] = mapped_column(JSON, nullable=True)
+    error: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     session: Mapped["ChatSession"] = relationship("ChatSession", back_populates="messages")
