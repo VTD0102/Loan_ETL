@@ -14,7 +14,7 @@ export const RiskBadge = ({ level }) => {
   const meta = RISK_META[level?.toUpperCase()] || { label: level, bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' }
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${meta.bg} ${meta.text} ${meta.border}`}>
-      Rủi ro: {meta.label}
+      {meta.label}
     </span>
   )
 }

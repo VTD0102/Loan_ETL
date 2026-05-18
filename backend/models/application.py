@@ -29,9 +29,10 @@ class LoanApplication(Base):
     listing_category: Mapped[str] = mapped_column(String)
     credit_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # v2: stated only, not model input
 
-    # ── v3 new fields ──────────────────────────────────────────────────────
+    # ── v3/v4 new fields ───────────────────────────────────────────────────
     occupation_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     years_employed: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
+    loan_purpose: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # ── Credit bureau features — nullable for backward compat with old rows ─
     num_bureau_records: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

@@ -127,6 +127,9 @@ SELECT
     COALESCE(b.max_credit_overdue_days, 0)                      AS max_credit_overdue_days,
     COALESCE(b.has_bad_debt, 0)                                 AS has_bad_debt,
 
+    -- ── Loan type (Cash=1, Revolving=0) ───────────────────────────────────
+    CASE WHEN s.listing_category_id = 1 THEN 1 ELSE 0 END       AS loan_type,
+
     -- ── Boolean flags ──────────────────────────────────────────────────────
     CASE WHEN s.is_homeowner = 'Yes' THEN 1 ELSE 0 END          AS is_homeowner_flag,
     s.income_verifiable::INT                                    AS income_verifiable_flag,
