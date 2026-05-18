@@ -8,13 +8,27 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 
+import httpx
+import openai
 from langchain_core.messages import AIMessage, HumanMessage
 
 from core.config import settings
 from models.chat import ChatMessage
+from rag.config import LLM_MODEL, OPENROUTER_BASE_URL
+from rag.exceptions import LLMError, RAGTimeoutError
 
 logger = logging.getLogger(__name__)
+
+_SUMMARY_SYSTEM_PROMPT = (
+    "Bạn là trợ lý tóm tắt hội thoại tín dụng cho hệ thống CreditIntel. "
+    "Viết tóm tắt bằng tiếng Việt, tối đa khoảng 500 tokens, tập trung vào: "
+    "(1) câu hỏi/quan tâm chính của khách hàng, "
+    "(2) dữ kiện đã trao đổi (số tiền, kỳ hạn, DTI, trạng thái đơn), "
+    "(3) quyết định / hướng dẫn đã đưa ra. "
+    "Không bịa thêm thông tin ngoài hội thoại."
+)
 
 
 @dataclass
@@ -66,6 +80,61 @@ def _split_window(rows_newest_first: list, budget: int) -> tuple[list, list]:
     return older, recent
 
 
+def _needs_summarize(older: list, session) -> bool:
+    """Return true when the older portion has enough uncovered messages."""
+    if len(older) < settings.rag_memory_min_messages_to_summarize:
+        return False
+    last_id = older[-1].id
+    return session.summary_covers_until_id != last_id
+
+
+def _format_messages_for_summary(rows: list) -> str:
+    lines = []
+    for row in rows:
+        prefix = "Khách" if row.role == "user" else "Trợ lý"
+        lines.append(f"{prefix}: {row.content}")
+    return "\n".join(lines)
+
+
+def _summarize(db, session, messages_to_summarize: list, previous_summary: str | None) -> str:
+    """Call the main LLM to produce an updated summary and persist it."""
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(
+        model=LLM_MODEL,
+        openai_api_key=settings.openrouter_api_key,
+        openai_api_base=OPENROUTER_BASE_URL,
+        temperature=0.2,
+        max_tokens=settings.rag_memory_summary_max_tokens,
+        timeout=settings.rag_llm_timeout_seconds,
+        max_retries=settings.rag_llm_max_retries,
+    )
+
+    user_block = (
+        f"Tóm tắt cũ:\n{previous_summary or '(chưa có)'}\n\n"
+        "Các lượt hội thoại mới cần đưa vào tóm tắt:\n"
+        f"{_format_messages_for_summary(messages_to_summarize)}\n\n"
+        "Hãy viết tóm tắt MỚI bao trùm toàn bộ hội thoại."
+    )
+
+    try:
+        response = llm.invoke([
+            {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
+            {"role": "user", "content": user_block},
+        ])
+    except (openai.APITimeoutError, httpx.TimeoutException) as exc:
+        raise RAGTimeoutError(f"Summary LLM timed out: {exc}") from exc
+    except (openai.APIConnectionError, openai.APIError) as exc:
+        raise LLMError(f"Summary LLM failed: {exc}") from exc
+
+    new_summary = (response.content or "").strip()
+    session.summary = new_summary
+    session.summary_covers_until_id = messages_to_summarize[-1].id
+    session.summary_updated_at = datetime.utcnow()
+    db.commit()
+    return new_summary
+
+
 def load_memory(db, session) -> MemoryContext:
     """Build the memory context for a chat session."""
     rows = (
@@ -79,7 +148,14 @@ def load_memory(db, session) -> MemoryContext:
     if not rows:
         return MemoryContext(summary=session.summary, recent_messages=[])
 
-    _older, recent = _split_window(rows, settings.rag_memory_window_token_budget)
+    older, recent = _split_window(rows, settings.rag_memory_window_token_budget)
+
+    if older and _needs_summarize(older, session):
+        try:
+            _summarize(db, session, older, session.summary)
+        except (LLMError, RAGTimeoutError) as exc:
+            logger.warning("Summary update failed, keeping previous summary: %s", exc)
+
     return MemoryContext(
         summary=session.summary,
         recent_messages=_to_langchain_messages(recent),
