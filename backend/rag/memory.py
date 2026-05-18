@@ -9,10 +9,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 import httpx
 import openai
 from langchain_core.messages import AIMessage, HumanMessage
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.config import settings
 from models.chat import ChatMessage
@@ -127,24 +129,38 @@ def _summarize(db, session, messages_to_summarize: list, previous_summary: str |
     except (openai.APIConnectionError, openai.APIError) as exc:
         raise LLMError(f"Summary LLM failed: {exc}") from exc
 
+    old_summary = session.summary
+    old_covers_until_id = session.summary_covers_until_id
+    old_updated_at = session.summary_updated_at
     new_summary = (response.content or "").strip()
     session.summary = new_summary
     session.summary_covers_until_id = messages_to_summarize[-1].id
     session.summary_updated_at = datetime.utcnow()
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        if hasattr(db, "rollback"):
+            db.rollback()
+        session.summary = old_summary
+        session.summary_covers_until_id = old_covers_until_id
+        session.summary_updated_at = old_updated_at
+        raise LLMError(f"Summary persistence failed: {exc}") from exc
     return new_summary
 
 
-def load_memory(db, session) -> MemoryContext:
+def load_memory(db, session, exclude_message_id: Any | None = None) -> MemoryContext:
     """Build the memory context for a chat session."""
-    rows = (
+    query = (
         db.query(ChatMessage)
         .filter(ChatMessage.session_id == session.id)
         .filter(ChatMessage.error.is_(False))
-        .order_by(ChatMessage.created_at.desc())
-        .all()
     )
-    rows = sorted(rows, key=lambda row: row.created_at, reverse=True)
+    if exclude_message_id is not None:
+        query = query.filter(ChatMessage.id != exclude_message_id)
+
+    rows = query.order_by(ChatMessage.created_at.desc()).all()
+    if exclude_message_id is not None:
+        rows = [row for row in rows if row.id != exclude_message_id]
     if not rows:
         return MemoryContext(summary=session.summary, recent_messages=[])
 

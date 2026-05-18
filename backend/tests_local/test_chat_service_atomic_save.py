@@ -77,7 +77,7 @@ def test_user_message_persists_when_rag_fails():
     def fake_build_user_context(db, user_id):
         return "fake context block"
 
-    def fake_load_memory(db, session):
+    def fake_load_memory(db, session, exclude_message_id=None):
         from rag.memory import MemoryContext
 
         return MemoryContext(summary=None, recent_messages=[])

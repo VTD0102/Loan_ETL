@@ -15,6 +15,8 @@ class FakeQuery:
         return self
 
     def order_by(self, *args, **kwargs):
+        if self._items and hasattr(self._items[0], "created_at"):
+            self._items = sorted(self._items, key=lambda item: item.created_at, reverse=True)
         return self
 
     def all(self):

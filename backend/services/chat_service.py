@@ -46,7 +46,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
     db.commit()
 
     # 2) Build memory context (recent window + lazy summary) for the LLM call.
-    memory = load_memory(db, session)
+    memory = load_memory(db, session, exclude_message_id=user_message.id)
 
     error_flag = False
     sources: list[dict[str, Any]] = []

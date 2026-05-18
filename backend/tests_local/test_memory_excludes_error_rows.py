@@ -19,6 +19,8 @@ class FakeQuery:
         return self
 
     def order_by(self, *args, **kwargs):
+        if self._items and hasattr(self._items[0], "created_at"):
+            self._items = sorted(self._items, key=lambda item: item.created_at, reverse=True)
         return self
 
     def all(self):
@@ -53,14 +55,11 @@ def _msg(role, content, idx=0, error=False):
 
 
 def test_error_rows_excluded_from_window_and_summary():
-    msgs = [
-        _msg("user", "câu hỏi đầu", idx=0),
-        _msg("assistant", "câu trả lời 1", idx=1),
-        _msg("user", "câu hỏi 2", idx=2),
-        _msg("assistant", "ERR PLACEHOLDER", idx=3, error=True),
-        _msg("user", "câu hỏi 3", idx=4),
-        _msg("assistant", "câu trả lời 3", idx=5),
-    ]
+    msgs = []
+    for i in range(20):
+        role = "user" if i % 2 == 0 else "assistant"
+        content = "ERR PLACEHOLDER" if i == 3 else f"message-{i}-" + ("x" * 800)
+        msgs.append(_msg(role, content, idx=i, error=(i == 3)))
 
     session = SimpleNamespace(
         id=uuid.uuid4(),
@@ -74,6 +73,9 @@ def test_error_rows_excluded_from_window_and_summary():
 
     def fake_summarize(db, sess, to_summarize, prev):
         captured["to_summarize"] = list(to_summarize)
+        sess.summary = "stub"
+        sess.summary_covers_until_id = to_summarize[-1].id
+        sess.summary_updated_at = datetime.utcnow()
         return "stub"
 
     original = memory_mod._summarize
@@ -86,10 +88,10 @@ def test_error_rows_excluded_from_window_and_summary():
     contents = [m.content for m in ctx.recent_messages]
     assert "ERR PLACEHOLDER" not in contents, "error row leaked into window"
 
-    if "to_summarize" in captured:
-        assert all(m.content != "ERR PLACEHOLDER" for m in captured["to_summarize"]), (
-            "error row leaked into summarize input"
-        )
+    assert "to_summarize" in captured, "test must exercise the summarize input path"
+    assert all(m.content != "ERR PLACEHOLDER" for m in captured["to_summarize"]), (
+        "error row leaked into summarize input"
+    )
 
 
 if __name__ == "__main__":
