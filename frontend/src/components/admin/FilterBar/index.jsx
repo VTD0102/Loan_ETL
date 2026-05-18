@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Tất cả trạng thái' },
+  { value: 'PENDING',         label: 'Đang xử lý' },
   { value: 'PENDING_REVIEW',  label: 'Chờ xét duyệt' },
   { value: 'AUTO_REJECTED',   label: 'Tự động từ chối' },
   { value: 'ADMIN_REJECTED',  label: 'Đã từ chối' },
   { value: 'AWAITING_INFO',   label: 'Chờ thông tin' },
   { value: 'INFO_SUBMITTED',  label: 'Đã nộp thông tin' },
+  { value: 'APPROVED',        label: 'Đã duyệt' },
+  { value: 'REJECTED',        label: 'Đã từ chối cuối' },
 ]
 
 const RISK_OPTIONS = [
@@ -30,6 +33,15 @@ const FilterBar = ({ filters = {}, onApply, onClear }) => {
     from_date:  filters.from_date  || '',
     to_date:    filters.to_date    || '',
   })
+
+  useEffect(() => {
+    setLocal({
+      status:     filters.status     || '',
+      risk_level: filters.risk_level || '',
+      from_date:  filters.from_date  || '',
+      to_date:    filters.to_date    || '',
+    })
+  }, [filters])
 
   const handleChange = (key, val) => setLocal((prev) => ({ ...prev, [key]: val }))
 

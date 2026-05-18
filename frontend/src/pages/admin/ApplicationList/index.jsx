@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { getAllApplications } from '../../../services/admin'
 import ApplicationsTable from '../../../components/admin/ApplicationsTable'
 import FilterBar from '../../../components/admin/FilterBar'
@@ -7,6 +8,7 @@ import LoadingSpinner from '../../../components/common/LoadingSpinner'
 const PAGE_LIMIT = 10
 
 const AllApplicationsPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items,   setItems]   = useState([])
   const [page,    setPage]    = useState(1)
   const [pages,   setPages]   = useState(1)
@@ -14,6 +16,13 @@ const AllApplicationsPage = () => {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [filters, setFilters] = useState({})
+
+  const filtersFromQuery = useCallback(() => ({
+    status:     searchParams.get('status')     || '',
+    risk_level: searchParams.get('risk_level') || '',
+    from_date:  searchParams.get('from_date')  || '',
+    to_date:    searchParams.get('to_date')    || '',
+  }), [searchParams])
 
   const fetchData = useCallback(async (p = 1, f = {}) => {
     setLoading(true)
@@ -39,18 +48,27 @@ const AllApplicationsPage = () => {
     }
   }, [])
 
-  useEffect(() => { fetchData(1, {}) }, [fetchData])
+  useEffect(() => {
+    const queryFilters = filtersFromQuery()
+    setFilters(queryFilters)
+    setPage(1)
+    fetchData(1, queryFilters)
+  }, [fetchData, filtersFromQuery])
+
+  const updateQuery = (nextFilters) => {
+    const clean = {}
+    Object.entries(nextFilters).forEach(([key, value]) => {
+      if (value) clean[key] = value
+    })
+    setSearchParams(clean)
+  }
 
   const handleApplyFilters = (f) => {
-    setFilters(f)
-    setPage(1)
-    fetchData(1, f)
+    updateQuery(f)
   }
 
   const handleClearFilters = () => {
-    setFilters({})
-    setPage(1)
-    fetchData(1, {})
+    setSearchParams({})
   }
 
   const handlePrev = () => { if (page > 1) fetchData(page - 1, filters) }
