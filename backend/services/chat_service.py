@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
-from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -13,6 +12,7 @@ from models.user import User
 from rag.chain import invoke as _rag_invoke
 from rag.context_builder import build_user_context
 from rag.exceptions import RAGError
+from rag.memory import load_memory
 from rag.personalizer import build_personalization
 from schemas.application import ApplicationCreate
 from services import ml_service
@@ -45,22 +45,8 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         session.title = payload_message.strip()[:80]
     db.commit()
 
-    # 2) Re-fetch history excluding the message we just stored.
-    history_rows = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.session_id == session.id)
-        .order_by(ChatMessage.created_at.desc())
-        .limit(11)
-        .all()
-    )
-    history_rows = [r for r in history_rows if r.id != user_message.id][:10]
-
-    chat_history = []
-    for row in reversed(history_rows):
-        if row.role == "user":
-            chat_history.append(HumanMessage(content=row.content))
-        elif row.role == "assistant":
-            chat_history.append(AIMessage(content=row.content))
+    # 2) Build memory context (recent window + lazy summary) for the LLM call.
+    memory = load_memory(db, session)
 
     error_flag = False
     sources: list[dict[str, Any]] = []
@@ -68,8 +54,9 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         context = build_user_context(db, user.id)
         personalization = build_personalization(user, app)
         response_payload = _rag_invoke(
-            payload_message, context, chat_history,
+            payload_message, context, memory.recent_messages,
             personalization=personalization,
+            conversation_summary=memory.summary,
         )
         answer = response_payload.get("answer") or ""
         sources = _extract_sources(response_payload.get("source_documents", []))

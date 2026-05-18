@@ -1,12 +1,12 @@
-"""Verify user message persists when RAG fails, and assistant row is marked error."""
+"""chat_service.send must pass rag.memory output into _rag_invoke."""
 import uuid
 from types import SimpleNamespace
 
-from fastapi import HTTPException
+from langchain_core.messages import HumanMessage
 
 import services.chat_service as chat_service
 from models.chat import ChatMessage, ChatSession
-from rag.exceptions import LLMError
+from rag.memory import MemoryContext
 
 
 class FakeQuery:
@@ -26,7 +26,7 @@ class FakeQuery:
         return self
 
     def scalar(self):
-        return 0  # rate-limit count = 0
+        return 0
 
     def first(self):
         return self._items[0] if self._items else None
@@ -67,51 +67,46 @@ class FakeDB:
         self.committed += 1
 
 
-def test_user_message_persists_when_rag_fails():
-    user = SimpleNamespace(id=uuid.uuid4(), email="a@b.com", username="Minh")
+def test_chat_service_passes_summary_and_window_to_rag():
+    user = SimpleNamespace(id=uuid.uuid4(), email="b@b.com", username="Mai")
     db = FakeDB(user)
 
-    def fake_invoke(*args, **kwargs):
-        raise LLMError("openrouter timeout")
+    rag_call = {}
 
-    def fake_build_user_context(db, user_id):
-        return "fake context block"
+    def fake_invoke(question, context, chat_history, **kwargs):
+        rag_call["question"] = question
+        rag_call["chat_history"] = list(chat_history)
+        rag_call["conversation_summary"] = kwargs.get("conversation_summary")
+        return {"answer": "OK", "source_documents": []}
 
     def fake_load_memory(db, session):
-        from rag.memory import MemoryContext
+        return MemoryContext(
+            summary="Khách đã hỏi vay 30tr hôm trước.",
+            recent_messages=[HumanMessage(content="câu hỏi cũ")],
+        )
 
-        return MemoryContext(summary=None, recent_messages=[])
+    def fake_build_user_context(db, user_id):
+        return "ctx"
 
     original_invoke = chat_service._rag_invoke
-    original_ctx = chat_service.build_user_context
     original_load_memory = chat_service.load_memory
+    original_ctx = chat_service.build_user_context
     chat_service._rag_invoke = fake_invoke
-    chat_service.build_user_context = fake_build_user_context
     chat_service.load_memory = fake_load_memory
+    chat_service.build_user_context = fake_build_user_context
     try:
-        raised = None
-        try:
-            chat_service.send(db, "a@b.com", "Tôi muốn vay 100 triệu")
-        except HTTPException as exc:
-            raised = exc
-        assert raised is not None, "expected HTTPException"
-        assert raised.status_code == 503
-        assert "thử lại" in raised.detail.lower() or "sự cố" in raised.detail.lower()
+        result = chat_service.send(db, "b@b.com", "Tôi muốn vay 50tr")
     finally:
         chat_service._rag_invoke = original_invoke
-        chat_service.build_user_context = original_ctx
         chat_service.load_memory = original_load_memory
+        chat_service.build_user_context = original_ctx
 
-    user_msgs = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "user"]
-    assistant_msgs = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
-
-    assert len(user_msgs) == 1, "user message must persist"
-    assert user_msgs[0].content == "Tôi muốn vay 100 triệu"
-    assert len(assistant_msgs) == 1, "assistant placeholder must be saved"
-    assert assistant_msgs[0].error is True
-    assert db.committed >= 2, "expected two commits (user first, then assistant)"
+    assert result["response"] == "OK"
+    assert rag_call["conversation_summary"] == "Khách đã hỏi vay 30tr hôm trước."
+    assert len(rag_call["chat_history"]) == 1
+    assert rag_call["chat_history"][0].content == "câu hỏi cũ"
 
 
 if __name__ == "__main__":
-    test_user_message_persists_when_rag_fails()
-    print("chat_service atomic save test passed")
+    test_chat_service_passes_summary_and_window_to_rag()
+    print("chat_service uses memory test passed")
