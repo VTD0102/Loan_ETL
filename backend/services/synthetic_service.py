@@ -22,6 +22,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from fastapi import HTTPException
 from models.user import User
 from models.cic import CICRecord
 from schemas.application import ApplicationCreate
@@ -81,7 +82,7 @@ def _random_email(name: str, idx: int) -> str:
         .replace("ý", "y").replace("ỳ", "y").replace("ỷ", "y").replace("ỹ", "y").replace("ỵ", "y")
     # Keep only ascii
     slug = "".join(c for c in slug if c.isalnum())
-    return f"synthetic.{slug}.{idx}@creditintel.test"
+    return f"synthetic.{slug}.{idx}@creditintel.com"
 
 
 def _generate_good_profile() -> dict[str, Any]:
@@ -326,6 +327,7 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
             # 4) Run through real ML pipeline (CIC enrichment happens automatically)
             result = application_service.evaluate(db, email, payload)
 
+            from schemas.application import ApplicationConfirm
             status = result.get("status", "UNKNOWN")
             stats["created"] += 1
             if status == "AUTO_REJECTED":
@@ -333,7 +335,18 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
                 if result.get("cic_blacklisted"):
                     stats["cic_blacklisted"] += 1
             else:
-                stats["pending_review"] += 1
+                try:
+                    profile["loan_amount"] = result.get("suggested_amount", payload.loan_amount)
+                    profile["term"] = result.get("suggested_term", payload.term)
+                    confirm_payload = ApplicationConfirm(**profile)
+                    application_service.confirm(db, email, confirm_payload)
+                    stats["pending_review"] += 1
+                except HTTPException as e:
+                    if e.status_code == 422:
+                        stats["auto_rejected"] += 1
+                        status = "AUTO_REJECTED"
+                    else:
+                        raise e
 
             stats["details"].append({
                 "email": email,

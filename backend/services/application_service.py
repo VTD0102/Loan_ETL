@@ -44,8 +44,9 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "loan_amount":             payload.loan_amount,
         "term":                    payload.term,
         "employment_status":       payload.employment_status,
+        "dti":                     payload.dti,
         "is_homeowner":            payload.is_homeowner,
-        "loan_purpose":            payload.loan_purpose,
+        "listing_category":        str(payload.listing_category),
         "occupation_type":         payload.occupation_type,
         "years_employed":          payload.years_employed,
         "num_bureau_records":      payload.num_bureau_records,
@@ -221,8 +222,9 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     db.add(new_app)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as e:
         db.rollback()
+        logger.error(f"IntegrityError in confirm: {e.orig}")
         raise HTTPException(400, "Bạn đã có đơn đang xử lý")
     db.refresh(new_app)
 
