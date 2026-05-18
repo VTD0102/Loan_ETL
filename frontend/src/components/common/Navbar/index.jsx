@@ -23,7 +23,7 @@ const Navbar = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 font-bold text-primary-700 text-lg select-none">
+          <Link to={token ? "/dashboard" : "/"} className="flex items-center gap-2 font-bold text-primary-700 text-lg select-none">
             <span className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white text-sm font-bold shadow-sm">
               CI
             </span>

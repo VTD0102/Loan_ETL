@@ -15,7 +15,7 @@ const RegisterPage = () => {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      await apiRegister({ email: data.email, username: data.username, password: data.password })
+      await apiRegister({ email: data.email, username: data.username, password: data.password, cccd: data.cccd })
       toast.success('Đăng ký thành công! Vui lòng đăng nhập.')
       navigate('/login')
     } catch (err) {
@@ -69,6 +69,22 @@ const RegisterPage = () => {
                 })}
               />
               {errors.username && <p className="error-msg">{errors.username.message}</p>}
+            </div>
+
+            {/* CCCD */}
+            <div>
+              <label className="label">Số CCCD</label>
+              <input
+                type="text"
+                placeholder="Nhập 12 số CCCD"
+                maxLength={12}
+                className={`input ${errors.cccd ? 'input-error' : ''}`}
+                {...register('cccd', {
+                  required: 'CCCD là bắt buộc',
+                  pattern: { value: /^[0-9]{12}$/, message: 'CCCD phải bao gồm đúng 12 chữ số' },
+                })}
+              />
+              {errors.cccd && <p className="error-msg">{errors.cccd.message}</p>}
             </div>
 
             {/* Password */}

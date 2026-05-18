@@ -472,7 +472,11 @@ const ApplyPage = () => {
             </div>
 
             {/* ── Section 3: Lịch sử tín dụng ─────────────────── */}
-            <SectionTitle title="Lịch sử tín dụng" />
+            <SectionTitle title="Lịch sử tín dụng (Tự khai)" />
+            <p className="text-sm text-gray-500 mb-4 px-1">
+              <span className="font-semibold text-primary-600">Lưu ý:</span> Hệ thống sẽ tự động tra cứu CCCD của bạn qua <strong>Trung tâm Thông tin Tín dụng (CIC)</strong>. 
+              Nếu có dữ liệu CIC, thông tin CIC sẽ được dùng để thay thế phần tự khai này nhằm đảm bảo tính chính xác.
+            </p>
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Số hồ sơ tín dụng" hint="Số lần bạn đã đăng ký tín dụng (vay, thẻ...)" error={errors.num_bureau_records?.message}>
                 <input type="number" step="1" min="0" placeholder="2"

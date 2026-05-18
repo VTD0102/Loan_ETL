@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import useAuthStore from '../../../store/authStore'
 
 const steps = [
   { icon: '📝', title: 'Nộp đơn vay', desc: 'Điền thông tin tài chính cơ bản trong vài phút. Không cần hồ sơ giấy tờ phức tạp.' },
@@ -50,6 +51,7 @@ const features = [
 
 const LandingPage = () => {
   const navigate = useNavigate()
+  const token = useAuthStore((s) => s.token)
 
   return (
     <div className="min-h-screen bg-white">
@@ -70,12 +72,20 @@ const LandingPage = () => {
             CreditIntel sử dụng trí tuệ nhân tạo để đánh giá rủi ro tín dụng chính xác, minh bạch và tức thì — giúp bạn vay đúng số tiền, đúng thời điểm.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button onClick={() => navigate('/register')} className="btn-primary text-base px-8 py-3 shadow-lg shadow-primary-200">
-              Đăng ký ngay — miễn phí
-            </button>
-            <button onClick={() => navigate('/login')} className="btn-outline text-base px-8 py-3">
-              Đăng nhập
-            </button>
+            {token ? (
+              <button onClick={() => navigate('/dashboard')} className="btn-primary text-base px-8 py-3 shadow-lg shadow-primary-200">
+                Đi tới Dashboard
+              </button>
+            ) : (
+              <>
+                <button onClick={() => navigate('/register')} className="btn-primary text-base px-8 py-3 shadow-lg shadow-primary-200">
+                  Đăng ký ngay — miễn phí
+                </button>
+                <button onClick={() => navigate('/login')} className="btn-outline text-base px-8 py-3">
+                  Đăng nhập
+                </button>
+              </>
+            )}
           </div>
           {/* Stats row */}
           <div className="mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto">
@@ -147,18 +157,29 @@ const LandingPage = () => {
           <h2 className="text-3xl font-bold text-white mb-4">Bắt đầu ngay hôm nay</h2>
           <p className="text-primary-100 mb-8 text-lg">Đăng ký miễn phí, nhận kết quả trong vài giây. Không ràng buộc.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onClick={() => navigate('/register')}
-              className="px-8 py-3 bg-white text-primary-700 font-semibold rounded-lg hover:bg-primary-50 transition-colors shadow-lg"
-            >
-              Đăng ký ngay
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
-            >
-              Đăng nhập
-            </button>
+            {token ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-8 py-3 bg-white text-primary-700 font-semibold rounded-lg hover:bg-primary-50 transition-colors shadow-lg"
+              >
+                Đi tới Dashboard
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="px-8 py-3 bg-white text-primary-700 font-semibold rounded-lg hover:bg-primary-50 transition-colors shadow-lg"
+                >
+                  Đăng ký ngay
+                </button>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="px-8 py-3 border-2 border-white text-white font-semibold rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  Đăng nhập
+                </button>
+              </>
+            )}
           </div>
         </div>
       </section>
