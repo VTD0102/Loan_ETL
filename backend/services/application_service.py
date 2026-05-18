@@ -1,16 +1,20 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import not_
+from sqlalchemy.exc import IntegrityError
 
 from models.application import LoanApplication
 from models.user import User
 from models.personal_info import PersonalInfo
 from schemas.application import ApplicationCreate, ApplicationConfirm
 from schemas.personal_info import PersonalInfoCreate
-from services import ml_service
+from services import ml_service, cic_service
 from services.loan_suggestion_service import validate_confirmed_values
 from services.model_feature_builder import fetch_previous_applications
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _get_user(db: Session, email: str) -> User:
@@ -72,6 +76,49 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
 
+    # ── CIC enrichment: replace self-reported bureau fields with verified data ──
+    cic_comparison = {}
+    if user.cccd:
+        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        if cic_record:
+            # Blacklist check — reject immediately without ML
+            if cic_record.blacklist_flag:
+                logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
+                new_app = LoanApplication(
+                    user_id=user.id,
+                    status="AUTO_REJECTED",
+                    **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
+                    default_probability=1.0,
+                    risk_level="High",
+                    risk_score=0,
+                    model_version="CIC_BLACKLIST",
+                    feature_snapshot={"cic_blacklisted": True, "reason": cic_record.blacklist_reason},
+                )
+                db.add(new_app)
+                try:
+                    db.commit()
+                except IntegrityError:
+                    db.rollback()
+                    raise HTTPException(400, "Bạn đã có đơn đang xử lý")
+                db.refresh(new_app)
+                return {
+                    "status": "AUTO_REJECTED",
+                    "application_id": str(new_app.id),
+                    "default_probability": 1.0,
+                    "risk_level": "High",
+                    "risk_score": 0,
+                    "credit_score_computed": cic_record.cic_score or 0,
+                    "is_perfect_fit": False,
+                    "suggested_amount": 0,
+                    "suggested_term": 0,
+                    "model_version": "CIC_BLACKLIST",
+                    "cic_blacklisted": True,
+                }
+
+            # Enrich payload with CIC data (overwrites self-reported values)
+            cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+            logger.info("CIC enrichment applied for %s", user.email)
+
     try:
         prediction = ml_service.predict(payload, db=db, user_id=user.id)
     except ml_service.ModelPredictionError as exc:
@@ -90,11 +137,15 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
             recommended_amount=prediction["suggested_amount"],
             recommended_term=prediction["suggested_term"],
             model_version=prediction["model_version"],
-            feature_snapshot=prediction["feature_snapshot"],
+            feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
             imputed_features=prediction["imputed_features"],
         )
         db.add(new_app)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(400, "Bạn đã có đơn đang xử lý")
         db.refresh(new_app)
 
         return {
@@ -132,10 +183,19 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
 
+    # ── CIC enrichment (same as evaluate) ──
+    cic_comparison = {}
+    if user.cccd:
+        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        if cic_record:
+            if cic_record.blacklist_flag:
+                raise HTTPException(400, "Tài khoản bị cấm vay do nằm trong danh sách đen CIC")
+            cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+
     try:
-        stage1, stage2 = ml_service._load_both()
+        artifact = ml_service._load()
         previous = fetch_previous_applications(db, user.id)
-        validate_confirmed_values(payload, stage1, stage2, previous_applications=previous)
+        validate_confirmed_values(payload, artifact, previous_applications=previous)
         prediction = ml_service.predict(payload, db=db, user_id=user.id)
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
@@ -155,11 +215,15 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
         recommended_amount=prediction["suggested_amount"],
         recommended_term=prediction["suggested_term"],
         model_version=prediction["model_version"],
-        feature_snapshot=prediction["feature_snapshot"],
+        feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
         imputed_features=prediction["imputed_features"],
     )
     db.add(new_app)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Bạn đã có đơn đang xử lý")
     db.refresh(new_app)
 
     return {
@@ -222,6 +286,10 @@ def submit_personal_info(db: Session, app_id: str, user_email: str, payload: Per
     )
     app.status = "INFO_SUBMITTED"
     db.add(info)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Thông tin cá nhân cho đơn này đã tồn tại")
     db.refresh(info)
     return info

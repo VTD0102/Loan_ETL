@@ -127,7 +127,11 @@ def approve_application(db: Session, app_id: str, admin_email: str):
     app.reviewed_at = datetime.now()
     app.reviewed_by = admin_user.id
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(500, "Lỗi khi duyệt đơn")
     db.refresh(app)
     return app
 
@@ -148,7 +152,11 @@ def reject_application(db: Session, app_id: str, admin_email: str, note: Optiona
     app.reviewed_by = admin_user.id
     app.admin_note = note
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(500, "Lỗi khi từ chối đơn")
     db.refresh(app)
     return app
 

@@ -58,27 +58,32 @@ async def upload_documents(
         url = await _upload_file(content, f.filename or "document", app_id)
         urls.append(url)
 
-    # Update or create PersonalInfo
+    # Update existing PersonalInfo if available, otherwise store URLs on the
+    # application itself.  We NEVER create a PersonalInfo skeleton with fake
+    # required fields — that blocks submit_personal_info() and will corrupt
+    # future CIC lookups by id_card_number.
     info = db.query(PersonalInfo).filter(PersonalInfo.application_id == app.id).first()
     if info:
         info.bank_account_number = bank_account_number
         info.document_urls = urls
+        app.status = "INFO_SUBMITTED"
     else:
-        info = PersonalInfo(
-            application_id=app.id,
-            user_id=user.id,
-            bank_account_number=bank_account_number,
-            document_urls=urls,
-            # Required fields will be filled later via personal-info endpoint
-            full_name="", id_card_number=str(uuid.uuid4()),
-            phone="", email=user_email,
-            date_of_birth=None, address="",
-        )
-        db.add(info)
+        # PersonalInfo not yet created — stash document URLs on the application
+        # so they can be merged later when submit_personal_info() is called.
+        app.feature_snapshot = {
+            **(app.feature_snapshot or {}),
+            "_pending_document_urls": urls,
+            "_pending_bank_account": bank_account_number,
+        }
+        # Do NOT change status to INFO_SUBMITTED; personal info is still missing.
 
-    app.status = "INFO_SUBMITTED"
-    db.commit()
-    db.refresh(info)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(500, "Lỗi khi lưu tài liệu")
+    if info:
+        db.refresh(info)
 
     return {"document_urls": urls, "bank_account_number": bank_account_number}
 

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,6 +19,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     username: Mapped[str] = mapped_column(String)
     password_hash: Mapped[str] = mapped_column(String)
+    cccd: Mapped[Optional[str]] = mapped_column(String(12), unique=True, nullable=True, index=True)
     role: Mapped[str] = mapped_column(String, default="customer")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     chat_sessions: Mapped[List["ChatSession"]] = relationship(
