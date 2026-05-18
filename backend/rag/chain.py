@@ -18,16 +18,10 @@ from typing import Any
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_openai import ChatOpenAI
-from sqlalchemy.orm import Session
-
 from core.config import settings
 from rag.config import LLM_MODEL, OPENROUTER_BASE_URL
 from rag.guardrails import check_input, check_output
-from rag.personalizer import (
-    PersonalizationContext,
-    build_personalization,
-    get_intent_instructions,
-)
+from rag.personalizer import PersonalizationContext, get_intent_instructions
 from rag.prompts import chat_prompt
 from rag.retriever import get_retriever
 from rag.router import classify_intent, needs_retrieval
@@ -55,8 +49,7 @@ def invoke(
     question: str,
     user_context: str,
     chat_history: list,
-    db: Session | None = None,
-    user_id: Any = None,
+    personalization: "PersonalizationContext | None" = None,
 ) -> dict:
     """Full RAG pipeline: guardrail → route → retrieve → personalise → LLM → guardrail.
 
@@ -68,10 +61,8 @@ def invoke(
         Pre-built textual context from ``context_builder.build_user_context``.
     chat_history : list
         LangChain message objects for conversation memory.
-    db : Session, optional
-        Database session for personalization queries.
-    user_id : Any, optional
-        Current user ID for personalization.
+    personalization : PersonalizationContext, optional
+        Pre-built personalization context. If ``None``, defaults are used.
 
     Returns
     -------
@@ -102,14 +93,9 @@ def invoke(
             logger.exception("Retrieval failed, continuing without docs")
             documents = []
 
-    # ── Step 4: Personalization ───────────────────────────────────────────
-    personalization = PersonalizationContext()
-    if db is not None and user_id is not None:
-        try:
-            personalization = build_personalization(db, user_id)
-        except Exception:
-            logger.exception("Personalization failed, using defaults")
-
+    # ── Step 4: Personalization (caller-provided) ─────────────────────────
+    if personalization is None:
+        personalization = PersonalizationContext()
     intent_instructions = get_intent_instructions(intent)
 
     # ── Step 5: LLM call ─────────────────────────────────────────────────

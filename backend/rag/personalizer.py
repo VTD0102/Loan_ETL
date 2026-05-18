@@ -9,11 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy.orm import Session
-
-from models.application import LoanApplication
-from models.user import User
-
 
 # ── Result type ───────────────────────────────────────────────────────────────
 
@@ -145,38 +140,29 @@ _INTENT_INSTRUCTIONS: dict[str, str] = {
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def build_personalization(db: Session, user_id: Any) -> PersonalizationContext:
-    """Build personalized context from user profile and latest application.
+def build_personalization(
+    user: "User | None",
+    app: "LoanApplication | None",
+) -> PersonalizationContext:
+    """Build personalized context from user profile + latest application.
 
-    Returns a ``PersonalizationContext`` with display name, tone, and
-    greeting appropriate to the user's current application status.
+    Caller is responsible for fetching ``user`` and ``app`` from the database
+    (or passing ``None``). This keeps the RAG layer decoupled from the ORM
+    session.
     """
     ctx = PersonalizationContext()
 
-    # Fetch user name
-    user = db.query(User).filter(User.id == user_id).first()
-    if user and user.username:
+    if user is not None and getattr(user, "username", None):
         ctx.user_display_name = user.username
-
-    # Fetch latest application status
-    app = (
-        db.query(LoanApplication)
-        .filter(LoanApplication.user_id == user_id)
-        .order_by(LoanApplication.submitted_at.desc())
-        .first()
-    )
 
     if app is not None:
         ctx.application_status = (app.status or "").lower()
     else:
         ctx.application_status = None
 
-    # Map status to tone
-    status_key = ctx.application_status
-    tone_config = _STATUS_TONES.get(status_key) or _STATUS_TONES.get(None)
+    tone_config = _STATUS_TONES.get(ctx.application_status) or _STATUS_TONES.get(None)
     ctx.tone_instructions = tone_config["tone"]
     ctx.greeting_line = tone_config["greeting"]
-
     return ctx
 
 

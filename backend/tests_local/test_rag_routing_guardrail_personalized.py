@@ -51,12 +51,13 @@ def test_chain_injects_personalization_into_prompt_payload():
         tone_instructions = "Giọng điệu: kiểm thử cá nhân hóa."
 
     original_get_chain = chain.get_chain
-    original_build_personalization = chain.build_personalization
     try:
         chain.get_chain = lambda: FakeChain()
-        chain.build_personalization = lambda db, user_id: FakePersonalization()
 
-        result = chain.invoke("Xin chào", "ctx", [], db=object(), user_id=123)
+        result = chain.invoke(
+            "Xin chào", "ctx", [],
+            personalization=FakePersonalization(),
+        )
 
         assert result["intent"] == "greeting"
         assert captured_payload["user_display_name"] == "Minh"
@@ -64,7 +65,6 @@ def test_chain_injects_personalization_into_prompt_payload():
         assert captured_payload["context"] == "Không tìm thấy tài liệu liên quan trong kho kiến thức."
     finally:
         chain.get_chain = original_get_chain
-        chain.build_personalization = original_build_personalization
 
 
 if __name__ == "__main__":
