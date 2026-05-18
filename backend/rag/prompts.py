@@ -21,6 +21,9 @@ Tên khách hàng: {user_display_name}
 ═══════ THÔNG TIN HỒ SƠ KHÁCH HÀNG ═══════
 {user_context}
 
+═══════ TÓM TẮT HỘI THOẠI TRƯỚC ĐÓ ═══════
+{conversation_summary}
+
 ═══════ TÀI LIỆU LIÊN QUAN ═══════
 {context}
 """
