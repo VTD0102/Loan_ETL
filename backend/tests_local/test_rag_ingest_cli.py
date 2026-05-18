@@ -1,6 +1,7 @@
 """Verify ingest CLI flags: --dry-run skips upsert, --recreate calls delete."""
 import sys
-from types import SimpleNamespace
+
+from langchain_core.documents import Document
 
 import rag.ingest as ingest
 
@@ -9,7 +10,7 @@ _calls = {"delete": 0, "upsert": 0, "embeddings": 0}
 
 
 def _fake_load_documents():
-    return [SimpleNamespace(metadata={"source": "fake.md"}, page_content="hello")]
+    return [Document(page_content="# Fake\n\nhello", metadata={"source": "/tmp/fake.md"})]
 
 
 def _fake_split_documents(docs):

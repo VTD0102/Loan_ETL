@@ -10,7 +10,8 @@ from pathlib import Path
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+from rag.chunking import split_documents_semantically
 
 from rag.config import (
     EMBEDDING_MODEL, OPENROUTER_BASE_URL,
@@ -36,15 +37,12 @@ def load_documents():
             loader_kwargs={"encoding": "utf-8"},
         )
         loaded = loader.load()
-        for doc in loaded:
-            doc.metadata["source"] = Path(doc.metadata["source"]).name
         docs.extend(loaded)
     return docs
 
 
 def split_documents(docs):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
-    return splitter.split_documents(docs)
+    return split_documents_semantically(docs)
 
 
 def get_embeddings():
@@ -104,7 +102,10 @@ def main():
     if args.dry_run:
         for i, chunk in enumerate(chunks[:2]):
             source = chunk.metadata.get("source", "?")
-            print(f"--- Chunk {i + 1} ({source}) ---")
+            section = chunk.metadata.get("section_title", "?")
+            source_type = chunk.metadata.get("source_type", "?")
+            parent_id = chunk.metadata.get("parent_id", "?")
+            print(f"--- Chunk {i + 1} ({source} | {source_type} | {section} | parent={parent_id}) ---")
             print(chunk.page_content[:200])
         print(f"\nDry run: would upsert {len(chunks)} chunks to '{args.collection}'")
         return
