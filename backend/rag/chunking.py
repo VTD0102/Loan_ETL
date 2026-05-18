@@ -171,11 +171,26 @@ def _split_markdown_into_parent_sections(markdown: str, base_metadata: dict) -> 
 
 
 def _split_faq_sections(markdown: str, base_metadata: dict) -> list[dict[str, str]]:
+    document_title = (
+        _extract_h1_title(markdown)
+        or base_metadata.get("document_title")
+        or base_metadata.get("source")
+        or "Preamble"
+    )
     matches = list(_FAQ_RE.finditer(markdown))
     if not matches:
+        body = markdown.strip()
+        if body:
+            return [{"section_title": document_title, "content": body}]
         return []
 
     sections: list[dict[str, str]] = []
+    preamble = markdown[: matches[0].start()].strip()
+    preamble = _H1_PATTERN.sub("", preamble, count=1).strip()
+    preamble = re.sub(r"^-+\s*$", "", preamble, flags=re.MULTILINE).strip()
+    if preamble:
+        sections.append({"section_title": document_title, "content": preamble})
+
     for index, match in enumerate(matches):
         start = match.start()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown)

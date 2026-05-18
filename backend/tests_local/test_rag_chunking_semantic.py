@@ -134,6 +134,28 @@ def test_faq_question_answer_block_stays_together():
     assert "DTI là tỷ lệ nợ trên thu nhập" in dti_chunks[0].metadata["parent_content"]
 
 
+def test_faq_preamble_is_preserved_as_parent():
+    md = (
+        "# FAQ về CreditIntel\n\n"
+        "Tài liệu này trả lời các câu hỏi thường gặp.\n\n"
+        "---\n\n"
+        "**Q: Bao lâu thì được duyệt?**\n\n"
+        "**A:** 1-3 ngày làm việc."
+    )
+    chunks = split_documents_semantically([
+        Document(page_content=md, metadata={"source": "faq.md"}),
+    ])
+
+    parents = expand_child_documents_to_parents(chunks)
+    titles = [parent.metadata["section_title"] for parent in parents]
+    assert "FAQ về CreditIntel" in titles, "preamble parent must exist"
+    preamble = next(
+        parent for parent in parents
+        if parent.metadata["section_title"] == "FAQ về CreditIntel"
+    )
+    assert "câu hỏi thường gặp" in preamble.page_content
+
+
 def test_expand_child_documents_to_parents_deduplicates_by_parent_id():
     child_a = Document(
         page_content="child A",
@@ -192,6 +214,7 @@ if __name__ == "__main__":
     test_document_without_headings_becomes_single_parent()
     test_children_inherit_document_title()
     test_faq_question_answer_block_stays_together()
+    test_faq_preamble_is_preserved_as_parent()
     test_expand_child_documents_to_parents_deduplicates_by_parent_id()
     test_extract_h1_title_returns_first_h1_text()
     test_extract_h1_title_returns_none_when_absent()
