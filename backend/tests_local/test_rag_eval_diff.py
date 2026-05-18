@@ -47,7 +47,43 @@ def test_diff_results_marks_missing_baseline_case_as_regression():
     assert diff["has_regression"] is True
 
 
+def test_diff_results_run_level_regression_triggers_has_regression():
+    """Avg overall drop > 0.05 flags regression even when no case regresses individually."""
+    baseline = [
+        {"id": "FAQ-01", "group": "faq", "faithfulness": 1.0, "context_precision": 1.0, "overall": 1.0},
+        {"id": "FAQ-02", "group": "faq", "faithfulness": 1.0, "context_precision": 1.0, "overall": 1.0},
+    ]
+    current = [
+        {"id": "FAQ-01", "group": "faq", "faithfulness": 0.93, "context_precision": 0.93, "overall": 0.93},
+        {"id": "FAQ-02", "group": "faq", "faithfulness": 0.93, "context_precision": 0.93, "overall": 0.93},
+    ]
+
+    diff = diff_results(current, baseline)
+
+    statuses = {case["id"]: case["status"] for case in diff["cases"]}
+    assert statuses["FAQ-01"] == "same", "individual case below per-case regression threshold"
+    assert statuses["FAQ-02"] == "same"
+    assert diff["regressed_case_ids"] == []
+    assert diff["summary"]["run_regressed"] is True, "run-level avg drop must flag regression"
+    assert diff["has_regression"] is True
+
+
+def test_diff_results_marks_unchanged_case_as_same():
+    baseline = [{"id": "FAQ-01", "group": "faq", "faithfulness": 0.8, "context_precision": 0.8, "overall": 0.8}]
+    current = [{"id": "FAQ-01", "group": "faq", "faithfulness": 0.8, "context_precision": 0.8, "overall": 0.8}]
+
+    diff = diff_results(current, baseline)
+
+    assert diff["cases"][0]["status"] == "same"
+    assert diff["cases"][0]["overall_delta"] == 0.0
+    assert diff["has_regression"] is False
+    assert diff["improved_case_ids"] == []
+    assert diff["regressed_case_ids"] == []
+
+
 if __name__ == "__main__":
     test_diff_results_marks_regressions_and_improvements()
     test_diff_results_marks_missing_baseline_case_as_regression()
+    test_diff_results_run_level_regression_triggers_has_regression()
+    test_diff_results_marks_unchanged_case_as_same()
     print("RAG eval diff checks passed.")
