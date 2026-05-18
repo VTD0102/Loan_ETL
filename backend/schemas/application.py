@@ -90,9 +90,9 @@ class ApplicationRead(BaseModel):
     loan_amount: Decimal
     term: int
     employment_status: str
-    dti: Decimal
+    dti: Optional[Decimal] = None
     is_homeowner: bool
-    listing_category: Union[str, int]
+    listing_category: Optional[Union[str, int]] = None
     credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
 
     # v3 (nullable với row cũ)

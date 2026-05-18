@@ -10,7 +10,6 @@ from schemas.personal_info import PersonalInfoCreate
 from services import ml_service
 from services.loan_suggestion_service import validate_confirmed_values
 from services.model_feature_builder import fetch_previous_applications
-from decimal import Decimal
 
 
 def _get_user(db: Session, email: str) -> User:
@@ -40,14 +39,16 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "loan_amount":             payload.loan_amount,
         "term":                    payload.term,
         "employment_status":       payload.employment_status,
+        "dti":                     payload.dti,
         "is_homeowner":            payload.is_homeowner,
-        "loan_purpose":            payload.loan_purpose,
+        "listing_category":        str(payload.listing_category),
         "occupation_type":         payload.occupation_type,
         "years_employed":          payload.years_employed,
         "num_bureau_records":      payload.num_bureau_records,
         "num_active_credit":       payload.num_active_credit,
         "total_overdue_amount":    payload.total_overdue_amount,
         "max_credit_overdue_days": payload.max_credit_overdue_days,
+        "has_bad_debt":            payload.has_bad_debt,
         "income_verifiable_flag":  payload.income_verifiable_flag,
         "age_years":               payload.age_years,
         "gender_male_flag":        payload.gender_male_flag,
@@ -57,7 +58,6 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "is_married_flag":         payload.is_married_flag,
         # System-computed by ML pipeline
         "credit_score":            prediction.get("credit_score_computed"),
-        "dti":                     Decimal(str(prediction.get("hc_dti", 0.0))),
     }
 
 
@@ -133,9 +133,9 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     _check_active_application(db, user.id)
 
     try:
-        stage1, stage2 = ml_service._load_both()
+        artifact = ml_service._load()
         previous = fetch_previous_applications(db, user.id)
-        validate_confirmed_values(payload, stage1, stage2, previous_applications=previous)
+        validate_confirmed_values(payload, artifact, previous_applications=previous)
         prediction = ml_service.predict(payload, db=db, user_id=user.id)
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
