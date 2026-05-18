@@ -78,7 +78,12 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         error=error_flag,
     ))
     session.updated_at = datetime.utcnow()
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to persist assistant message")
+        raise HTTPException(503, _RAG_ERROR_MESSAGE)
 
     if error_flag:
         raise HTTPException(status_code=503, detail=answer)

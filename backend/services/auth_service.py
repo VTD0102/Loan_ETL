@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from models.user import User
 from schemas.user import UserCreate as UserRegister, UserLogin, TokenOut
@@ -7,22 +8,34 @@ from core.security import create_access_token, hash_password, verify_password
 
 
 def register(db: Session, payload: UserRegister):
-    existing_user = db.query(User).filter(User.email == payload.email).first()
-    if existing_user:
+    # Check email
+    if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email đã được đăng ký"
         )
-    
+
+    # Check CCCD uniqueness
+    if db.query(User).filter(User.cccd == payload.cccd).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CCCD này đã được sử dụng bởi tài khoản khác"
+        )
+
     hashed_pwd = hash_password(payload.password)
     new_user = User(
         email=payload.email,
         username=payload.username,
         password_hash=hashed_pwd,
+        cccd=payload.cccd,
         role="customer"
     )
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Email hoặc CCCD đã tồn tại")
     db.refresh(new_user)
 
     token_payload = {"sub": new_user.email, "role": new_user.role}
