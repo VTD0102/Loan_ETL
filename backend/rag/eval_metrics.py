@@ -231,3 +231,101 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
         "failing_case_ids": failing_case_ids,
         "groups": groups,
     }
+
+
+def _result_map(results: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {str(result.get("id")): result for result in results}
+
+
+def _delta(current: dict[str, Any], baseline: dict[str, Any], key: str) -> float:
+    return round(float(current.get(key, 0.0)) - float(baseline.get(key, 0.0)), 4)
+
+
+def _case_diff_status(current: dict[str, Any], baseline: dict[str, Any]) -> str:
+    overall_delta = _delta(current, baseline, "overall")
+    baseline_passed = float(baseline.get("overall", 0.0)) >= PASS_THRESHOLD
+    current_passed = float(current.get("overall", 0.0)) >= PASS_THRESHOLD
+    if overall_delta <= CASE_REGRESSION_DELTA or (baseline_passed and not current_passed):
+        return "regressed"
+    if overall_delta > 0:
+        return "improved"
+    return "same"
+
+
+def diff_results(
+    current_results: list[dict[str, Any]],
+    baseline_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare current eval results against a baseline by case ID."""
+    current_by_id = _result_map(current_results)
+    baseline_by_id = _result_map(baseline_results)
+    case_ids = sorted(set(current_by_id) | set(baseline_by_id))
+
+    case_diffs: list[dict[str, Any]] = []
+    regressed_case_ids: list[str] = []
+    improved_case_ids: list[str] = []
+    for case_id in case_ids:
+        current = current_by_id.get(case_id)
+        baseline = baseline_by_id.get(case_id)
+
+        if current is None and baseline is not None:
+            status = "missing"
+            diff = {
+                "id": case_id,
+                "group": baseline.get("group"),
+                "status": status,
+                "faithfulness_delta": -float(baseline.get("faithfulness", 0.0)),
+                "context_precision_delta": -float(baseline.get("context_precision", 0.0)),
+                "overall_delta": -float(baseline.get("overall", 0.0)),
+                "current_overall": None,
+                "baseline_overall": baseline.get("overall"),
+            }
+        elif baseline is None and current is not None:
+            status = "new"
+            diff = {
+                "id": case_id,
+                "group": current.get("group"),
+                "status": status,
+                "faithfulness_delta": float(current.get("faithfulness", 0.0)),
+                "context_precision_delta": float(current.get("context_precision", 0.0)),
+                "overall_delta": float(current.get("overall", 0.0)),
+                "current_overall": current.get("overall"),
+                "baseline_overall": None,
+            }
+        else:
+            assert current is not None and baseline is not None
+            status = _case_diff_status(current, baseline)
+            diff = {
+                "id": case_id,
+                "group": current.get("group") or baseline.get("group"),
+                "status": status,
+                "faithfulness_delta": _delta(current, baseline, "faithfulness"),
+                "context_precision_delta": _delta(current, baseline, "context_precision"),
+                "overall_delta": _delta(current, baseline, "overall"),
+                "current_overall": current.get("overall"),
+                "baseline_overall": baseline.get("overall"),
+            }
+
+        if status in {"regressed", "missing"}:
+            regressed_case_ids.append(case_id)
+        elif status == "improved":
+            improved_case_ids.append(case_id)
+        case_diffs.append(diff)
+
+    current_summary = summarize_results(current_results)
+    baseline_summary = summarize_results(baseline_results)
+    avg_overall_delta = round(current_summary["avg_overall"] - baseline_summary["avg_overall"], 4)
+    run_regressed = avg_overall_delta <= RUN_REGRESSION_DELTA
+
+    return {
+        "summary": {
+            "current": current_summary,
+            "baseline": baseline_summary,
+            "avg_overall_delta": avg_overall_delta,
+            "run_regressed": run_regressed,
+        },
+        "cases": case_diffs,
+        "regressed_case_ids": regressed_case_ids,
+        "improved_case_ids": improved_case_ids,
+        "has_regression": bool(regressed_case_ids or run_regressed),
+    }
