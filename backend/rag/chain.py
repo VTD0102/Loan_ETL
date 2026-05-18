@@ -164,6 +164,12 @@ def _format_documents(documents: list[Any]) -> str:
         content = getattr(doc, "page_content", str(doc))
         metadata = getattr(doc, "metadata", {}) or {}
         source = metadata.get("source") or metadata.get("file_path") or metadata.get("title")
-        header = f"[{index}] {source}" if source else f"[{index}]"
+        section = metadata.get("section_title")
+        if source and section:
+            header = f"[{index}] {source} — {section}"
+        elif source:
+            header = f"[{index}] {source}"
+        else:
+            header = f"[{index}]"
         chunks.append(f"{header}\n{content}")
     return "\n\n".join(chunks)
