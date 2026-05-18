@@ -155,7 +155,7 @@
       "PENDING_REVIEW"
     ],
     "must_include": [
-      "1",
+      "1 ngày|1-3 ngày",
       "3 ngày làm việc|1-3 ngày",
       "PENDING_REVIEW"
     ],
