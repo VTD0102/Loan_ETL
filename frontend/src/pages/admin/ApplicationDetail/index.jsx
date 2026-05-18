@@ -112,6 +112,9 @@ const AdminApplicationDetailPage = () => {
     { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
     { label: 'Thu nhập xác minh',  value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
   ]
+  
+  const isCicApplied = app.feature_snapshot?.cic_applied
+  const cicScore = app.feature_snapshot?.cic_score
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -173,6 +176,17 @@ const AdminApplicationDetailPage = () => {
 
           {/* 4. Lịch sử tín dụng */}
           <SectionCard title="Lịch sử tín dụng (Bureau)">
+            {isCicApplied && (
+              <div className="mb-4 p-3 bg-success-50 border border-success-200 rounded-lg flex items-center gap-3">
+                <svg className="w-5 h-5 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-semibold text-success-800">Đã xác minh qua CIC</p>
+                  <p className="text-xs text-success-700">Dữ liệu bên dưới đã được tự động cập nhật từ hệ thống CIC quốc gia. Điểm CIC: {cicScore || 'N/A'}</p>
+                </div>
+              </div>
+            )}
             <InfoGrid items={bureauInfo} />
           </SectionCard>
 
