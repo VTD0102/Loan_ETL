@@ -111,6 +111,32 @@ def test_run_eval_file_writes_results_and_diff(tmp_path):
     assert diff["improved_case_ids"] == ["FAQ-02"]
 
 
+def test_run_eval_file_missing_baseline_raises_value_error(tmp_path):
+    dataset_path = tmp_path / "dataset.json"
+    output_path = tmp_path / "results.json"
+    diff_path = tmp_path / "diff.json"
+    baseline_path = tmp_path / "does_not_exist.json"
+
+    dataset_path.write_text(json.dumps([_case()], ensure_ascii=False), encoding="utf-8")
+
+    raised = None
+    try:
+        run_eval_file(
+            dataset_path=dataset_path,
+            output_path=output_path,
+            baseline_path=baseline_path,
+            diff_path=diff_path,
+            invoke_func=_fake_invoke,
+            enforce_dataset_size=False,
+        )
+    except ValueError as exc:
+        raised = exc
+
+    assert raised is not None, "expected ValueError when baseline missing"
+    assert "Baseline" in str(raised) or "baseline" in str(raised)
+    assert str(baseline_path) in str(raised)
+
+
 if __name__ == "__main__":
     import tempfile
 
@@ -118,4 +144,6 @@ if __name__ == "__main__":
     test_run_eval_cases_scores_fake_invoker()
     with tempfile.TemporaryDirectory() as directory:
         test_run_eval_file_writes_results_and_diff(Path(directory))
+    with tempfile.TemporaryDirectory() as directory:
+        test_run_eval_file_missing_baseline_raises_value_error(Path(directory))
     print("RAG eval runner checks passed.")

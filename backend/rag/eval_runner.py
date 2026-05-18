@@ -119,7 +119,13 @@ def run_eval_file(
     _write_json(output_path, {"summary": summary, "results": results})
 
     if baseline is not None:
-        diff = diff_results(results, _read_results(baseline))
+        try:
+            baseline_results = _read_results(baseline)
+        except FileNotFoundError as exc:
+            raise ValueError(f"Baseline file not found: {baseline}") from exc
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Cannot read baseline file {baseline}: {exc}") from exc
+        diff = diff_results(results, baseline_results)
         if diff_output is not None:
             _write_json(diff_output, diff)
         if fail_on_regression and diff["has_regression"]:
