@@ -85,7 +85,7 @@ export const MOCK_APP_STATUS = 'AWAITING_INFO'
 | `AWAITING_INFO`   | Được duyệt, cần nộp thông tin cá nhân            |
 | `INFO_SUBMITTED`  | Đã nộp đầy đủ thông tin, chờ xử lý              |
 
-> **Test form nộp đơn:** Nhập `credit_score < 600` hoặc `DTI > 70` → mock trả `AUTO_REJECTED`. Ngược lại → `PENDING_REVIEW`.
+> **Test form nộp đơn:** Form hiện tại không còn hỏi `credit_score`. Mock tự động từ chối khi hồ sơ có tín hiệu rủi ro rõ ràng như DTI cao, tỷ lệ trả nợ/thu nhập cao hoặc có nợ xấu; ngược lại trả `PENDING_REVIEW`.
 
 #### Tắt mock, chuyển sang backend thật
 

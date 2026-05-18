@@ -34,7 +34,7 @@ const features = [
       </svg>
     ),
     title: 'AI-Powered',
-    desc: 'Mô hình Random Forest được huấn luyện trên hơn 113,000 khoản vay thực. ROC-AUC 0.864.',
+    desc: 'LightGBM v4 dự đoán rủi ro từ bộ Stability hơn 1.5 triệu hồ sơ; scorecard riêng quy đổi thành điểm tín dụng 300–850.',
   },
   {
     icon: (
@@ -79,7 +79,7 @@ const LandingPage = () => {
           </div>
           {/* Stats row */}
           <div className="mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto">
-            {[['113K+', 'Khoản vay đã phân tích'], ['0.864', 'ROC-AUC Score'], ['< 3s', 'Thời gian phân tích']].map(([val, lbl]) => (
+            {[['1.52M+', 'Hồ sơ Stability'], ['0.8065', 'ROC-AUC LightGBM'], ['300–850', 'Điểm scorecard']].map(([val, lbl]) => (
               <div key={lbl} className="text-center">
                 <div className="text-2xl font-bold text-primary-600">{val}</div>
                 <div className="text-xs text-gray-500 mt-1">{lbl}</div>

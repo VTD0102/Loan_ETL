@@ -17,9 +17,11 @@ class FakeChain:
 def main():
     original_chain = chain._chain
     original_get_retriever = chain.get_retriever
+    original_classify_intent = chain.classify_intent
     try:
         chain._chain = FakeChain()
         chain.get_retriever = lambda: FailingRetriever()
+        chain.classify_intent = lambda question, chat_history: "personal_advice"
 
         result = chain.invoke(
             "Tôi nên cải thiện hồ sơ vay như thế nào?",
@@ -33,6 +35,7 @@ def main():
     finally:
         chain._chain = original_chain
         chain.get_retriever = original_get_retriever
+        chain.classify_intent = original_classify_intent
 
 
 if __name__ == "__main__":

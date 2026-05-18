@@ -112,7 +112,8 @@ Phần này ghi lại ý nghĩa của các file/thư mục và các cốt lõi c
 - **Data Protection:** Chữ chuẩn hóa Pydantic Schema `PersonalInfoRead` tiếp tục được tái sử dụng để cắt gọt các cột thừa thãi của bảng Database, chỉ hiển thị đúng các trường `full_name, id_card_number, phone, email, date_of_birth, address, submitted_at` theo yêu cầu tuyệt vời của kiến trúc sư trưởng.
 
 ### 🤖 Task 1.11: Tích hợp Trí tuệ nhân tạo (ML Model) vào Submit Application
-- **Bảo hiểm rủi ro (Fault-Tolerant Mocking):** Backend bọc ML prediction vào `try...except`. Khi Model chưa sẵn sàng hoặc feature không khớp, hệ thống tự động sinh Mock data dựa trên credit_score để giữ server ổn định, chờ Team ML hoàn thiện integration.
+- **Model contract v4:** Backend load `customer_risk_model.pkl` và build feature vector qua `model_feature_builder.py`. Contract hiện tại dùng 35 feature từ Stability dataset, không dùng `credit_score` tự khai báo, giới tính, số con hoặc số thành viên gia đình.
+- **Fail-fast khi artifact lỗi:** Nếu model chưa sẵn sàng hoặc feature contract lệch, service trả lỗi rõ ràng để sửa artifact/ETL thay vì sinh mock dựa trên dữ liệu không còn trong form.
 - **Auto-Reject Mechanism (Máy chém tự động):** Khi User bấm `POST /applications/submit`, Backend gọi ngầm Service ML (từ `ml_service.py`). Nhận lại kết quả tỉ lệ mặc định `prob`. 
   - Nếu `prob > 0.4`, Backend gắn nhãn `AUTO_REJECTED` lên đơn và khóa vĩnh viễn.
   - Ngược lại nó được phép vào quy trình `PENDING_REVIEW` cho Admin xử lý. Toàn bộ `risk_level`, `risk_score` từ AI được ghi vào DB trong cùng transaction.

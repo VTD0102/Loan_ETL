@@ -1,5 +1,7 @@
 # ML_FEATURES.md — Tài liệu đặc trưng & kết quả huấn luyện mô hình
 
+> **Lưu ý 18/05/2026:** Tài liệu này mô tả pipeline v3 cũ. Pipeline hiện tại đã chuyển sang Home Credit Stability v2/v4, bỏ `credit_score`, `credit_score_midpoint`, `rating_ordinal`, `gender_male_flag`, `cnt_children`, `cnt_fam_members`. Xem `docs/migration_v2_summary.md` để lấy contract và metric mới nhất.
+
 > **Phiên bản model:** customer_lgbm_v3 (LightGBM) + scorecard_v3 (LR Scorecard)  
 > **Ngày cập nhật:** Tháng 5 năm 2026  
 > **Dữ liệu huấn luyện:** 300,360 rows từ `gold.hc_features_v1` (Home Credit Default Risk)  
@@ -18,7 +20,7 @@
 | 3 | `dti` | Debt-to-Income ratio: tổng trả nợ hàng tháng / thu nhập tháng. Càng cao càng nguy. | Form — nhập số | **#4 — 2,811** |
 | 4 | `years_employed` | Số năm làm việc liên tục tại công ty hiện tại. Thâm niên cao → thu nhập ổn định. | Form — nhập số (năm) | **#5 — 2,727** |
 | 5 | `monthly_income` | Thu nhập hàng tháng (USD). Nền tảng để đánh giá khả năng trả nợ. | Form — nhập số | **#8 — 1,727** |
-| 6 | `term` | Kỳ hạn vay: 12, 36, hoặc 60 tháng. Kỳ hạn dài → thanh toán nhỏ hơn nhưng tổng lãi cao hơn. | Form — chọn | **#7 — 1,916** |
+| 6 | `term` | Kỳ hạn vay: 12, 24, 36, 48 hoặc 60 tháng. Kỳ hạn dài → thanh toán nhỏ hơn nhưng tổng lãi cao hơn. | Form — chọn | **#7 — 1,916** |
 | 7 | `occupation_type` | Nghề nghiệp (19 loại: 18 HC gốc + Unknown). Một số nghề có tỷ lệ vỡ nợ cao rõ rệt (xem bảng bên dưới). | Form — dropdown | **#13 — 1,171** |
 | 8 | `education_ordinal` | Trình độ học vấn (1=Tiểu học → 5=Sau đại học). Học vấn cao tương quan với thu nhập ổn định. | Form — dropdown | **#14 — 465** |
 | 9 | `cnt_fam_members` | Tổng số người trong gia đình. Nhiều người phụ thuộc → áp lực tài chính cao hơn. | Form — nhập số | **#15 — 415** |

@@ -1,5 +1,5 @@
 """
-Full ETL pipeline — Home Credit Default Risk.
+Full ETL pipeline — Home Credit Credit Risk Model Stability (v2).
 
 Bronze → Silver → Gold (DuckDB local)
 

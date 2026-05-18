@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendMessage } from '../../../services/chat'
+import { getChatHistory, sendMessage } from '../../../services/chat'
 import ChatMessage from '../../../components/customer/ChatMessage'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
@@ -9,6 +9,12 @@ const SUGGESTIONS = [
   'Tôi nên vay bao nhiêu là hợp lý?',
   'DTI là gì và ảnh hưởng như thế nào?',
 ]
+
+const CHAT_SESSION_KEY = 'creditintel_chat_session_id'
+const DEFAULT_MESSAGE = {
+  role: 'assistant',
+  content: 'Xin chào! Tôi là trợ lý AI của CreditIntel. Tôi có thể giúp bạn hiểu về kết quả đánh giá tín dụng, cách cải thiện điểm tín dụng, hoặc tư vấn về khoản vay. Bạn cần hỏi gì?',
+}
 
 const TypingIndicator = () => (
   <div className="flex gap-3">
@@ -24,14 +30,42 @@ const TypingIndicator = () => (
 )
 
 const ChatbotPage = () => {
-  const [messages,  setMessages]  = useState([
-    { role: 'assistant', content: 'Xin chào! Tôi là trợ lý AI của CreditIntel. Tôi có thể giúp bạn hiểu về kết quả đánh giá tín dụng, cách cải thiện điểm tín dụng, hoặc tư vấn về khoản vay. Bạn cần hỏi gì?' },
-  ])
+  const [messages,  setMessages]  = useState([DEFAULT_MESSAGE])
   const [input,     setInput]     = useState('')
   const [loading,   setLoading]   = useState(false)
   const [sessionId, setSessionId] = useState(null)
+  const [hydrating, setHydrating] = useState(true)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadHistory = async () => {
+      const savedSessionId = localStorage.getItem(CHAT_SESSION_KEY)
+      try {
+        const res = await getChatHistory(savedSessionId)
+        if (cancelled) return
+        const loaded = res.data?.messages || []
+        if (res.data?.session_id) {
+          setSessionId(res.data.session_id)
+          localStorage.setItem(CHAT_SESSION_KEY, res.data.session_id)
+        }
+        if (loaded.length > 0) {
+          setMessages(loaded.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+            sources: msg.sources || [],
+          })))
+        }
+      } catch {
+        localStorage.removeItem(CHAT_SESSION_KEY)
+      } finally {
+        if (!cancelled) setHydrating(false)
+      }
+    }
+    loadHistory()
+    return () => { cancelled = true }
+  }, [])
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -40,7 +74,7 @@ const ChatbotPage = () => {
 
   const handleSend = async (text) => {
     const content = (text || input).trim()
-    if (!content || loading) return
+    if (!content || loading || hydrating) return
 
     const userMsg = { role: 'user', content }
     setMessages((prev) => [...prev, userMsg])
@@ -49,7 +83,10 @@ const ChatbotPage = () => {
 
     try {
       const res = await sendMessage({ message: content, session_id: sessionId })
-      if (res.data?.session_id) setSessionId(res.data.session_id)
+      if (res.data?.session_id) {
+        setSessionId(res.data.session_id)
+        localStorage.setItem(CHAT_SESSION_KEY, res.data.session_id)
+      }
       const reply = res.data?.response || res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
     } catch {
@@ -94,6 +131,11 @@ const ChatbotPage = () => {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+          {hydrating && (
+            <div className="flex justify-center py-3">
+              <LoadingSpinner size="sm" />
+            </div>
+          )}
           {messages.map((msg, i) => (
             <ChatMessage key={i} message={msg} />
           ))}
@@ -103,7 +145,7 @@ const ChatbotPage = () => {
       </div>
 
       {/* Suggestions — show only before first user message */}
-      {messages.length === 1 && (
+      {messages.length === 1 && !hydrating && (
         <div className="max-w-3xl mx-auto px-4 pb-4 w-full">
           <p className="text-xs text-gray-400 mb-2 text-center">Gợi ý câu hỏi</p>
           <div className="flex flex-wrap gap-2 justify-center">
@@ -131,12 +173,13 @@ const ChatbotPage = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Nhập câu hỏi... (Enter để gửi)"
+              disabled={hydrating}
               className="flex-1 bg-transparent resize-none text-sm text-gray-800 placeholder-gray-400 outline-none max-h-32"
               style={{ overflowY: 'auto' }}
             />
             <button
               onClick={() => handleSend()}
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || hydrating}
               className="flex-shrink-0 w-9 h-9 bg-primary-600 text-white rounded-xl flex items-center justify-center
                          hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >

@@ -11,11 +11,120 @@ import {
 } from './mockData'
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
+const MOCK_CHAT_SESSION_ID = '00000000-0000-4000-8000-000000000001'
+const MOCK_CHAT_HISTORY_KEY = 'MOCK_CHAT_HISTORY'
 
 const saveToStorage = () => {
   localStorage.setItem('MOCK_ADMIN_APPS', JSON.stringify(MOCK_ADMIN_APPS))
   localStorage.setItem('MOCK_PERSONAL_INFOS', JSON.stringify(MOCK_PERSONAL_INFOS))
 }
+
+const getMockChatHistory = () => {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_CHAT_HISTORY_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+const saveMockChatHistory = (messages) => {
+  localStorage.setItem(MOCK_CHAT_HISTORY_KEY, JSON.stringify(messages))
+}
+
+const mockPrediction = (body) => {
+  const dtiRaw = parseFloat(body.dti || 0)
+  const dti = dtiRaw > 1 ? dtiRaw / 100 : dtiRaw
+  const income = parseFloat(body.monthly_income || 0)
+  const loan = parseFloat(body.loan_amount || 0)
+  const term = parseInt(body.term || 36)
+  const paymentToIncome = income > 0 && term > 0 ? (loan / term) / income : 0
+  const badDebtPenalty = body.has_bad_debt === true || body.has_bad_debt === 'true' ? 0.18 : 0
+  const prob = Math.min(0.85, Math.max(0.03, 0.05 + dti * 0.35 + paymentToIncome * 0.9 + badDebtPenalty))
+  const status = prob > 0.4 ? 'AUTO_REJECTED' : 'PENDING_REVIEW'
+  return {
+    status,
+    default_probability: Number(prob.toFixed(4)),
+    risk_level: prob > 0.4 ? 'High' : prob > 0.2 ? 'Medium' : 'Low',
+    risk_score: Math.round((1 - prob) * 100),
+    is_perfect_fit: prob < 0.2,
+    suggested_amount: status === 'AUTO_REJECTED' ? Math.round(loan * 0.75) : Math.round(loan * 0.9),
+    suggested_term: status === 'AUTO_REJECTED' ? 60 : term,
+    model_version: 'mock_lgbm_v4_stability',
+  }
+}
+
+const scoreBand = (score) => {
+  if (score >= 740) return 'Excellent'
+  if (score >= 670) return 'Good'
+  if (score >= 580) return 'Fair'
+  return 'Poor'
+}
+
+const mockScorecard = (app) => {
+  const prob = Number(app.default_probability ?? mockPrediction(app).default_probability)
+  const score = Math.max(300, Math.min(850, Math.round(820 - prob * 650)))
+  return {
+    member_key: String(app.user_id || MOCK_USER.id),
+    credit_score: score,
+    score_band: scoreBand(score),
+    default_probability: prob,
+    risk_level: prob > 0.4 ? 'High' : prob > 0.2 ? 'Medium' : 'Low',
+    top_factors: [
+      {
+        feature: 'payment_to_income',
+        direction: prob > 0.2 ? 'increases_risk' : 'decreases_risk',
+        impact: Number((prob * 0.8).toFixed(4)),
+      },
+      {
+        feature: 'has_bad_debt',
+        direction: app.has_bad_debt ? 'increases_risk' : 'decreases_risk',
+        impact: app.has_bad_debt ? 0.22 : -0.08,
+      },
+      {
+        feature: 'income_verifiable_flag',
+        direction: app.income_verifiable_flag ? 'decreases_risk' : 'increases_risk',
+        impact: app.income_verifiable_flag ? -0.12 : 0.1,
+      },
+    ],
+  }
+}
+
+const buildMockApplication = (body, prediction) => ({
+  id: Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1,
+  user_id: MOCK_USER.id,
+  user_email: MOCK_USER.email,
+  user_username: MOCK_USER.username,
+  monthly_income: parseFloat(body.monthly_income || 0),
+  loan_amount: parseFloat(body.loan_amount || 0),
+  term: parseInt(body.term || 12),
+  employment_status: body.employment_status || 'Employed',
+  dti: parseFloat(body.dti || 0),
+  is_homeowner: body.is_homeowner === 'true' || body.is_homeowner === true,
+  listing_category: body.listing_category || 'Other',
+  credit_score: body.credit_score ?? null,
+  occupation_type: body.occupation_type || 'OTHER',
+  years_employed: parseFloat(body.years_employed || 0),
+  num_bureau_records: parseInt(body.num_bureau_records || 0),
+  num_active_credit: parseInt(body.num_active_credit || 0),
+  total_overdue_amount: parseFloat(body.total_overdue_amount || 0),
+  max_credit_overdue_days: parseInt(body.max_credit_overdue_days || 0),
+  has_bad_debt: body.has_bad_debt === 'true' || body.has_bad_debt === true,
+  income_verifiable_flag: body.income_verifiable_flag === 'true' || body.income_verifiable_flag === true,
+  age_years: parseInt(body.age_years || 0),
+  education_ordinal: parseInt(body.education_ordinal || 3),
+  is_married_flag: body.is_married_flag === 'true' || body.is_married_flag === true,
+  status: prediction.status,
+  default_probability: prediction.default_probability,
+  risk_level: prediction.risk_level,
+  risk_score: prediction.risk_score,
+  recommended_amount: prediction.suggested_amount,
+  recommended_term: prediction.suggested_term,
+  model_version: prediction.model_version,
+  submitted_at: new Date().toISOString(),
+  reviewed_at: null,
+  reviewed_by: null,
+  admin_note: null
+})
 
 export const mockHandlers = async (config) => {
   const { method, url, data: rawData } = config
@@ -52,85 +161,46 @@ export const mockHandlers = async (config) => {
     return [404, { detail: 'Not found' }]
   }
 
-  if (m === 'get' && /\/applications\/\d+$/.test(url) && !url.includes('/admin/')) {
+  if (m === 'get' && /\/applications\/\d+$/.test(url) && !url.includes('/admin/') && !url.includes('/credit-score/')) {
     const id = parseInt(url.split('/').pop())
     const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
     if (found && found.user_id === MOCK_USER.id) return [200, found]
     return [404, { detail: 'Not found' }]
   }
 
-  // Phase 1: evaluate (runs AI, returns score + suggestion, saves only if AUTO_REJECTED)
-  if (m === 'post' && url.endsWith('/applications/evaluate')) {
-    const income   = parseFloat(body.monthly_income || 5000)
-    const loanAmt  = parseFloat(body.loan_amount || 10000)
-    const term     = parseInt(body.term || 36)
-    // Mock credit score: derived from years_employed + bureau records (simulating Stage 1)
-    const yrsEmp   = parseFloat(body.years_employed || 0)
-    const bureau   = parseInt(body.num_bureau_records || 0)
-    const mockScore = Math.min(850, Math.max(300, 480 + yrsEmp * 8 + bureau * 15 + (body.is_homeowner ? 30 : 0)))
-    const mockProb  = Math.max(0.01, Math.min(0.99, 0.45 - (mockScore - 300) / 1100))
-    const riskLevel = mockProb < 0.20 ? 'Low' : mockProb < 0.40 ? 'Medium' : 'High'
-    const sugAmt    = Math.min(loanAmt * 1.2, income * 12 * 0.4)
-
-    if (mockProb > 0.40) {
-      const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
-      const newApp = {
-        id: newId, user_id: MOCK_USER.id, status: 'AUTO_REJECTED',
-        monthly_income: income, loan_amount: loanAmt, term,
-        employment_status: body.employment_status || 'Employed',
-        loan_purpose: body.loan_purpose || 'Personal',
-        credit_score: Math.round(mockScore), dti: (loanAmt / term) / income,
-        is_homeowner: body.is_homeowner === true || body.is_homeowner === 'true',
-        default_probability: mockProb, risk_level: 'High', risk_score: Math.round((1 - mockProb) * 100),
-        recommended_amount: Math.round(sugAmt / 100) * 100, recommended_term: 36,
-        submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, admin_note: null,
-      }
-      MOCK_ADMIN_APPS.unshift(newApp)
-      saveToStorage()
-      return [200, {
-        status: 'AUTO_REJECTED', application_id: String(newId),
-        default_probability: mockProb, risk_level: 'High', risk_score: Math.round((1 - mockProb) * 100),
-        credit_score_computed: Math.round(mockScore),
-        is_perfect_fit: false, suggested_amount: Math.round(sugAmt / 100) * 100, suggested_term: 36,
-      }]
-    }
-
-    return [200, {
-      status: 'PENDING_REVIEW', application_id: null,
-      default_probability: mockProb, risk_level: riskLevel, risk_score: Math.round((1 - mockProb) * 100),
-      credit_score_computed: Math.round(mockScore),
-      is_perfect_fit: loanAmt <= sugAmt * 0.9,
-      suggested_amount: Math.round(sugAmt / 100) * 100, suggested_term: term,
-    }]
+  if (m === 'get' && /\/credit-score\/applications\/\d+$/.test(url)) {
+    const id = parseInt(url.split('/').pop())
+    const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
+    if (found && found.user_id === MOCK_USER.id) return [200, mockScorecard(found)]
+    return [404, { detail: 'Application not found' }]
   }
 
-  // Phase 2: confirm (saves to DB)
-  if (m === 'post' && url.endsWith('/applications/confirm')) {
-    const income  = parseFloat(body.monthly_income || 5000)
-    const loanAmt = parseFloat(body.loan_amount || 10000)
-    const term    = parseInt(body.term || 36)
-    const yrsEmp  = parseFloat(body.years_employed || 0)
-    const bureau  = parseInt(body.num_bureau_records || 0)
-    const mockScore = Math.min(850, Math.max(300, 480 + yrsEmp * 8 + bureau * 15 + (body.is_homeowner ? 30 : 0)))
-    const mockProb  = Math.max(0.01, Math.min(0.99, 0.45 - (mockScore - 300) / 1100))
-    const newId = Math.max(0, ...MOCK_ADMIN_APPS.map((a) => a.id)) + 1
-    const newApp = {
-      id: newId, user_id: MOCK_USER.id, status: 'PENDING_REVIEW',
-      monthly_income: income, loan_amount: loanAmt, term,
-      employment_status: body.employment_status || 'Employed',
-      loan_purpose: body.loan_purpose || 'Personal',
-      credit_score: Math.round(mockScore), dti: (loanAmt / term) / income,
-      is_homeowner: body.is_homeowner === true || body.is_homeowner === 'true',
-      default_probability: mockProb, risk_level: mockProb < 0.20 ? 'Low' : 'Medium',
-      risk_score: Math.round((1 - mockProb) * 100),
-      recommended_amount: loanAmt, recommended_term: term,
-      submitted_at: new Date().toISOString(), reviewed_at: null, reviewed_by: null, admin_note: null,
-    }
-    MOCK_ADMIN_APPS.unshift(newApp)
+  if (m === 'get' && /\/credit-score\/admin\/applications\/\d+$/.test(url)) {
+    const id = parseInt(url.split('/').pop())
+    const found = MOCK_ADMIN_APPS.find((a) => a.id === id)
+    if (found) return [200, mockScorecard(found)]
+    return [404, { detail: 'Application not found' }]
+  }
+
+  if (m === 'post' && url.endsWith('/applications/evaluate')) {
+    const prediction = mockPrediction(body)
+    return [200, { ...prediction, application_id: null }]
+  }
+
+  if (m === 'post' && (url.endsWith('/applications/confirm') || url.endsWith('/applications'))) {
+    const prediction = mockPrediction(body)
+    const newApp = buildMockApplication(body, prediction)
+    MOCK_ADMIN_APPS.unshift(newApp) // Push to top so Admin sees it first
     saveToStorage()
-    return [201, { application_id: String(newId), status: 'PENDING_REVIEW', default_probability: mockProb,
-      risk_level: newApp.risk_level, risk_score: newApp.risk_score,
-      suggested_amount: loanAmt, suggested_term: term }]
+    return [200, {
+      application_id: String(newApp.id),
+      status: newApp.status,
+      default_probability: newApp.default_probability,
+      risk_level: newApp.risk_level,
+      risk_score: newApp.risk_score,
+      suggested_amount: newApp.recommended_amount,
+      suggested_term: newApp.recommended_term,
+    }]
   }
 
   if (m === 'post' && /\/applications\/\d+\/personal-info$/.test(url) && !url.includes('/admin/')) {
@@ -158,7 +228,19 @@ export const mockHandlers = async (config) => {
   /* ── Chat ─────────────────────────────────────────── */
   if (m === 'post' && url.endsWith('/chat')) {
     await delay(600) // extra delay to simulate LLM
-    return [200, { reply: getNextChatResponse() }]
+    const reply = getNextChatResponse()
+    const history = getMockChatHistory()
+    const nextHistory = [
+      ...history,
+      { role: 'user', content: body.message || '' },
+      { role: 'assistant', content: reply, sources: [] },
+    ]
+    saveMockChatHistory(nextHistory)
+    return [200, { response: reply, reply, session_id: MOCK_CHAT_SESSION_ID, sources: [] }]
+  }
+
+  if (m === 'get' && url.includes('/chat/history')) {
+    return [200, { session_id: MOCK_CHAT_SESSION_ID, messages: getMockChatHistory() }]
   }
 
   if (m === 'get' && url.endsWith('/chat/sessions')) {

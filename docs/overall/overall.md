@@ -254,7 +254,7 @@ python -m machinelearning.etl.etl_gold
 |---|---|---|
 | `monthly_income` | float | Thu nhập hàng tháng (USD) |
 | `loan_amount` | float | Số tiền muốn vay (USD) |
-| `term` | int | Kỳ hạn: 12, 36 hoặc 60 tháng |
+| `term` | int | Kỳ hạn: 12, 24, 36, 48 hoặc 60 tháng |
 | `employment_status` | str | Employed / Self-employed / Retired / Not employed / Other |
 | `dti` | float | Debt-to-income ratio |
 | `is_homeowner` | bool | Sở hữu nhà |

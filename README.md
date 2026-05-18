@@ -1,7 +1,7 @@
 # CreditIntel - Hệ Thống Quản Lý & Đánh Giá Rủi Ro Khoản Vay
 
 > Dự án môn Hệ Quản Trị CSDL - Nhóm KH086  
-> FastAPI Backend + React Frontend + Home Credit ETL + Machine Learning + RAG Chatbot
+> FastAPI Backend + React Frontend + Home Credit Stability ETL + Machine Learning + RAG Chatbot
 
 ---
 
@@ -90,7 +90,7 @@ graph TB
     subgraph STORAGE["💾 Lưu trữ (Database)"]
         POSTGRES[("🐘 PostgreSQL / Supabase<br/>users · loan_applications<br/>chat_sessions · chat_messages<br/>personal_info")]
         QDRANT[("🔷 Qdrant Vector DB<br/>Collection: creditintel-kb<br/>Embedding tài liệu RAG")]
-        DUCKDB[("🦆 DuckDB Local<br/>Bronze → Silver → Gold<br/>ETL Home Credit data")]
+        DUCKDB[("🦆 DuckDB Local<br/>Bronze → Silver → Gold<br/>ETL Stability data")]
     end
 
     AUTH_SVC --> POSTGRES
@@ -201,14 +201,14 @@ graph LR
 ```mermaid
 graph TB
     subgraph DATA_SOURCE["📂 Nguồn dữ liệu"]
-        CSV["Home Credit CSV Files<br/>application_train.csv<br/>previous_application.csv<br/>bureau.csv"]
+        CSV["Home Credit Stability Parquet<br/>train_base.parquet<br/>train_static_0_*.parquet<br/>bureau + previous application"]
     end
 
     subgraph ETL_PIPELINE["🔄 ETL Pipeline (machinelearning/etl/)"]
         direction TB
-        BRONZE["🥉 load_bronze.py<br/>Load CSV → DuckDB raw tables"]
-        SILVER["🥈 etl_silver.py<br/>Clean + transform<br/>SQL: transform_silver_homecredit.sql"]
-        GOLD["🥇 etl_gold.py<br/>Feature engineering<br/>SQL: transform_gold_homecredit.sql"]
+        BRONZE["🥉 load_bronze.py<br/>Load Parquet → DuckDB raw tables"]
+        SILVER["🥈 etl_silver.py<br/>Clean + transform<br/>SQL: transform_silver_hcv2.sql"]
+        GOLD["🥇 etl_gold.py<br/>Feature engineering<br/>SQL: transform_gold_hcv2.sql"]
     end
 
     CSV --> BRONZE
@@ -222,7 +222,7 @@ graph TB
         TRAIN_SCORE["train_scorecard.py<br/>LR credit scorecard"]
     end
 
-    GOLD -->|"gold.hc_features_v1"| VALIDATE
+    GOLD -->|"gold.hc_features_v2"| VALIDATE
     VALIDATE --> TRAIN_RISK
     VALIDATE --> TRAIN_SCORE
 
@@ -264,10 +264,10 @@ graph TB
 ```
 
 > **Chú thích ETL & ML:**
-> - **Bronze**: Load raw CSV vào DuckDB, giữ nguyên schema gốc.
+> - **Bronze**: Load raw Parquet của Home Credit Credit Risk Model Stability vào DuckDB, giữ nguyên schema gốc.
 > - **Silver**: Làm sạch dữ liệu (xử lý null, chuẩn hóa kiểu dữ liệu, loại bỏ outliers) theo SQL transforms.
-> - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ nhiều bảng) → bảng `gold.hc_features_v1`.
-> - **Training**: 2 model được train: LightGBM cho dự đoán rủi ro vỡ nợ, Logistic Regression cho credit scorecard (FICO-style 300–850).
+> - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ bureau/previous applications/CB queries) → bảng `gold.hc_features_v2`.
+> - **Training**: 2 model được train: LightGBM v4 cho dự đoán rủi ro vỡ nợ (35 feature, không dùng `credit_score` tự khai báo) và Logistic Regression scorecard (30 feature, FICO-style 300–850).
 > - **Runtime**: Backend load model artifacts bằng `joblib` và chạy inference real-time khi khách hàng nộp đơn.
 
 ---
@@ -323,7 +323,7 @@ Loan_ETL/
 │   ├── database/             # SQL transforms: silver + gold
 │   ├── ml/                   # Training: retrain_customer_model, train_scorecard
 │   │   └── models/           # Exported .pkl artifacts
-│   ├── data/                 # DuckDB + raw CSV files (Home Credit)
+│   ├── data/                 # DuckDB + raw Parquet files (Home Credit Stability)
 │   ├── config/               # etl_db.env
 │   ├── notebooks/            # EDA / training notebooks
 │   └── utils/                # Shared DB connection helper
@@ -380,6 +380,11 @@ Backend dùng model artifacts tại:
 - `machinelearning/ml/models/customer_risk_model.pkl`
 - `machinelearning/ml/models/scorecard_model.pkl`
 
+Model hiện tại:
+
+- `customer_lgbm_v4_stability`: 35 feature từ `gold.hc_features_v2`, ROC-AUC gần nhất `0.8065`.
+- `scorecard_model.pkl`: 30 feature, FICO-style 300–850, ROC-AUC gần nhất `0.7367`.
+
 ### 3. Frontend React
 
 ```bash
@@ -435,11 +440,18 @@ QDRANT_COLLECTION=creditintel-kb
 
 ### 5. ETL Pipeline
 
-Đặt các file Home Credit CSV vào `machinelearning/data/home_credit/`, ví dụ:
+Đặt dataset Home Credit Credit Risk Model Stability dạng Parquet vào:
 
-- `application_train.csv`
-- `previous_application.csv`
-- `bureau.csv`
+`machinelearning/data/home-credit-credit-risk-model-stability/parquet_files/train/`
+
+Các file tối thiểu mà loader đang dùng:
+
+- `train_base.parquet`
+- `train_static_0_*.parquet`
+- `train_static_cb_0.parquet`
+- `train_person_1.parquet`
+- `train_credit_bureau_a_1_*.parquet`
+- `train_applprev_1_*.parquet`
 
 Chạy toàn bộ pipeline:
 
@@ -468,6 +480,12 @@ Kiểm tra contract artifact:
 
 ```bash
 python -m machinelearning.ml.check_customer_model_contract
+```
+
+Notebook EDA/evaluation chính:
+
+```bash
+jupyter lab machinelearning/notebooks/home_credit_eda.ipynb
 ```
 
 ## Công Nghệ Sử Dụng

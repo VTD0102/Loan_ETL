@@ -20,19 +20,24 @@ def _artifact():
     }
     defaults.update({
         "employment_status": "Other/Unknown",
-        "occupation_type": "Unknown",
+        "occupation_type": "OTHER",
         "years_employed": 0,
         "num_bureau_records": 2,
         "num_active_credit": 1,
+        "num_active_credit_bureau": 1,
         "total_overdue_amount": 0,
         "max_credit_overdue_days": 0,
+        "max_dpd_24m": 0,
+        "avg_dpd_recent": 0,
+        "num_installs_dpd10": 0,
+        "total_prolongations": 0,
+        "max_overdue_amount": 0,
+        "cb_queries_30d": 0,
+        "num_cb_queries": 0,
         "has_bad_debt": 0,
         "income_verifiable_flag": 1,
         "age_years": 38,
-        "gender_male_flag": 0,
         "education_ordinal": 3,
-        "cnt_children": 0,
-        "cnt_fam_members": 2,
         "is_married_flag": 1,
     })
     return {
@@ -51,8 +56,7 @@ def test_full_payload_uses_supplied_optional_values_and_derives_history():
         dti=Decimal("0.45"),
         is_homeowner=True,
         listing_category="Debt Consolidation",
-        credit_score=720,
-        occupation_type="Laborers",
+        occupation_type="EMPLOYED",
         years_employed=Decimal("4.5"),
         num_bureau_records=5,
         num_active_credit=2,
@@ -61,10 +65,7 @@ def test_full_payload_uses_supplied_optional_values_and_derives_history():
         has_bad_debt=False,
         income_verifiable_flag=True,
         age_years=41,
-        gender_male_flag=True,
         education_ordinal=4,
-        cnt_children=2,
-        cnt_fam_members=4,
         is_married_flag=True,
     )
     previous = [
@@ -75,21 +76,36 @@ def test_full_payload_uses_supplied_optional_values_and_derives_history():
     result = build_model_input(payload, _artifact(), previous_applications=previous)
 
     assert list(result.features) == ALL_FEATURES
-    assert result.imputed_features == []
-    assert result.features["occupation_type"] == "Laborers"
+    assert "credit_score" not in result.features
+    assert "rating_ordinal" not in result.features
+    assert "gender_male_flag" not in result.features
+    assert "cnt_children" not in result.features
+    assert "cnt_fam_members" not in result.features
+    assert set(result.imputed_features) == {
+        "avg_dpd_recent",
+        "num_installs_dpd10",
+        "total_prolongations",
+        "cb_queries_30d",
+        "num_cb_queries",
+    }
+    assert result.features["occupation_type"] == "EMPLOYED"
     assert result.features["years_employed"] == 4.5
     assert result.features["total_overdue_amount"] == 125.50
     assert result.features["has_bad_debt"] == 0
-    assert result.features["gender_male_flag"] == 1
     assert result.features["log_monthly_income"] == math.log1p(5000)
-    assert result.features["loan_amount_to_income"] == 2
+    assert result.features["loan_amount_to_income"] == 10000 / (5000 * 12)
+    assert result.features["payment_to_income"] == (10000 / 36) / 5000
+    assert result.features["current_debt_ratio"] == 125.50 / 10000
+    assert result.features["total_debt_to_income"] == 125.50 / (5000 * 12)
+    assert result.features["max_dpd_24m"] == 15
+    assert result.features["num_active_credit_bureau"] == 2
+    assert result.features["max_overdue_amount"] == 125.50
     assert result.features["high_dti_flag"] == 1
-    assert result.features["rating_ordinal"] == 6
     assert result.features["num_previous_loans"] == 2
     assert result.features["previous_default_rate"] == 0.5
 
 
-def test_required_payload_without_history_derives_features_without_imputation():
+def test_v4_payload_without_deprecated_fields_derives_features_with_defaults():
     payload = ApplicationCreate(
         monthly_income=Decimal("4000"),
         loan_amount=Decimal("8000"),
@@ -98,8 +114,7 @@ def test_required_payload_without_history_derives_features_without_imputation():
         dti=Decimal("0.20"),
         is_homeowner=False,
         listing_category="Other",
-        credit_score=650,
-        occupation_type="Unknown",
+        occupation_type="SELFEMPLOYED",
         years_employed=Decimal("0"),
         num_bureau_records=2,
         num_active_credit=1,
@@ -108,17 +123,16 @@ def test_required_payload_without_history_derives_features_without_imputation():
         has_bad_debt=False,
         income_verifiable_flag=True,
         age_years=38,
-        gender_male_flag=False,
         education_ordinal=3,
-        cnt_children=0,
-        cnt_fam_members=2,
         is_married_flag=True,
     )
 
     result = build_model_input(payload, _artifact(), previous_applications=[])
 
-    assert result.imputed_features == []
-    assert result.features["occupation_type"] == "Unknown"
+    assert list(result.features) == ALL_FEATURES
+    assert "credit_score" not in result.features
+    assert "rating_ordinal" not in result.features
+    assert result.features["occupation_type"] == "SELFEMPLOYED"
     assert result.features["years_employed"] == 0
     assert result.features["age_years"] == 38
     assert result.features["num_previous_loans"] == 0
@@ -128,5 +142,5 @@ def test_required_payload_without_history_derives_features_without_imputation():
 
 if __name__ == "__main__":
     test_full_payload_uses_supplied_optional_values_and_derives_history()
-    test_required_payload_without_history_derives_features_without_imputation()
+    test_v4_payload_without_deprecated_fields_derives_features_with_defaults()
     print("model_feature_builder tests passed")

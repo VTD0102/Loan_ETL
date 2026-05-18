@@ -12,6 +12,7 @@ export const getRiskDistribution     = ()       => api.get('/admin/dashboard/ris
 export const getPendingApplications  = (params) => api.get('/admin/applications/pending', { params })
 export const getAllApplications       = (params) => api.get('/admin/applications', { params })
 export const getAdminApplicationById = (id)     => api.get(`/admin/applications/${id}`)
+export const getAdminApplicationCreditScore = (id) => api.get(`/credit-score/admin/applications/${id}`)
 export const approveApplication      = (id, data) => api.post(`/admin/applications/${id}/approve`, data)
 export const rejectApplication       = (id, data) => api.post(`/admin/applications/${id}/reject`, data)
 

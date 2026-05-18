@@ -142,7 +142,7 @@ Tài liệu này mô tả toàn bộ các tính năng dành cho **Khách hàng (
 |----------------------------|----------|-----------------------------------|
 | Thu nhập hàng tháng (USD)  | Number   | > 0, bắt buộc                    |
 | Số tiền muốn vay (USD)     | Number   | > 0, ≤ 40,000, bắt buộc          |
-| Kỳ hạn vay                 | Dropdown | 12 / 36 / 60 tháng               |
+| Kỳ hạn vay                 | Dropdown | 12 / 24 / 36 / 48 / 60 tháng     |
 | Tỷ lệ nợ/Thu nhập (DTI %)  | Number   | 0–100, có tooltip giải thích      |
 | Tình trạng việc làm        | Dropdown | Employed, Self-employed, v.v.     |
 | Điểm tín dụng              | Number   | 300–850                           |
