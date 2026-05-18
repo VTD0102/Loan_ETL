@@ -19,6 +19,9 @@ class ChatSession(Base):
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    summary_covers_until_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
+    summary_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
     messages: Mapped[list["ChatMessage"]] = relationship(
