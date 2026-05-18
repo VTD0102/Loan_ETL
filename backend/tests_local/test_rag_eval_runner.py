@@ -67,6 +67,38 @@ def test_run_eval_cases_scores_fake_invoker():
     assert results[0]["sources_returned"] == ["faq.md"]
 
 
+def test_run_eval_cases_records_invoker_error_and_continues():
+    """When the invoker raises for one case, the run continues and the error is recorded."""
+    base_case = {
+        "group": "g",
+        "expected_behavior": "...",
+        "must_include": [],
+        "must_not_include": [],
+        "expected_context_terms": [],
+        "expected_sources": [],
+    }
+    cases = [
+        {**base_case, "id": "OK-1", "question": "q1", "ground_truth": "gt1"},
+        {**base_case, "id": "BAD-2", "question": "q2", "ground_truth": "gt2"},
+        {**base_case, "id": "OK-3", "question": "q3", "ground_truth": "gt3"},
+    ]
+    attempted = []
+
+    def flaky_invoke(question, user_context):
+        attempted.append(question)
+        if question == "q2":
+            raise RuntimeError("upstream blip")
+        return {"answer": "stub", "source_documents": []}
+
+    results = run_eval_cases(cases, invoke_func=flaky_invoke)
+
+    assert attempted == ["q1", "q2", "q3"], "all 3 cases must be attempted, even after failure"
+    by_id = {result["id"]: result for result in results}
+    assert "error" in by_id["BAD-2"] and "upstream blip" in by_id["BAD-2"]["error"]
+    assert by_id["OK-3"].get("error") is None
+    assert by_id["OK-1"].get("error") is None
+
+
 def test_run_eval_file_writes_results_and_diff(tmp_path):
     dataset_path = tmp_path / "dataset.json"
     output_path = tmp_path / "results.json"
@@ -142,6 +174,7 @@ if __name__ == "__main__":
 
     test_serialize_document_extracts_metadata()
     test_run_eval_cases_scores_fake_invoker()
+    test_run_eval_cases_records_invoker_error_and_continues()
     with tempfile.TemporaryDirectory() as directory:
         test_run_eval_file_writes_results_and_diff(Path(directory))
     with tempfile.TemporaryDirectory() as directory:
