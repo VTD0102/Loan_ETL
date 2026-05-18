@@ -18,7 +18,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         raise HTTPException(status_code=401, detail="User not found")
 
     _enforce_rate_limit(db, user.id)
-    _ensure_latest_application_has_prediction(db, user.id)
+    app = _ensure_latest_application_has_prediction(db, user.id)
     session = _get_or_create_session(db, user.id, session_id)
     history_rows = (
         db.query(ChatMessage)
@@ -30,8 +30,9 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
 
     try:
         from langchain_core.messages import AIMessage, HumanMessage
-        from rag.chain import invoke
+        from rag.chain import invoke as rag_invoke
         from rag.context_builder import build_user_context
+        from rag.personalizer import build_personalization
 
         chat_history = []
         for row in reversed(history_rows):
@@ -41,9 +42,10 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
                 chat_history.append(AIMessage(content=row.content))
 
         context = build_user_context(db, user.id)
-        response_payload = invoke(
+        personalization = build_personalization(user, app)
+        response_payload = rag_invoke(
             payload_message, context, chat_history,
-            db=db, user_id=user.id,
+            personalization=personalization,
         )
         answer = response_payload.get("answer", "Xin lỗi, hiện tại tôi không thể kết nối tới lõi suy luận kiến thức.")
         sources = _extract_sources(response_payload.get("source_documents", []))
@@ -147,15 +149,22 @@ def _get_or_create_session(db: Session, user_id: Any, session_id: Any = None) ->
     return session
 
 
-def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> None:
+def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> LoanApplication | None:
+    """Ensure the user's latest application has ML prediction fields filled.
+
+    Returns the latest application (or None if the user has none). Callers
+    can reuse this object to avoid a duplicate query downstream.
+    """
     app = (
         db.query(LoanApplication)
         .filter(LoanApplication.user_id == user_id)
         .order_by(LoanApplication.submitted_at.desc())
         .first()
     )
-    if app is None or (app.default_probability is not None and app.model_version):
-        return
+    if app is None:
+        return None
+    if app.default_probability is not None and app.model_version:
+        return app
 
     payload = _application_to_payload(app)
     try:
@@ -175,6 +184,7 @@ def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> None
     app.feature_snapshot = prediction.get("feature_snapshot")
     app.imputed_features = prediction.get("imputed_features")
     db.flush()
+    return app
 
 
 def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
