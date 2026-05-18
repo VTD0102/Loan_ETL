@@ -164,9 +164,12 @@ def _format_documents(documents: list[Any]) -> str:
         content = getattr(doc, "page_content", str(doc))
         metadata = getattr(doc, "metadata", {}) or {}
         source = metadata.get("source") or metadata.get("file_path") or metadata.get("title")
-        section = metadata.get("section_title")
-        if source and section:
-            header = f"[{index}] {source} — {section}"
+        document_title = metadata.get("document_title")
+        section_title = metadata.get("section_title")
+        if source and document_title and section_title and document_title != section_title:
+            header = f"[{index}] {source} :: {document_title} → {section_title}"
+        elif source and section_title:
+            header = f"[{index}] {source} :: {section_title}"
         elif source:
             header = f"[{index}] {source}"
         else:

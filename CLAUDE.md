@@ -157,6 +157,8 @@ PYTHONPATH=. ../.venv/bin/python -m rag.ingest
 PYTHONPATH=. ../.venv/bin/python -m rag.ingest --recreate
 ```
 
+> **Note:** Sau khi nâng cấp chunking (V1+), bạn PHẢI chạy `--recreate` một lần để xoá chunks fixed-size cũ. Chạy không có `--recreate` sẽ trộn parent-child mới và fixed-size cũ trong cùng collection và làm hỏng parent expansion ở query time.
+
 ## Key Documentation
 - `README.md` — full system diagrams and quickstart (Vietnamese)
 - `backend/BACKEND_API_SPEC.md` — endpoint reference

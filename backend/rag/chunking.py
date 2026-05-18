@@ -17,6 +17,8 @@ CHILD_MAX_CHARS = 700
 CHILD_OVERLAP_CHARS = 80
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
+_H1_PATTERN = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+_H2_PATTERN = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _FAQ_RE = re.compile(r"^\*\*Q:\s*(.+?)\*\*\s*$", re.MULTILINE)
 
 
@@ -112,24 +114,56 @@ def _extract_document_title(markdown: str, fallback: str) -> str:
     return fallback
 
 
+def _extract_h1_title(markdown: str) -> str | None:
+    """Return the first ``# Heading`` text, or None if no level-1 heading exists."""
+    match = _H1_PATTERN.search(markdown)
+    if match is None:
+        return None
+    return match.group(1).strip()
+
+
 def _split_markdown_into_parent_sections(markdown: str, base_metadata: dict) -> list[dict[str, str]]:
     if base_metadata.get("source_type") == "faq":
         faq_sections = _split_faq_sections(markdown, base_metadata)
         if faq_sections:
             return faq_sections
 
-    matches = list(_HEADING_RE.finditer(markdown))
-    if not matches:
+    document_title = (
+        _extract_h1_title(markdown)
+        or base_metadata.get("document_title")
+        or base_metadata.get("source")
+        or "Document"
+    )
+    h2_matches = list(_H2_PATTERN.finditer(markdown))
+
+    if h2_matches:
+        sections: list[dict[str, str]] = []
+        preamble = markdown[: h2_matches[0].start()].strip()
+        preamble = _H1_PATTERN.sub("", preamble, count=1).strip()
+        if preamble:
+            sections.append({"section_title": document_title, "content": preamble})
+
+        for index, match in enumerate(h2_matches):
+            start = match.start()
+            end = h2_matches[index + 1].start() if index + 1 < len(h2_matches) else len(markdown)
+            section_title = match.group(1).strip()
+            content = markdown[start:end].strip()
+            if content:
+                sections.append({"section_title": section_title, "content": content})
+        return sections
+
+    h1_matches = list(_H1_PATTERN.finditer(markdown))
+    if not h1_matches:
         return [{
-            "section_title": base_metadata.get("document_title") or base_metadata.get("source") or "Document",
+            "section_title": document_title,
             "content": markdown,
         }]
 
     sections: list[dict[str, str]] = []
-    for index, match in enumerate(matches):
+    for index, match in enumerate(h1_matches):
         start = match.start()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown)
-        title = match.group(2).strip()
+        end = h1_matches[index + 1].start() if index + 1 < len(h1_matches) else len(markdown)
+        title = match.group(1).strip()
         content = markdown[start:end].strip()
         if content:
             sections.append({"section_title": title, "content": content})
@@ -137,11 +171,26 @@ def _split_markdown_into_parent_sections(markdown: str, base_metadata: dict) -> 
 
 
 def _split_faq_sections(markdown: str, base_metadata: dict) -> list[dict[str, str]]:
+    document_title = (
+        _extract_h1_title(markdown)
+        or base_metadata.get("document_title")
+        or base_metadata.get("source")
+        or "Preamble"
+    )
     matches = list(_FAQ_RE.finditer(markdown))
     if not matches:
+        body = markdown.strip()
+        if body:
+            return [{"section_title": document_title, "content": body}]
         return []
 
     sections: list[dict[str, str]] = []
+    preamble = markdown[: matches[0].start()].strip()
+    preamble = _H1_PATTERN.sub("", preamble, count=1).strip()
+    preamble = re.sub(r"^-+\s*$", "", preamble, flags=re.MULTILINE).strip()
+    if preamble:
+        sections.append({"section_title": document_title, "content": preamble})
+
     for index, match in enumerate(matches):
         start = match.start()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown)

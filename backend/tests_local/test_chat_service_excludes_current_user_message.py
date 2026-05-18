@@ -1,13 +1,10 @@
-"""chat_service.send must pass rag.memory output into _rag_invoke."""
+"""chat_service.send must exclude the current user message from memory history."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
-
-from langchain_core.messages import HumanMessage
 
 import services.chat_service as chat_service
 from models.chat import ChatMessage, ChatSession
-from rag.memory import MemoryContext
 
 
 class FakeQuery:
@@ -78,46 +75,63 @@ class FakeDB:
         self.committed += 1
 
 
-def test_chat_service_passes_summary_and_window_to_rag():
-    user = SimpleNamespace(id=uuid.uuid4(), email="b@b.com", username="Mai")
-    db = FakeDB(user)
+def _message(session_id, role, content, idx=0):
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        session_id=session_id,
+        role=role,
+        content=content,
+        sources=None,
+        error=False,
+        created_at=datetime.utcnow() + timedelta(seconds=idx),
+    )
+
+
+def test_chat_service_excludes_current_user_message_from_memory_window():
+    session = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        title="old session",
+        summary=None,
+        summary_covers_until_id=None,
+        summary_updated_at=None,
+        updated_at=None,
+    )
+    user = SimpleNamespace(id=session.user_id, email="c@d.com", username="Lan")
+    db = FakeDB(
+        user,
+        session=session,
+        messages=[
+            _message(session.id, "user", "Câu hỏi trước đó", idx=0),
+            _message(session.id, "assistant", "Câu trả lời trước đó", idx=1),
+        ],
+    )
 
     rag_call = {}
 
     def fake_invoke(question, context, chat_history, **kwargs):
         rag_call["question"] = question
-        rag_call["chat_history"] = list(chat_history)
-        rag_call["conversation_summary"] = kwargs.get("conversation_summary")
+        rag_call["chat_history"] = [message.content for message in chat_history]
         return {"answer": "OK", "source_documents": []}
-
-    def fake_load_memory(db, session, exclude_message_id=None):
-        return MemoryContext(
-            summary="Khách đã hỏi vay 30tr hôm trước.",
-            recent_messages=[HumanMessage(content="câu hỏi cũ")],
-        )
 
     def fake_build_user_context(db, user_id):
         return "ctx"
 
     original_invoke = chat_service._rag_invoke
-    original_load_memory = chat_service.load_memory
     original_ctx = chat_service.build_user_context
     chat_service._rag_invoke = fake_invoke
-    chat_service.load_memory = fake_load_memory
     chat_service.build_user_context = fake_build_user_context
     try:
-        result = chat_service.send(db, "b@b.com", "Tôi muốn vay 50tr")
+        chat_service.send(db, "c@d.com", "Tôi muốn vay 50tr", session_id=session.id)
     finally:
         chat_service._rag_invoke = original_invoke
-        chat_service.load_memory = original_load_memory
         chat_service.build_user_context = original_ctx
 
-    assert result["response"] == "OK"
-    assert rag_call["conversation_summary"] == "Khách đã hỏi vay 30tr hôm trước."
-    assert len(rag_call["chat_history"]) == 1
-    assert rag_call["chat_history"][0].content == "câu hỏi cũ"
+    assert rag_call["question"] == "Tôi muốn vay 50tr"
+    assert "Tôi muốn vay 50tr" not in rag_call["chat_history"]
+    assert rag_call["chat_history"] == ["Câu hỏi trước đó", "Câu trả lời trước đó"]
 
 
 if __name__ == "__main__":
-    test_chat_service_passes_summary_and_window_to_rag()
-    print("chat_service uses memory test passed")
+    test_chat_service_excludes_current_user_message_from_memory_window()
+    print("chat_service excludes-current-user-message test passed")

@@ -1,6 +1,6 @@
 # RAG CHATBOT PLAN — CreditIntel Customer Assistant
 
-> Tài liệu thiết kế chi tiết cho module **RAG Chatbot** trong hệ thống CreditIntel. Mở rộng Mục 8 của `APP_DEVELOPMENT_PLAN.md` thành kế hoạch thực thi đầy đủ: kiến trúc, stack, pipeline ingestion, API contract, schema DB, prompt template, checklist triển khai.
+> Tài liệu thiết kế chi tiết cho module **RAG Chatbot** trong hệ thống CreditIntel. Kiến trúc, stack, pipeline ingestion, API contract, schema DB, prompt template, checklist triển khai.
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### 1.1 Vị trí trong hệ thống
 
-RAG Chatbot là một module của CreditIntel Web App (xem `docs/overall/APP_DEVELOPMENT_PLAN.md` §8). Truy cập qua route `/chat` trên frontend React, **chỉ phục vụ khách hàng đã đăng nhập**. Admin không có chatbot (theo quyết định §11 của plan tổng).
+RAG Chatbot là một module của CreditIntel Web App. Truy cập qua route `/chat` trên frontend React, **chỉ phục vụ khách hàng đã đăng nhập**. Admin không có chatbot.
 
 ### 1.2 Mục tiêu chính
 
@@ -193,7 +193,7 @@ CREATE TABLE chat_messages (
 CREATE INDEX idx_chat_messages_session ON chat_messages(session_id, created_at);
 ```
 
-Bảng `users`, `loan_applications`, `personal_info` được tạo bởi `APP_DEVELOPMENT_PLAN.md` §7 — không trùng.
+Bảng `users`, `loan_applications`, `personal_info` được tạo bởi `backend/init_db.py` — không trùng.
 
 ---
 
@@ -412,4 +412,4 @@ Với scale lớn hơn (1000+ user), xem xét chuyển sang Qdrant Cloud/self-ho
 
 ---
 
-> Tài liệu được tạo ngày 2026-04-22, mở rộng từ Mục 8 của `APP_DEVELOPMENT_PLAN.md`. Cấu hình runtime hiện tại dùng LangChain + Qdrant + OpenRouter + `google/gemini-2.5-flash` + `openai/text-embedding-3-small` + persistent chat history.
+> Tài liệu được tạo ngày 2026-04-22. Cấu hình runtime hiện tại dùng LangChain + Qdrant + OpenRouter + `google/gemini-2.5-flash` + `openai/text-embedding-3-small` + persistent chat history.
