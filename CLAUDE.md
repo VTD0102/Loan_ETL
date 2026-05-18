@@ -105,7 +105,7 @@ python tests_local/test_router.py
 - API handlers stay thin; business logic belongs in `services/`.
 - `models/` defines DB schema; `schemas/` defines API contracts — keep them separate even when they look similar.
 - UUIDs (not integer IDs) for `users` and `loan_applications`.
-- RAG imports are lazy (`try/except ImportError`) so the API starts even if LangChain/Qdrant deps are missing.
+- RAG dependencies (LangChain, Qdrant, OpenAI SDK) are hard imports at module load — install `backend/requirements.txt` before starting the server. On upstream failure, `chat_service` catches `rag.exceptions.RAGError` and returns HTTP 503 with the assistant placeholder row already persisted (`error=True`).
 - Match existing **Vietnamese error messages** in `services/` — don't silently switch to English.
 
 **Frontend:**
