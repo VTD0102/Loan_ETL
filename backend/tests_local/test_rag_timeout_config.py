@@ -77,6 +77,7 @@ def test_retriever_timeout_kwargs():
     retriever_mod.QdrantVectorStore = FakeVectorStore
     try:
         retriever_mod.get_retriever()
+        assert retriever_mod._retriever.max_parent_docs == settings.rag_top_k
     finally:
         retriever_mod.OpenAIEmbeddings = original_emb
         retriever_mod.QdrantClient = original_client
