@@ -1,15 +1,27 @@
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
+from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.application import LoanApplication
 from models.chat import ChatMessage, ChatSession
 from models.user import User
+from rag.chain import invoke as _rag_invoke
+from rag.context_builder import build_user_context
+from rag.exceptions import RAGError
+from rag.personalizer import build_personalization
 from schemas.application import ApplicationCreate
 from services import ml_service
+
+logger = logging.getLogger(__name__)
+
+_RAG_ERROR_MESSAGE = (
+    "Xin lỗi, hệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút."
+)
 
 
 def send(db: Session, user_email: str, payload_message: str, session_id: Any = None) -> dict:
@@ -20,48 +32,65 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
     _enforce_rate_limit(db, user.id)
     app = _ensure_latest_application_has_prediction(db, user.id)
     session = _get_or_create_session(db, user.id, session_id)
+
+    # 1) Persist the user message before invoking RAG so it survives any
+    #    upstream failure.
+    user_message = ChatMessage(
+        session_id=session.id,
+        role="user",
+        content=payload_message,
+    )
+    db.add(user_message)
+    if not session.title:
+        session.title = payload_message.strip()[:80]
+    db.commit()
+
+    # 2) Re-fetch history excluding the message we just stored.
     history_rows = (
         db.query(ChatMessage)
         .filter(ChatMessage.session_id == session.id)
         .order_by(ChatMessage.created_at.desc())
-        .limit(10)
+        .limit(11)
         .all()
     )
+    history_rows = [r for r in history_rows if r.id != user_message.id][:10]
 
+    chat_history = []
+    for row in reversed(history_rows):
+        if row.role == "user":
+            chat_history.append(HumanMessage(content=row.content))
+        elif row.role == "assistant":
+            chat_history.append(AIMessage(content=row.content))
+
+    error_flag = False
+    sources: list[dict[str, Any]] = []
     try:
-        from langchain_core.messages import AIMessage, HumanMessage
-        from rag.chain import invoke as rag_invoke
-        from rag.context_builder import build_user_context
-        from rag.personalizer import build_personalization
-
-        chat_history = []
-        for row in reversed(history_rows):
-            if row.role == "user":
-                chat_history.append(HumanMessage(content=row.content))
-            elif row.role == "assistant":
-                chat_history.append(AIMessage(content=row.content))
-
         context = build_user_context(db, user.id)
         personalization = build_personalization(user, app)
-        response_payload = rag_invoke(
+        response_payload = _rag_invoke(
             payload_message, context, chat_history,
             personalization=personalization,
         )
-        answer = response_payload.get("answer", "Xin lỗi, hiện tại tôi không thể kết nối tới lõi suy luận kiến thức.")
+        answer = response_payload.get("answer") or _RAG_ERROR_MESSAGE
         sources = _extract_sources(response_payload.get("source_documents", []))
-    except ImportError as ie:
-        answer = f"RAG Module chưa sẵn sàng: {str(ie)}. Xin thử lại sau."
-        sources = []
-    except Exception as e:
-        answer = f"Lỗi truy vấn nội bộ RAG/LLM: {str(e)}"
-        sources = []
+    except RAGError:
+        logger.exception("RAG pipeline failed")
+        answer = _RAG_ERROR_MESSAGE
+        error_flag = True
 
-    if not session.title:
-        session.title = payload_message.strip()[:80]
+    # 3) Save the assistant turn (success or error placeholder).
+    db.add(ChatMessage(
+        session_id=session.id,
+        role="assistant",
+        content=answer,
+        sources=sources,
+        error=error_flag,
+    ))
     session.updated_at = datetime.utcnow()
-    db.add(ChatMessage(session_id=session.id, role="user", content=payload_message))
-    db.add(ChatMessage(session_id=session.id, role="assistant", content=answer, sources=sources))
     db.commit()
+
+    if error_flag:
+        raise HTTPException(status_code=503, detail=answer)
 
     return {
         "response": answer,
@@ -150,11 +179,6 @@ def _get_or_create_session(db: Session, user_id: Any, session_id: Any = None) ->
 
 
 def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> LoanApplication | None:
-    """Ensure the user's latest application has ML prediction fields filled.
-
-    Returns the latest application (or None if the user has none). Callers
-    can reuse this object to avoid a duplicate query downstream.
-    """
     app = (
         db.query(LoanApplication)
         .filter(LoanApplication.user_id == user_id)
@@ -188,8 +212,6 @@ def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> Loan
 
 
 def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
-    # Persisted rows can predate the current request validators, so build the
-    # internal ML payload without re-validating user-input-only constraints.
     return ApplicationCreate.model_construct(
         monthly_income=app.monthly_income,
         loan_amount=app.loan_amount,
