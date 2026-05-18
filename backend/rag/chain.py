@@ -40,6 +40,8 @@ def get_chain() -> Any:
             openai_api_key=settings.openrouter_api_key,
             openai_api_base=OPENROUTER_BASE_URL,
             temperature=0.3,
+            timeout=settings.rag_llm_timeout_seconds,
+            max_retries=settings.rag_llm_max_retries,
         )
         _chain = chat_prompt | llm | StrOutputParser()
     return _chain

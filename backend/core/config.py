@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     rag_embedding_model: str = "openai/text-embedding-3-small"
     rag_top_k: int = 4
 
+    # RAG timeouts / retries (seconds)
+    rag_llm_timeout_seconds: float = 30.0
+    rag_llm_max_retries: int = 2
+    rag_embedding_timeout_seconds: float = 10.0
+    rag_embedding_max_retries: int = 2
+    rag_qdrant_timeout_seconds: float = 5.0
+
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None

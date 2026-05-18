@@ -133,6 +133,8 @@ def _get_classifier_llm() -> ChatOpenAI:
             openai_api_base=OPENROUTER_BASE_URL,
             temperature=0,
             max_tokens=60,
+            timeout=settings.rag_llm_timeout_seconds,
+            max_retries=settings.rag_llm_max_retries,
         )
     return _classifier_llm
 
