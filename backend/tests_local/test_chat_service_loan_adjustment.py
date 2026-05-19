@@ -292,10 +292,31 @@ def test_adjustment_tool_model_error_persists_assistant_error():
 
 
 def test_reapplication_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Tôi có thể nộp lại sau khi bị từ chối không?",
+        "Bạn có thể nộp lại sau khi cập nhật hồ sơ.",
+    )
+
+
+def test_generic_credit_score_improvement_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Làm sao cải thiện điểm tín dụng?",
+        "Bạn có thể cải thiện điểm tín dụng bằng cách thanh toán đúng hạn.",
+    )
+
+
+def test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Làm sao cải thiện hồ sơ vay?",
+        "Bạn có thể cải thiện hồ sơ vay bằng cách bổ sung giấy tờ thu nhập.",
+    )
+
+
+def _assert_message_does_not_trigger_adjustment_tool(message, rag_answer):
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     session = _session(user.id)
     db = FakeDB(user, session=session)
-    rag_calls, restore_common = _patch_common(rag_answer="Bạn có thể nộp lại sau khi cập nhật hồ sơ.")
+    rag_calls, restore_common = _patch_common(rag_answer=rag_answer)
 
     original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
     find_calls = []
@@ -307,14 +328,14 @@ def test_reapplication_faq_does_not_trigger_adjustment_tool():
         result = chat_service.send(
             db,
             "loan@example.com",
-            "Tôi có thể nộp lại sau khi bị từ chối không?",
+            message,
             session_id=session.id,
         )
     finally:
         chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
         restore_common()
 
-    assert result["response"] == "Bạn có thể nộp lại sau khi cập nhật hồ sơ."
+    assert result["response"] == rag_answer
     assert find_calls == []
     assert len(rag_calls) == 1
     assert rag_calls[0]["context"] == "base user context"
@@ -372,5 +393,7 @@ if __name__ == "__main__":
     test_adjustment_question_without_proposal_does_not_store_pending_action()
     test_adjustment_tool_model_error_persists_assistant_error()
     test_reapplication_faq_does_not_trigger_adjustment_tool()
+    test_generic_credit_score_improvement_does_not_trigger_adjustment_tool()
+    test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool()
     test_whitespace_rag_answer_does_not_store_pending_action()
     print("chat service loan adjustment tests passed")

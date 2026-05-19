@@ -27,6 +27,8 @@ _ADJUSTMENT_CONTEXT_TERMS = (
     "bi tu choi",
     "không được duyệt",
     "khong duoc duyet",
+    "duyệt",
+    "duyet",
 )
 _ADJUSTMENT_DIRECT_ACTION_TERMS = (
     "đổi kỳ hạn",
@@ -37,6 +39,8 @@ _ADJUSTMENT_DIRECT_ACTION_TERMS = (
     "ky han nao",
     "thời hạn nào",
     "thoi han nao",
+)
+_ADJUSTMENT_CONTEXTUAL_ACTION_TERMS = (
     "tăng khả năng",
     "tang kha nang",
     "dễ được duyệt",
@@ -281,8 +285,9 @@ def _is_loan_adjustment_request(message: str) -> bool:
     text = _normalize_message(message)
     has_context = any(term in text for term in _ADJUSTMENT_CONTEXT_TERMS)
     has_direct_action = any(term in text for term in _ADJUSTMENT_DIRECT_ACTION_TERMS)
+    has_contextual_action = any(term in text for term in _ADJUSTMENT_CONTEXTUAL_ACTION_TERMS)
     has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
-    return has_direct_action or (has_context and has_help_action)
+    return has_direct_action or (has_context and (has_contextual_action or has_help_action))
 
 
 def _normalize_message(message: str) -> str:
