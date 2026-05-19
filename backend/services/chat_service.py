@@ -22,21 +22,37 @@ logger = logging.getLogger(__name__)
 _RAG_ERROR_MESSAGE = (
     "Xin lỗi, hệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút."
 )
-_ADJUSTMENT_INTENT_KEYWORDS = (
+_ADJUSTMENT_CONTEXT_TERMS = (
     "bị từ chối",
     "bi tu choi",
     "không được duyệt",
     "khong duoc duyet",
+)
+_ADJUSTMENT_DIRECT_ACTION_TERMS = (
     "đổi kỳ hạn",
     "doi ky han",
     "đổi thời hạn",
     "doi thoi han",
-    "nộp lại",
-    "nop lai",
+    "kỳ hạn nào",
+    "ky han nao",
+    "thời hạn nào",
+    "thoi han nao",
     "tăng khả năng",
     "tang kha nang",
     "dễ được duyệt",
     "de duoc duyet",
+    "cải thiện",
+    "cai thien",
+)
+_ADJUSTMENT_HELP_TERMS = (
+    "đề xuất",
+    "de xuat",
+    "gợi ý",
+    "goi y",
+    "phương án",
+    "phuong an",
+    "giúp tôi",
+    "giup toi",
 )
 
 
@@ -83,7 +99,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             personalization=personalization,
             conversation_summary=memory.summary,
         )
-        answer = response_payload.get("answer") or ""
+        answer = (response_payload.get("answer") or "").strip()
         sources = _extract_sources(response_payload.get("source_documents", []))
         if not answer:
             answer = _RAG_ERROR_MESSAGE
@@ -91,8 +107,8 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             sources = []
         if pending_action is not None and not error_flag:
             session.pending_action = pending_action
-    except RAGError:
-        logger.exception("RAG pipeline failed")
+    except (RAGError, ml_service.ModelPredictionError):
+        logger.exception("Chat pipeline failed")
         answer = _RAG_ERROR_MESSAGE
         error_flag = True
 
@@ -263,7 +279,10 @@ def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
 
 def _is_loan_adjustment_request(message: str) -> bool:
     text = _normalize_message(message)
-    return any(keyword in text for keyword in _ADJUSTMENT_INTENT_KEYWORDS)
+    has_context = any(term in text for term in _ADJUSTMENT_CONTEXT_TERMS)
+    has_direct_action = any(term in text for term in _ADJUSTMENT_DIRECT_ACTION_TERMS)
+    has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
+    return has_direct_action or (has_context and has_help_action)
 
 
 def _normalize_message(message: str) -> str:

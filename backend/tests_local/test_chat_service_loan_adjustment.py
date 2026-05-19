@@ -7,6 +7,8 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+from fastapi import HTTPException
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "backend"))
@@ -248,7 +250,127 @@ def test_adjustment_question_without_proposal_does_not_store_pending_action():
     assert "Phương án tốt nhất quan sát được" in rag_calls[0]["context"]
 
 
+def test_adjustment_tool_model_error_persists_assistant_error():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common()
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+
+    def raise_model_error(db, user_id):
+        raise chat_service.ml_service.ModelPredictionError("boom")
+
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = raise_model_error
+    try:
+        raised = None
+        try:
+            chat_service.send(
+                db,
+                "loan@example.com",
+                "Tôi bị từ chối, đổi kỳ hạn nào để dễ được duyệt hơn?",
+                session_id=session.id,
+            )
+        except HTTPException as exc:
+            raised = exc
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        restore_common()
+
+    assert raised is not None
+    assert raised.status_code == 503
+    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert rag_calls == []
+    assert session.pending_action is None
+    user_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "user"]
+    assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
+    assert len(user_messages) == 1
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].error is True
+    assert db.committed >= 2
+
+
+def test_reapplication_faq_does_not_trigger_adjustment_tool():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common(rag_answer="Bạn có thể nộp lại sau khi cập nhật hồ sơ.")
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+    find_calls = []
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = (
+        lambda db, user_id: find_calls.append((db, user_id))
+    )
+
+    try:
+        result = chat_service.send(
+            db,
+            "loan@example.com",
+            "Tôi có thể nộp lại sau khi bị từ chối không?",
+            session_id=session.id,
+        )
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        restore_common()
+
+    assert result["response"] == "Bạn có thể nộp lại sau khi cập nhật hồ sơ."
+    assert find_calls == []
+    assert len(rag_calls) == 1
+    assert rag_calls[0]["context"] == "base user context"
+    assert session.pending_action is None
+
+
+def test_whitespace_rag_answer_does_not_store_pending_action():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    source_application_id = uuid.uuid4()
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common(rag_answer="   ")
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+    original_build = chat_service.loan_adjustment_tool.build_pending_action
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = (
+        lambda db, user_id: _proposal_result(source_application_id)
+    )
+    chat_service.loan_adjustment_tool.build_pending_action = lambda result: {
+        "type": "loan_term_adjustment",
+        "status": "pending_confirmation",
+        "source_application_id": result.source_application_id,
+        "proposal": {"term": 36},
+    }
+
+    try:
+        raised = None
+        try:
+            chat_service.send(
+                db,
+                "loan@example.com",
+                "Tôi bị từ chối, đổi kỳ hạn nào để dễ được duyệt hơn?",
+                session_id=session.id,
+            )
+        except HTTPException as exc:
+            raised = exc
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        chat_service.loan_adjustment_tool.build_pending_action = original_build
+        restore_common()
+
+    assert raised is not None
+    assert raised.status_code == 503
+    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert session.pending_action is None
+    assert len(rag_calls) == 1
+    assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].error is True
+
+
 if __name__ == "__main__":
     test_adjustment_question_stores_pending_action_without_submitting()
     test_adjustment_question_without_proposal_does_not_store_pending_action()
+    test_adjustment_tool_model_error_persists_assistant_error()
+    test_reapplication_faq_does_not_trigger_adjustment_tool()
+    test_whitespace_rag_answer_does_not_store_pending_action()
     print("chat service loan adjustment tests passed")
