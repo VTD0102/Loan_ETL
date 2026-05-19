@@ -424,14 +424,14 @@ def _confirm_pending_loan_adjustment(
 
 def _is_affirmative_response(message: str) -> bool:
     text = _normalize_message(message)
-    if any(keyword in text for keyword in _NEGATIVE_KEYWORDS):
+    if any(_contains_phrase(text, keyword) for keyword in _NEGATIVE_KEYWORDS):
         return False
-    return any(keyword in text for keyword in _AFFIRMATIVE_KEYWORDS)
+    return any(_contains_phrase(text, keyword) for keyword in _AFFIRMATIVE_KEYWORDS)
 
 
 def _is_negative_response(message: str) -> bool:
     text = _normalize_message(message)
-    return any(keyword in text for keyword in _NEGATIVE_KEYWORDS)
+    return any(_contains_phrase(text, keyword) for keyword in _NEGATIVE_KEYWORDS)
 
 
 def _is_loan_adjustment_request(message: str) -> bool:
@@ -454,6 +454,13 @@ def _is_loan_adjustment_request(message: str) -> bool:
 
 def _normalize_message(message: str) -> str:
     return " ".join(str(message).strip().lower().split())
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    if phrase == "dung":
+        text = f" {text} ".replace(" su dung ", " ")
+        return f" {phrase} " in text
+    return f" {phrase} " in f" {text} "
 
 
 def _format_loan_adjustment_context(

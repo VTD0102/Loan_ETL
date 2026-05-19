@@ -703,6 +703,50 @@ def test_negated_affirmative_does_not_confirm_pending_action():
         assert confirm_calls == []
 
 
+def test_pending_action_token_question_uses_rag_not_confirm():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common(rag_answer="Token là mã xác thực.")
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "token là gì?", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert result["response"] == "Token là mã xác thực."
+    assert session.pending_action is not None
+    assert confirm_calls == []
+    assert len(rag_calls) == 1
+
+
+def test_pending_action_su_dung_question_uses_rag_not_cancel():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common(rag_answer="DTI là tỷ lệ nợ trên thu nhập.")
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "su dung DTI la gi?", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert result["response"] == "DTI là tỷ lệ nợ trên thu nhập."
+    assert session.pending_action is not None
+    assert confirm_calls == []
+    assert len(rag_calls) == 1
+
+
 def test_expired_pending_action_clears_without_confirming():
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     app_id = uuid.uuid4()
@@ -830,6 +874,8 @@ if __name__ == "__main__":
     test_affirmative_response_confirms_pending_action_and_clears_it()
     test_negative_response_clears_pending_action_without_confirming()
     test_negated_affirmative_does_not_confirm_pending_action()
+    test_pending_action_token_question_uses_rag_not_confirm()
+    test_pending_action_su_dung_question_uses_rag_not_cancel()
     test_expired_pending_action_clears_without_confirming()
     test_expired_pending_action_clears_before_rag_for_non_confirmation()
     test_pending_adjustment_request_returns_reminder_without_overwriting_action()
