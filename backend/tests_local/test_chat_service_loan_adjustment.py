@@ -373,6 +373,59 @@ def test_adjustment_tool_unexpected_error_persists_assistant_error():
     assert assistant_messages[0].error is True
 
 
+def test_adjustment_formatter_unexpected_error_persists_assistant_error():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    source_application_id = uuid.uuid4()
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common()
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+    original_build = chat_service.loan_adjustment_tool.build_pending_action
+    original_format = chat_service.loan_adjustment_tool.format_result_for_rag
+
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = (
+        lambda db, user_id: _proposal_result(source_application_id)
+    )
+    chat_service.loan_adjustment_tool.build_pending_action = lambda result: {
+        "type": "loan_term_adjustment",
+        "status": "pending_confirmation",
+        "source_application_id": result.source_application_id,
+        "proposal": {"term": 36},
+    }
+
+    def raise_format_error(result):
+        raise RuntimeError("format boom")
+
+    chat_service.loan_adjustment_tool.format_result_for_rag = raise_format_error
+    try:
+        raised = None
+        try:
+            chat_service.send(
+                db,
+                "loan@example.com",
+                "Tôi bị từ chối, đổi kỳ hạn giúp tôi",
+                session_id=session.id,
+            )
+        except HTTPException as exc:
+            raised = exc
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        chat_service.loan_adjustment_tool.build_pending_action = original_build
+        chat_service.loan_adjustment_tool.format_result_for_rag = original_format
+        restore_common()
+
+    assert raised is not None
+    assert raised.status_code == 503
+    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert rag_calls == []
+    assert session.pending_action is None
+    assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].error is True
+
+
 def test_reapplication_faq_does_not_trigger_adjustment_tool():
     _assert_message_does_not_trigger_adjustment_tool(
         "Tôi có thể nộp lại sau khi bị từ chối không?",
@@ -390,6 +443,13 @@ def test_rejected_loan_profile_improvement_does_not_trigger_adjustment_tool():
 def test_rejected_credit_score_improvement_does_not_trigger_adjustment_tool():
     _assert_message_does_not_trigger_adjustment_tool(
         "Tôi bị từ chối, làm sao cải thiện điểm tín dụng?",
+        "Bạn có thể cải thiện điểm tín dụng bằng cách thanh toán đúng hạn.",
+    )
+
+
+def test_rejected_credit_score_adjustment_hint_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Tôi bị từ chối, gợi ý điều chỉnh điểm tín dụng",
         "Bạn có thể cải thiện điểm tín dụng bằng cách thanh toán đúng hạn.",
     )
 
@@ -525,9 +585,11 @@ if __name__ == "__main__":
     test_direct_term_change_with_personal_help_triggers_adjustment_tool()
     test_adjustment_tool_model_error_persists_assistant_error()
     test_adjustment_tool_unexpected_error_persists_assistant_error()
+    test_adjustment_formatter_unexpected_error_persists_assistant_error()
     test_reapplication_faq_does_not_trigger_adjustment_tool()
     test_rejected_loan_profile_improvement_does_not_trigger_adjustment_tool()
     test_rejected_credit_score_improvement_does_not_trigger_adjustment_tool()
+    test_rejected_credit_score_adjustment_hint_does_not_trigger_adjustment_tool()
     test_rejected_supported_terms_faq_does_not_trigger_adjustment_tool()
     test_generic_credit_score_improvement_does_not_trigger_adjustment_tool()
     test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool()

@@ -45,8 +45,6 @@ _ADJUSTMENT_WORDING_TERMS = (
     "ky han",
     "thời hạn",
     "thoi han",
-    "điều chỉnh",
-    "dieu chinh",
 )
 _ADJUSTMENT_HELP_TERMS = (
     "đề xuất",
@@ -109,7 +107,10 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
 
         context = build_user_context(db, user.id)
         if tool_result is not None:
-            context = f"{context}\n\n{_format_loan_adjustment_context(tool_result)}"
+            try:
+                context = f"{context}\n\n{_format_loan_adjustment_context(tool_result)}"
+            except Exception as exc:
+                raise _LoanAdjustmentToolError from exc
         personalization = build_personalization(user, app)
         response_payload = _rag_invoke(
             payload_message, context, memory.recent_messages,
