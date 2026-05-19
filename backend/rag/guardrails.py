@@ -5,10 +5,11 @@ Input and output safety guardrails for the CreditIntel RAG pipeline.
 - Input:  prompt-injection detection, PII probing, message length
 - Output: internal-leak detection, promise detection, length cap
 """
-from __future__ import annotations
-
+import logging
 import re
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 # ── Result type ───────────────────────────────────────────────────────────────
@@ -171,7 +172,13 @@ def check_output(response: str) -> GuardrailResult:
     """
     # Internal leak — hard block
     for pattern in _INTERNAL_LEAK_PATTERNS:
-        if pattern.search(response):
+        match = pattern.search(response)
+        if match:
+            logger.warning(
+                "Output guardrail: internal leak pattern matched [%s] near: %s",
+                pattern.pattern[:30],
+                match.group()[:50]
+            )
             return GuardrailResult(
                 passed=False,
                 reason="internal_leak",

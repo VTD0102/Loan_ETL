@@ -185,6 +185,8 @@ def _ensure_latest_application_has_prediction(db: Session, user_id: Any) -> Loan
         return None
     if app.default_probability is not None and app.model_version:
         return app
+    if app.status in ("APPROVED", "ADMIN_REJECTED", "AUTO_REJECTED"):
+        return app
 
     payload = _application_to_payload(app)
     try:
