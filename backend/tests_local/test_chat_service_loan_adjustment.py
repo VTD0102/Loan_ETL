@@ -119,6 +119,62 @@ def _proposal_result(source_application_id):
     )
 
 
+def _source_app(app_id, user_id):
+    return SimpleNamespace(
+        id=app_id,
+        user_id=user_id,
+        status="AUTO_REJECTED",
+        monthly_income=Decimal("8000"),
+        loan_amount=Decimal("50000"),
+        term=12,
+        employment_status="Employed",
+        occupation_type="Laborers",
+        years_employed=Decimal("5"),
+        dti=Decimal("0.35"),
+        is_homeowner=False,
+        listing_category="personal",
+        credit_score=680,
+        num_bureau_records=3,
+        num_active_credit=2,
+        total_overdue_amount=Decimal("0"),
+        max_credit_overdue_days=0,
+        has_bad_debt=False,
+        income_verifiable_flag=True,
+        age_years=35,
+        gender_male_flag=False,
+        education_ordinal=4,
+        cnt_children=0,
+        cnt_fam_members=2,
+        is_married_flag=True,
+        recommended_amount=Decimal("35000"),
+        recommended_term=36,
+        default_probability=Decimal("0.55"),
+        risk_level="High",
+        risk_score=45,
+        model_version="test-model",
+        feature_snapshot={},
+        imputed_features=[],
+    )
+
+
+def _pending_action(app_id):
+    return {
+        "type": "loan_term_adjustment",
+        "status": "pending_confirmation",
+        "source_application_id": str(app_id),
+        "proposal": {
+            "loan_amount": "35000",
+            "term": 36,
+            "default_probability": 0.28,
+            "risk_level": "Medium",
+            "risk_score": 72,
+            "model_version": "test-model",
+        },
+        "created_at": "2026-05-19T10:00:00",
+        "expires_at": "2099-05-19T10:30:00",
+    }
+
+
 def _patch_common(rag_answer="Đề xuất kỳ hạn 36 tháng. Bạn có muốn nộp lại với phương án này không?"):
     originals = {
         "rag": chat_service._rag_invoke,
@@ -579,6 +635,111 @@ def test_whitespace_rag_answer_does_not_store_pending_action():
     assert assistant_messages[0].error is True
 
 
+def test_affirmative_response_confirms_pending_action_and_clears_it():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common()
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_payloads = []
+
+    def fake_confirm(db, user_email, payload):
+        confirm_payloads.append(payload)
+        return {
+            "application_id": str(uuid.uuid4()),
+            "status": "PENDING_REVIEW",
+            "default_probability": 0.28,
+            "risk_level": "Medium",
+            "risk_score": 72,
+            "suggested_amount": 35000,
+            "suggested_term": 36,
+        }
+
+    chat_service.application_service.confirm = fake_confirm
+    try:
+        result = chat_service.send(db, "loan@example.com", "đồng ý nộp lại", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "Đã nộp lại hồ sơ mới" in result["response"]
+    assert session.pending_action is None
+    assert len(confirm_payloads) == 1
+    assert confirm_payloads[0].loan_amount == Decimal("35000")
+    assert confirm_payloads[0].term == 36
+    assert rag_calls == []
+
+
+def test_negative_response_clears_pending_action_without_confirming():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common()
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "không, hủy giúp tôi", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "đã hủy" in result["response"].lower()
+    assert session.pending_action is None
+    assert confirm_calls == []
+    assert rag_calls == []
+
+
+def test_expired_pending_action_clears_without_confirming():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    action = _pending_action(app_id)
+    action["expires_at"] = "2000-01-01T00:00:00"
+    session = _session(user.id, pending_action=action)
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common()
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "đồng ý", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "hết hạn" in result["response"].lower()
+    assert session.pending_action is None
+    assert confirm_calls == []
+    assert rag_calls == []
+
+
+def test_pending_action_non_confirmation_keeps_existing_rag_path():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common(rag_answer="Câu trả lời RAG bình thường")
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "DTI là gì?", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert result["response"] == "Câu trả lời RAG bình thường"
+    assert session.pending_action is not None
+    assert confirm_calls == []
+    assert len(rag_calls) == 1
+
+
 if __name__ == "__main__":
     test_adjustment_question_stores_pending_action_without_submitting()
     test_adjustment_question_without_proposal_does_not_store_pending_action()
@@ -598,4 +759,8 @@ if __name__ == "__main__":
     test_term_approval_chance_faq_does_not_trigger_adjustment_tool()
     test_easier_approval_term_faq_does_not_trigger_adjustment_tool()
     test_whitespace_rag_answer_does_not_store_pending_action()
+    test_affirmative_response_confirms_pending_action_and_clears_it()
+    test_negative_response_clears_pending_action_without_confirming()
+    test_expired_pending_action_clears_without_confirming()
+    test_pending_action_non_confirmation_keeps_existing_rag_path()
     print("chat service loan adjustment tests passed")
