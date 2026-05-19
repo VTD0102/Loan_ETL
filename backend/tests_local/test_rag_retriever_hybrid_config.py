@@ -56,6 +56,8 @@ def test_retriever_uses_hybrid_mode_with_fastembed_sparse():
     )
     # retrieval_mode is a RetrievalMode enum; compare via name to avoid importing the enum here.
     assert getattr(vs_kwargs["retrieval_mode"], "name", str(vs_kwargs["retrieval_mode"])) == "HYBRID"
+    assert vs_kwargs.get("vector_name") == "dense"
+    assert vs_kwargs.get("sparse_vector_name") == "sparse"
     assert _captured["sparse"]["model_name"] == settings.rag_bm25_model
 
 

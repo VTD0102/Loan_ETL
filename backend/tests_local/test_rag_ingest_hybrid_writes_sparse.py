@@ -1,10 +1,15 @@
-"""Verify upsert_to_qdrant passes sparse_embedding + HYBRID on both branches."""
+"""Verify upsert_to_qdrant writes HYBRID vectors using explicit dense/sparse slots."""
 from types import SimpleNamespace
 
 import rag.ingest as ingest
 
 
-_captured = {"from_documents": None, "store_init": None, "store_add": None, "sparse_init": None}
+_captured = {
+    "create_collection": None,
+    "store_init": None,
+    "store_add": None,
+    "sparse_init": None,
+}
 
 
 class FakeSparse:
@@ -22,6 +27,10 @@ class FakeClient:
     def delete_collection(self, collection_name):
         self._exists = False
 
+    def create_collection(self, **kwargs):
+        _captured["create_collection"] = kwargs
+        self._exists = True
+
 
 class FakeVectorStore:
     def __init__(self, **kwargs):
@@ -29,10 +38,6 @@ class FakeVectorStore:
 
     def add_documents(self, chunks):
         _captured["store_add"] = list(chunks)
-
-    @classmethod
-    def from_documents(cls, **kwargs):
-        _captured["from_documents"] = kwargs
 
 
 def _reset():
@@ -65,7 +70,7 @@ def _chunks():
     return [SimpleNamespace(page_content="x", metadata={"source": "fake.md"})]
 
 
-def test_recreate_branch_uses_from_documents_with_sparse_and_hybrid():
+def test_recreate_branch_creates_collection_with_named_vectors():
     _reset()
     original, lcq, qc = _patch()
     try:
@@ -73,11 +78,20 @@ def test_recreate_branch_uses_from_documents_with_sparse_and_hybrid():
     finally:
         _unpatch(original, lcq, qc)
 
-    kwargs = _captured["from_documents"]
-    assert kwargs is not None, "from_documents must be called for recreate"
+    create_kwargs = _captured["create_collection"]
+    assert create_kwargs is not None, "create_collection must be called for recreate"
+    assert create_kwargs["collection_name"] == "kb"
+    assert "dense" in create_kwargs["vectors_config"]
+    assert "sparse" in create_kwargs["sparse_vectors_config"]
+
+    kwargs = _captured["store_init"]
+    assert kwargs is not None, "QdrantVectorStore must be instantiated"
     assert "sparse_embedding" in kwargs
     assert isinstance(kwargs["sparse_embedding"], FakeSparse)
     assert getattr(kwargs["retrieval_mode"], "name", str(kwargs["retrieval_mode"])) == "HYBRID"
+    assert kwargs.get("vector_name") == "dense"
+    assert kwargs.get("sparse_vector_name") == "sparse"
+    assert _captured["store_add"] is not None, "add_documents must be called"
 
 
 def test_incremental_branch_uses_add_documents_with_hybrid_store():
@@ -101,10 +115,12 @@ def test_incremental_branch_uses_add_documents_with_hybrid_store():
     assert "sparse_embedding" in kwargs
     assert isinstance(kwargs["sparse_embedding"], FakeSparse)
     assert getattr(kwargs["retrieval_mode"], "name", str(kwargs["retrieval_mode"])) == "HYBRID"
+    assert kwargs.get("vector_name") == "dense"
+    assert kwargs.get("sparse_vector_name") == "sparse"
     assert _captured["store_add"] is not None, "add_documents must be called"
 
 
 if __name__ == "__main__":
-    test_recreate_branch_uses_from_documents_with_sparse_and_hybrid()
+    test_recreate_branch_creates_collection_with_named_vectors()
     test_incremental_branch_uses_add_documents_with_hybrid_store()
     print("rag ingest hybrid tests passed")

@@ -54,13 +54,8 @@ def get_embeddings():
 
 
 def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recreate=False):
-    """Upsert chunks into Qdrant in HYBRID mode (dense + BM25 sparse).
-
-    With ``recreate=True``, deletes the collection first (destructive).
-    With ``recreate=False`` (default), appends to the existing collection.
-    """
     from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
-    from qdrant_client import QdrantClient
+    from qdrant_client import QdrantClient, models
 
     sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
@@ -68,17 +63,16 @@ def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recr
     if recreate and client.collection_exists(collection_name=collection_name):
         client.delete_collection(collection_name=collection_name)
 
-    if recreate or not client.collection_exists(collection_name=collection_name):
-        QdrantVectorStore.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            sparse_embedding=sparse_embeddings,
-            retrieval_mode=RetrievalMode.HYBRID,
-            url=QDRANT_URL,
-            api_key=QDRANT_API_KEY,
+    if not client.collection_exists(collection_name=collection_name):
+        client.create_collection(
             collection_name=collection_name,
+            vectors_config={
+                "dense": models.VectorParams(size=1536, distance=models.Distance.COSINE),
+            },
+            sparse_vectors_config={
+                "sparse": models.SparseVectorParams(),
+            },
         )
-        return
 
     store = QdrantVectorStore(
         client=client,
@@ -86,6 +80,8 @@ def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recr
         embedding=embeddings,
         sparse_embedding=sparse_embeddings,
         retrieval_mode=RetrievalMode.HYBRID,
+        vector_name="dense",
+        sparse_vector_name="sparse",
     )
     store.add_documents(chunks)
 

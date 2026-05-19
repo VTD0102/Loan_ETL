@@ -56,6 +56,8 @@ def get_retriever():
             embedding=embeddings,
             sparse_embedding=sparse_embeddings,
             retrieval_mode=RetrievalMode.HYBRID,
+            vector_name="dense",
+            sparse_vector_name="sparse",
         )
         child_retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K * 3})
         _retriever = ParentDocumentRetriever(child_retriever, max_parent_docs=TOP_K)
