@@ -159,6 +159,8 @@ PYTHONPATH=. ../.venv/bin/python -m rag.ingest --recreate
 
 > **Note (V1+/hybrid):** After upgrading either (a) the chunking algorithm or (b) to hybrid retrieval, you MUST re-run `python -m rag.ingest --recreate` once. Hybrid mode requires both dense and BM25 sparse named vectors on every Qdrant point; the old collection has only dense and will error on hybrid query.
 
+> **Note (Stage 2 / reranker):** The first live RAG query after enabling the reranker downloads `jinaai/jina-reranker-v2-base-multilingual` (~1.11 GB) into `~/.cache/fastembed/`. Subsequent queries are instant. To disable rerank entirely (e.g., for A/B comparison), set `rag_reranker_enabled=False` in `backend/.env` and restart the server — the retrieval pipeline falls back to plain hybrid sliced to top-K.
+
 ## Key Documentation
 - `README.md` — full system diagrams and quickstart (Vietnamese)
 - `backend/BACKEND_API_SPEC.md` — endpoint reference
