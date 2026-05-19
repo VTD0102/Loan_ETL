@@ -795,13 +795,14 @@ def test_expired_pending_action_clears_before_rag_for_non_confirmation():
     assert rag_calls == []
 
 
-def test_pending_adjustment_request_returns_reminder_without_overwriting_action():
+def test_pending_adjustment_request_uses_rag_without_overwriting_action():
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     app_id = uuid.uuid4()
     pending_action = _pending_action(app_id)
     session = _session(user.id, pending_action=pending_action)
     db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
-    rag_calls, restore_common = _patch_common(rag_answer="Câu trả lời RAG bình thường")
+    rag_answer = "Câu trả lời RAG bình thường"
+    rag_calls, restore_common = _patch_common(rag_answer=rag_answer)
 
     original_confirm = chat_service.application_service.confirm
     original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
@@ -823,11 +824,12 @@ def test_pending_adjustment_request_returns_reminder_without_overwriting_action(
         chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
         restore_common()
 
-    assert "đang chờ xác nhận" in result["response"].lower()
+    assert result["response"] == rag_answer
     assert session.pending_action is pending_action
     assert confirm_calls == []
     assert find_calls == []
-    assert rag_calls == []
+    assert len(rag_calls) == 1
+    assert rag_calls[0]["context"] == "base user context"
 
 
 def test_pending_action_non_confirmation_keeps_existing_rag_path():
@@ -878,6 +880,6 @@ if __name__ == "__main__":
     test_pending_action_su_dung_question_uses_rag_not_cancel()
     test_expired_pending_action_clears_without_confirming()
     test_expired_pending_action_clears_before_rag_for_non_confirmation()
-    test_pending_adjustment_request_returns_reminder_without_overwriting_action()
+    test_pending_adjustment_request_uses_rag_without_overwriting_action()
     test_pending_action_non_confirmation_keeps_existing_rag_path()
     print("chat service loan adjustment tests passed")

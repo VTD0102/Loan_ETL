@@ -146,12 +146,13 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             "sources": [],
         }
 
+    has_pending_loan_adjustment = _has_pending_loan_adjustment_action(session)
     error_flag = False
     sources: list[dict[str, Any]] = []
     try:
         tool_result = None
         pending_action = None
-        if _is_loan_adjustment_request(payload_message):
+        if not has_pending_loan_adjustment and _is_loan_adjustment_request(payload_message):
             try:
                 tool_result = loan_adjustment_tool.find_best_reapplication_option(db, user.id)
                 if tool_result.proposal is not None:
@@ -375,13 +376,15 @@ def _handle_pending_loan_adjustment_response(
     if _is_affirmative_response(message):
         return _confirm_pending_loan_adjustment(db, user_email, user_id, session, action)
 
-    if _is_loan_adjustment_request(message):
-        return (
-            "Bạn đang có một phương án nộp lại đang chờ xác nhận. "
-            "Vui lòng xác nhận để nộp lại, hoặc hủy phương án hiện tại trước khi yêu cầu mô phỏng mới."
-        )
-
     return None
+
+
+def _has_pending_loan_adjustment_action(session: ChatSession) -> bool:
+    action = getattr(session, "pending_action", None) or {}
+    return (
+        action.get("type") == "loan_term_adjustment"
+        and action.get("status") == "pending_confirmation"
+    )
 
 
 def _confirm_pending_loan_adjustment(
