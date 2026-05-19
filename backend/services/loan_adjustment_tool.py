@@ -43,7 +43,7 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
     app = _latest_auto_rejected_application(db, user_id)
     if app is None:
         return LoanAdjustmentResult(
-            status="not_found",
+            status="no_rejected_application",
             source_application_id=None,
             current_loan_amount=None,
             current_term=None,
@@ -107,7 +107,7 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
 
     if not passing:
         return LoanAdjustmentResult(
-            status="no_proposal",
+            status="no_passing_option",
             source_application_id=str(app.id),
             current_loan_amount=app.loan_amount,
             current_term=app.term,
@@ -145,6 +145,7 @@ def get_source_application(
         .filter(
             LoanApplication.id == app_id,
             LoanApplication.user_id == user_id,
+            LoanApplication.status == "AUTO_REJECTED",
         )
         .first()
     )

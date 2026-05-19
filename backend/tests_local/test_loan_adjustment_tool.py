@@ -274,6 +274,34 @@ def test_tool_returns_no_proposal_for_cic_blacklist():
     assert result.proposal is None
 
 
+def test_tool_returns_no_rejected_application_status_when_missing():
+    result = tool.find_best_reapplication_option(FakeDB([]), uuid.uuid4())
+
+    assert result.status == "no_rejected_application"
+    assert result.proposal is None
+
+
+def test_tool_returns_no_passing_option_status_when_all_candidates_fail():
+    app = _rejected_app(recommended_amount=None)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 12): 0.55,
+        (Decimal("50000"), 24): 0.52,
+        (Decimal("50000"), 36): 0.50,
+        (Decimal("50000"), 48): 0.49,
+        (Decimal("50000"), 60): 0.48,
+    }
+    restore = _patch_tool(predictions)
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "no_passing_option"
+    assert result.proposal is None
+    assert result.best_observed is not None
+
+
 def test_get_source_application_returns_none_for_invalid_uuid():
     app = _rejected_app()
 
@@ -286,6 +314,14 @@ def test_get_source_application_returns_none_for_wrong_user():
     app = _rejected_app()
 
     result = tool.get_source_application(FakeDB([app]), uuid.uuid4(), app.id)
+
+    assert result is None
+
+
+def test_get_source_application_requires_auto_rejected_status():
+    app = _rejected_app(status="PENDING_REVIEW")
+
+    result = tool.get_source_application(FakeDB([app]), app.user_id, app.id)
 
     assert result is None
 
@@ -408,8 +444,11 @@ if __name__ == "__main__":
     test_tool_skips_candidates_that_confirm_validation_would_reject()
     test_tool_uses_newest_same_user_auto_rejected_application()
     test_tool_returns_no_proposal_for_cic_blacklist()
+    test_tool_returns_no_rejected_application_status_when_missing()
+    test_tool_returns_no_passing_option_status_when_all_candidates_fail()
     test_get_source_application_returns_none_for_invalid_uuid()
     test_get_source_application_returns_none_for_wrong_user()
+    test_get_source_application_requires_auto_rejected_status()
     test_pending_action_expiry_helpers()
     test_build_pending_action_requires_proposal()
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()
