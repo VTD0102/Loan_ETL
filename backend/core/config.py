@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # RAG retrieval (V1: hybrid BM25 + vector)
     rag_bm25_model: str = "Qdrant/bm25"
 
+    # RAG retrieval Stage 2 (reranker)
+    rag_reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"
+    rag_reranker_enabled: bool = True
+    rag_reranker_candidate_k: int = 20
+
     # RAG memory (V1: window + summary buffer)
     rag_memory_window_token_budget: int = 2000
     rag_memory_summary_max_tokens: int = 500
