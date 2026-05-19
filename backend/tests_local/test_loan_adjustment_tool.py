@@ -1,11 +1,11 @@
 """Loan adjustment tool tests use monkeypatched ML and no external services."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from types import SimpleNamespace
 import sys
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -14,14 +14,40 @@ sys.path.insert(0, str(ROOT / "backend"))
 import services.loan_adjustment_tool as tool
 
 
+def _criterion_field(criterion):
+    left = getattr(criterion, "left", None)
+    return getattr(left, "key", None) or getattr(left, "name", None)
+
+
+def _criterion_value(criterion):
+    right = getattr(criterion, "right", None)
+    return getattr(right, "value", None)
+
+
 class FakeQuery:
     def __init__(self, items):
         self._items = list(items)
 
     def filter(self, *args, **kwargs):
+        for criterion in args:
+            field = _criterion_field(criterion)
+            value = _criterion_value(criterion)
+            if field in {"id", "user_id", "status"}:
+                self._items = [
+                    item for item in self._items
+                    if getattr(item, field, None) == value
+                ]
         return self
 
     def order_by(self, *args, **kwargs):
+        for criterion in args:
+            element = getattr(criterion, "element", None)
+            key = getattr(element, "key", None) or getattr(element, "name", None)
+            if key == "submitted_at":
+                self._items.sort(
+                    key=lambda item: getattr(item, "submitted_at", datetime.min),
+                    reverse=True,
+                )
         return self
 
     def first(self):
@@ -189,6 +215,57 @@ def test_tool_skips_candidates_that_confirm_validation_would_reject():
     assert result.proposal.term == 48
 
 
+def test_tool_uses_newest_same_user_auto_rejected_application():
+    user_id = uuid.uuid4()
+    other_user_id = uuid.uuid4()
+    newer_other_user = _rejected_app(
+        user_id=other_user_id,
+        loan_amount=Decimal("90000"),
+        submitted_at=datetime(2026, 5, 19, 12, 0, 0),
+    )
+    same_user_non_rejected = _rejected_app(
+        user_id=user_id,
+        status="PENDING_REVIEW",
+        loan_amount=Decimal("80000"),
+        submitted_at=datetime(2026, 5, 19, 11, 0, 0),
+    )
+    older_same_user_rejected = _rejected_app(
+        user_id=user_id,
+        loan_amount=Decimal("70000"),
+        submitted_at=datetime(2026, 5, 19, 10, 0, 0),
+    )
+    newer_same_user_rejected = _rejected_app(
+        user_id=user_id,
+        loan_amount=Decimal("60000"),
+        submitted_at=datetime(2026, 5, 19, 10, 30, 0),
+        recommended_amount=None,
+    )
+    db = FakeDB([
+        newer_other_user,
+        same_user_non_rejected,
+        older_same_user_rejected,
+        newer_same_user_rejected,
+    ])
+    predictions = {
+        (Decimal("60000"), 12): 0.55,
+        (Decimal("60000"), 24): 0.45,
+        (Decimal("60000"), 36): 0.32,
+        (Decimal("60000"), 48): 0.34,
+        (Decimal("60000"), 60): 0.38,
+    }
+    restore = _patch_tool(predictions)
+    try:
+        result = tool.find_best_reapplication_option(db, user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert result.source_application_id == str(newer_same_user_rejected.id)
+    assert result.current_loan_amount == Decimal("60000")
+    assert result.proposal is not None
+    assert result.proposal.loan_amount == Decimal("60000")
+
+
 def test_tool_returns_no_proposal_for_cic_blacklist():
     app = _rejected_app(model_version="CIC_BLACKLIST")
     result = tool.find_best_reapplication_option(FakeDB([app]), app.user_id)
@@ -226,10 +303,75 @@ def test_pending_action_expiry_helpers():
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=31)) is True
 
 
+def test_pending_action_expiry_accepts_timezone_aware_iso_strings():
+    action = {
+        "type": "loan_term_adjustment",
+        "expires_at": "2026-05-19T10:30:00+00:00",
+    }
+
+    assert tool.is_pending_action_expired(
+        action,
+        now=datetime(2026, 5, 19, 10, 29, 0, tzinfo=timezone.utc),
+    ) is False
+    assert tool.is_pending_action_expired(
+        action,
+        now=datetime(2026, 5, 19, 10, 31, 0, tzinfo=timezone.utc),
+    ) is True
+    assert tool.is_pending_action_expired(
+        action,
+        now=datetime(2026, 5, 19, 10, 31, 0),
+    ) is True
+
+
+def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
+    app = _rejected_app(
+        occupation_type=None,
+        years_employed=None,
+        num_bureau_records=None,
+        num_active_credit=None,
+        total_overdue_amount=None,
+        max_credit_overdue_days=None,
+        has_bad_debt=None,
+        income_verifiable_flag=None,
+        age_years=None,
+        gender_male_flag=None,
+        education_ordinal=None,
+        cnt_children=None,
+        cnt_fam_members=None,
+        is_married_flag=None,
+    )
+
+    payload = tool.application_to_confirm_payload(
+        app,
+        loan_amount=Decimal("30000"),
+        term=48,
+    )
+
+    assert payload.loan_amount == Decimal("30000")
+    assert payload.term == 48
+    assert payload.occupation_type == "Unknown"
+    assert payload.years_employed == Decimal("0")
+    assert payload.num_bureau_records == 0
+    assert payload.num_active_credit == 0
+    assert payload.total_overdue_amount == Decimal("0")
+    assert payload.max_credit_overdue_days == 0
+    assert payload.has_bad_debt is False
+    assert payload.income_verifiable_flag is False
+    assert payload.age_years == 30
+    assert payload.gender_male_flag is False
+    assert payload.education_ordinal == 3
+    assert payload.cnt_children == 0
+    assert payload.cnt_fam_members == 1
+    assert payload.is_married_flag is False
+
+
 if __name__ == "__main__":
     test_tool_selects_passing_term_at_original_amount()
     test_tool_falls_back_to_recommended_amount_when_original_amount_fails()
     test_tool_skips_candidates_that_confirm_validation_would_reject()
+    test_tool_uses_newest_same_user_auto_rejected_application()
     test_tool_returns_no_proposal_for_cic_blacklist()
     test_pending_action_expiry_helpers()
+    test_pending_action_expiry_accepts_timezone_aware_iso_strings()
+    test_application_to_confirm_payload_defaults_legacy_nullable_fields()
     print("loan adjustment tool tests passed")

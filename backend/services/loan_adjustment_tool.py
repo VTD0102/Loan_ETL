@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -95,6 +95,8 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
                 continue
 
             term_distance = abs(int(term) - int(app.term))
+            # Product choice: keep the original requested amount when possible;
+            # only reduce amount if no original-amount candidate passes.
             rank = (
                 amount_index,
                 proposal.default_probability,
@@ -162,20 +164,20 @@ def application_to_confirm_payload(
         is_homeowner=app.is_homeowner,
         listing_category=app.listing_category,
         credit_score=getattr(app, "credit_score", None),
-        occupation_type=app.occupation_type,
-        years_employed=app.years_employed,
-        num_bureau_records=app.num_bureau_records,
-        num_active_credit=app.num_active_credit,
-        total_overdue_amount=app.total_overdue_amount,
-        max_credit_overdue_days=app.max_credit_overdue_days,
-        has_bad_debt=app.has_bad_debt,
-        income_verifiable_flag=app.income_verifiable_flag,
-        age_years=app.age_years,
-        gender_male_flag=getattr(app, "gender_male_flag", None),
-        education_ordinal=app.education_ordinal,
-        cnt_children=getattr(app, "cnt_children", None),
-        cnt_fam_members=getattr(app, "cnt_fam_members", None),
-        is_married_flag=app.is_married_flag,
+        occupation_type=app.occupation_type or "Unknown",
+        years_employed=app.years_employed or Decimal("0"),
+        num_bureau_records=app.num_bureau_records or 0,
+        num_active_credit=app.num_active_credit or 0,
+        total_overdue_amount=app.total_overdue_amount or Decimal("0"),
+        max_credit_overdue_days=app.max_credit_overdue_days or 0,
+        has_bad_debt=app.has_bad_debt or False,
+        income_verifiable_flag=app.income_verifiable_flag or False,
+        age_years=app.age_years or 30,
+        gender_male_flag=getattr(app, "gender_male_flag", None) or False,
+        education_ordinal=app.education_ordinal or 3,
+        cnt_children=getattr(app, "cnt_children", None) or 0,
+        cnt_fam_members=getattr(app, "cnt_fam_members", None) or 1,
+        is_married_flag=app.is_married_flag or False,
     )
 
 
@@ -216,7 +218,13 @@ def is_pending_action_expired(
         expiry = datetime.fromisoformat(expires_at)
     except (TypeError, ValueError):
         return True
-    return (now or datetime.utcnow()) > expiry
+
+    current = now or datetime.utcnow()
+    if _is_timezone_aware(expiry) and not _is_timezone_aware(current):
+        current = current.replace(tzinfo=timezone.utc)
+    elif _is_timezone_aware(current) and not _is_timezone_aware(expiry):
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    return current > expiry
 
 
 def format_result_for_rag(result: LoanAdjustmentResult) -> str:
@@ -271,6 +279,10 @@ def _float_or_none(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _is_timezone_aware(value: datetime) -> bool:
+    return value.tzinfo is not None and value.utcoffset() is not None
 
 
 def _to_decimal(value: Any) -> Decimal:
