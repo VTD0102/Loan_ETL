@@ -684,7 +684,13 @@ def test_negative_response_clears_pending_action_without_confirming():
 
 
 def test_negated_affirmative_does_not_confirm_pending_action():
-    for message in ("tôi chưa đồng ý", "đừng xác nhận"):
+    for message in (
+        "tôi chưa đồng ý",
+        "đừng xác nhận",
+        "không, tôi đồng ý",
+        "chưa, đồng ý",
+        "đừng, xác nhận",
+    ):
         user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
         app_id = uuid.uuid4()
         session = _session(user.id, pending_action=_pending_action(app_id))

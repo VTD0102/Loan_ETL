@@ -94,6 +94,9 @@ _NEGATIVE_KEYWORDS = (
     "đổi phương án khác",
     "doi phuong an khac",
 )
+_CONFIRMATION_PUNCTUATION_TRANSLATION = str.maketrans({
+    ch: " " for ch in ",.;:!?()[]{}\"'“”‘’"
+})
 
 
 class _LoanAdjustmentToolError(Exception):
@@ -456,7 +459,8 @@ def _is_loan_adjustment_request(message: str) -> bool:
 
 
 def _normalize_message(message: str) -> str:
-    return " ".join(str(message).strip().lower().split())
+    text = str(message).strip().lower().translate(_CONFIRMATION_PUNCTUATION_TRANSLATION)
+    return " ".join(text.split())
 
 
 def _contains_phrase(text: str, phrase: str) -> bool:
