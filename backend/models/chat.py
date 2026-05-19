@@ -22,6 +22,7 @@ class ChatSession(Base):
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary_covers_until_id: Mapped[Optional[uuid.UUID]] = mapped_column(nullable=True)
     summary_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    pending_action: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     user: Mapped["User"] = relationship("User", back_populates="chat_sessions")
     messages: Mapped[list["ChatMessage"]] = relationship(
