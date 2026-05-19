@@ -1,10 +1,10 @@
-from langchain_qdrant import QdrantVectorStore
 from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
 from qdrant_client import QdrantClient
 
 from rag.chunking import expand_child_documents_to_parents
 from rag.config import (
-    EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL, TOP_K,
 )
 from core.config import settings
@@ -44,6 +44,7 @@ def get_retriever():
             timeout=settings.rag_embedding_timeout_seconds,
             max_retries=settings.rag_embedding_max_retries,
         )
+        sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
         client = QdrantClient(
             url=QDRANT_URL,
             api_key=QDRANT_API_KEY,
@@ -53,6 +54,8 @@ def get_retriever():
             client=client,
             collection_name=QDRANT_COLLECTION,
             embedding=embeddings,
+            sparse_embedding=sparse_embeddings,
+            retrieval_mode=RetrievalMode.HYBRID,
         )
         child_retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K * 3})
         _retriever = ParentDocumentRetriever(child_retriever, max_parent_docs=TOP_K)
