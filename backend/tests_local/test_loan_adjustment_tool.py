@@ -274,6 +274,22 @@ def test_tool_returns_no_proposal_for_cic_blacklist():
     assert result.proposal is None
 
 
+def test_get_source_application_returns_none_for_invalid_uuid():
+    app = _rejected_app()
+
+    result = tool.get_source_application(FakeDB([app]), app.user_id, "not-a-uuid")
+
+    assert result is None
+
+
+def test_get_source_application_returns_none_for_wrong_user():
+    app = _rejected_app()
+
+    result = tool.get_source_application(FakeDB([app]), uuid.uuid4(), app.id)
+
+    assert result is None
+
+
 def test_pending_action_expiry_helpers():
     app = _rejected_app()
     proposal = tool.LoanAdjustmentProposal(
@@ -392,6 +408,8 @@ if __name__ == "__main__":
     test_tool_skips_candidates_that_confirm_validation_would_reject()
     test_tool_uses_newest_same_user_auto_rejected_application()
     test_tool_returns_no_proposal_for_cic_blacklist()
+    test_get_source_application_returns_none_for_invalid_uuid()
+    test_get_source_application_returns_none_for_wrong_user()
     test_pending_action_expiry_helpers()
     test_build_pending_action_requires_proposal()
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()

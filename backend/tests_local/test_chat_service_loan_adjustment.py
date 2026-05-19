@@ -683,6 +683,26 @@ def test_negative_response_clears_pending_action_without_confirming():
     assert rag_calls == []
 
 
+def test_negated_affirmative_does_not_confirm_pending_action():
+    for message in ("tôi chưa đồng ý", "đừng xác nhận"):
+        user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+        app_id = uuid.uuid4()
+        session = _session(user.id, pending_action=_pending_action(app_id))
+        db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+        rag_calls, restore_common = _patch_common(rag_answer="Câu trả lời RAG bình thường")
+
+        original_confirm = chat_service.application_service.confirm
+        confirm_calls = []
+        chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+        try:
+            chat_service.send(db, "loan@example.com", message, session_id=session.id)
+        finally:
+            chat_service.application_service.confirm = original_confirm
+            restore_common()
+
+        assert confirm_calls == []
+
+
 def test_expired_pending_action_clears_without_confirming():
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     app_id = uuid.uuid4()
@@ -704,6 +724,65 @@ def test_expired_pending_action_clears_without_confirming():
     assert "hết hạn" in result["response"].lower()
     assert session.pending_action is None
     assert confirm_calls == []
+    assert rag_calls == []
+
+
+def test_expired_pending_action_clears_before_rag_for_non_confirmation():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    action = _pending_action(app_id)
+    action["expires_at"] = "2000-01-01T00:00:00"
+    session = _session(user.id, pending_action=action)
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common(rag_answer="Câu trả lời RAG bình thường")
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "DTI là gì?", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "hết hạn" in result["response"].lower()
+    assert session.pending_action is None
+    assert confirm_calls == []
+    assert rag_calls == []
+
+
+def test_pending_adjustment_request_returns_reminder_without_overwriting_action():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    pending_action = _pending_action(app_id)
+    session = _session(user.id, pending_action=pending_action)
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common(rag_answer="Câu trả lời RAG bình thường")
+
+    original_confirm = chat_service.application_service.confirm
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+    confirm_calls = []
+    find_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = (
+        lambda *args, **kwargs: find_calls.append(args)
+    )
+    try:
+        result = chat_service.send(
+            db,
+            "loan@example.com",
+            "Tôi bị từ chối, đổi kỳ hạn nào để dễ được duyệt hơn?",
+            session_id=session.id,
+        )
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        restore_common()
+
+    assert "đang chờ xác nhận" in result["response"].lower()
+    assert session.pending_action is pending_action
+    assert confirm_calls == []
+    assert find_calls == []
     assert rag_calls == []
 
 
@@ -750,6 +829,9 @@ if __name__ == "__main__":
     test_whitespace_rag_answer_does_not_store_pending_action()
     test_affirmative_response_confirms_pending_action_and_clears_it()
     test_negative_response_clears_pending_action_without_confirming()
+    test_negated_affirmative_does_not_confirm_pending_action()
     test_expired_pending_action_clears_without_confirming()
+    test_expired_pending_action_clears_before_rag_for_non_confirmation()
+    test_pending_adjustment_request_returns_reminder_without_overwriting_action()
     test_pending_action_non_confirmation_keeps_existing_rag_path()
     print("chat service loan adjustment tests passed")

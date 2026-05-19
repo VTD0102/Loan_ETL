@@ -77,6 +77,14 @@ _AFFIRMATIVE_KEYWORDS = (
     "duyet phuong an",
 )
 _NEGATIVE_KEYWORDS = (
+    "chưa",
+    "chua",
+    "đừng",
+    "dung",
+    "không đồng ý",
+    "khong dong y",
+    "không xác nhận",
+    "khong xac nhan",
     "không",
     "khong",
     "hủy",
@@ -356,18 +364,24 @@ def _handle_pending_loan_adjustment_response(
     if action.get("status") != "pending_confirmation":
         return None
 
-    if _is_negative_response(message):
-        session.pending_action = None
-        return "Mình đã hủy phương án nộp lại đang chờ xác nhận. Hồ sơ bị từ chối cũ không bị thay đổi."
-
-    if not _is_affirmative_response(message):
-        return None
-
     if loan_adjustment_tool.is_pending_action_expired(action):
         session.pending_action = None
         return "Phương án nộp lại đã hết hạn. Bạn hãy yêu cầu mình mô phỏng lại để lấy kết quả mới nhất."
 
-    return _confirm_pending_loan_adjustment(db, user_email, user_id, session, action)
+    if _is_negative_response(message):
+        session.pending_action = None
+        return "Mình đã hủy phương án nộp lại đang chờ xác nhận. Hồ sơ bị từ chối cũ không bị thay đổi."
+
+    if _is_affirmative_response(message):
+        return _confirm_pending_loan_adjustment(db, user_email, user_id, session, action)
+
+    if _is_loan_adjustment_request(message):
+        return (
+            "Bạn đang có một phương án nộp lại đang chờ xác nhận. "
+            "Vui lòng xác nhận để nộp lại, hoặc hủy phương án hiện tại trước khi yêu cầu mô phỏng mới."
+        )
+
+    return None
 
 
 def _confirm_pending_loan_adjustment(
