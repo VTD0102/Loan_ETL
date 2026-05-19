@@ -1,3 +1,5 @@
+import logging
+
 from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
 from qdrant_client import QdrantClient
@@ -8,6 +10,8 @@ from rag.config import (
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL, TOP_K,
 )
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ParentDocumentRetriever:
@@ -26,6 +30,38 @@ class ParentDocumentRetriever:
             child_docs,
             max_parent_docs=self.max_parent_docs,
         )
+
+    def get_relevant_documents(self, query):
+        return self.invoke(query)
+
+
+class RerankedRetriever:
+    """Pulls candidates from base_retriever; if a reranker is provided,
+    scores+sorts via reranker; otherwise pure slice to top_k.
+
+    Any reranker exception is caught and we fall back to the raw
+    candidate slice — never let a reranker failure break retrieval.
+    """
+
+    def __init__(self, base_retriever, reranker, top_k: int):
+        self.base_retriever = base_retriever
+        self.reranker = reranker
+        self.top_k = top_k
+
+    def invoke(self, query):
+        if hasattr(self.base_retriever, "invoke"):
+            candidates = self.base_retriever.invoke(query)
+        else:
+            candidates = self.base_retriever.get_relevant_documents(query)
+
+        if self.reranker is None:
+            return candidates[: self.top_k]
+
+        try:
+            return self.reranker.rerank(query, candidates, self.top_k)
+        except Exception:
+            logger.exception("Reranker failed, falling back to candidates")
+            return candidates[: self.top_k]
 
     def get_relevant_documents(self, query):
         return self.invoke(query)
