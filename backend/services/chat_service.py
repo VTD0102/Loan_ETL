@@ -15,12 +15,28 @@ from rag.exceptions import RAGError
 from rag.memory import load_memory
 from rag.personalizer import build_personalization
 from schemas.application import ApplicationCreate
-from services import ml_service
+from services import loan_adjustment_tool, ml_service
 
 logger = logging.getLogger(__name__)
 
 _RAG_ERROR_MESSAGE = (
     "Xin lỗi, hệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút."
+)
+_ADJUSTMENT_INTENT_KEYWORDS = (
+    "bị từ chối",
+    "bi tu choi",
+    "không được duyệt",
+    "khong duoc duyet",
+    "đổi kỳ hạn",
+    "doi ky han",
+    "đổi thời hạn",
+    "doi thoi han",
+    "nộp lại",
+    "nop lai",
+    "tăng khả năng",
+    "tang kha nang",
+    "dễ được duyệt",
+    "de duoc duyet",
 )
 
 
@@ -51,7 +67,16 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
     error_flag = False
     sources: list[dict[str, Any]] = []
     try:
+        tool_result = None
+        pending_action = None
+        if _is_loan_adjustment_request(payload_message):
+            tool_result = loan_adjustment_tool.find_best_reapplication_option(db, user.id)
+            if tool_result.proposal is not None:
+                pending_action = loan_adjustment_tool.build_pending_action(tool_result)
+
         context = build_user_context(db, user.id)
+        if tool_result is not None:
+            context = f"{context}\n\n{_format_loan_adjustment_context(tool_result)}"
         personalization = build_personalization(user, app)
         response_payload = _rag_invoke(
             payload_message, context, memory.recent_messages,
@@ -64,6 +89,8 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             answer = _RAG_ERROR_MESSAGE
             error_flag = True
             sources = []
+        if pending_action is not None and not error_flag:
+            session.pending_action = pending_action
     except RAGError:
         logger.exception("RAG pipeline failed")
         answer = _RAG_ERROR_MESSAGE
@@ -232,6 +259,34 @@ def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
         cnt_fam_members=app.cnt_fam_members or 1,
         is_married_flag=app.is_married_flag or False,
     )
+
+
+def _is_loan_adjustment_request(message: str) -> bool:
+    text = _normalize_message(message)
+    return any(keyword in text for keyword in _ADJUSTMENT_INTENT_KEYWORDS)
+
+
+def _normalize_message(message: str) -> str:
+    return " ".join(str(message).strip().lower().split())
+
+
+def _format_loan_adjustment_context(
+    result: loan_adjustment_tool.LoanAdjustmentResult,
+) -> str:
+    lines = [
+        "Kết quả tool mô phỏng điều chỉnh khoản vay:",
+        loan_adjustment_tool.format_result_for_rag(result),
+    ]
+    if result.best_observed is not None:
+        best = result.best_observed
+        lines.extend([
+            "Phương án tốt nhất quan sát được:",
+            f"- Số tiền vay: {best.loan_amount}",
+            f"- Kỳ hạn: {best.term} tháng",
+            f"- Xác suất vỡ nợ: {best.default_probability:.2%}",
+            f"- Mức rủi ro: {best.risk_level}",
+        ])
+    return "\n".join(lines)
 
 
 def _extract_sources(documents: list[Any]) -> list[dict[str, Any]]:
