@@ -312,6 +312,20 @@ def test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool():
     )
 
 
+def test_supported_terms_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Kỳ hạn nào hiện được hỗ trợ?",
+        "Các kỳ hạn hiện được hỗ trợ là 12, 24, 36, 48 và 60 tháng.",
+    )
+
+
+def test_term_policy_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Kỳ hạn nào ảnh hưởng đến kết quả xét duyệt?",
+        "Kỳ hạn là một trong các yếu tố được xem xét trong hồ sơ vay.",
+    )
+
+
 def _assert_message_does_not_trigger_adjustment_tool(message, rag_answer):
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     session = _session(user.id)
@@ -395,5 +409,7 @@ if __name__ == "__main__":
     test_reapplication_faq_does_not_trigger_adjustment_tool()
     test_generic_credit_score_improvement_does_not_trigger_adjustment_tool()
     test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool()
+    test_supported_terms_faq_does_not_trigger_adjustment_tool()
+    test_term_policy_faq_does_not_trigger_adjustment_tool()
     test_whitespace_rag_answer_does_not_store_pending_action()
     print("chat service loan adjustment tests passed")
