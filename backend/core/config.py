@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     rag_embedding_max_retries: int = 2
     rag_qdrant_timeout_seconds: float = 5.0
 
+    # RAG retrieval (V1: hybrid BM25 + vector)
+    rag_bm25_model: str = "Qdrant/bm25"
+
     # RAG memory (V1: window + summary buffer)
     rag_memory_window_token_budget: int = 2000
     rag_memory_summary_max_tokens: int = 500
