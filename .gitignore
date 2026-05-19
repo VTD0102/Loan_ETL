@@ -42,5 +42,6 @@ docs/_build/
 .gemini/
 .codex/
 .uv-python/
+.worktrees/
 
 .python-version
