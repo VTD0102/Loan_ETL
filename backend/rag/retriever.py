@@ -8,7 +8,7 @@ from rag.chunking import expand_child_documents_to_parents
 from rag.config import (
     BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
-    RERANKER_CANDIDATE_K, TOP_K,
+    RERANKER_CANDIDATE_K, RERANKER_TOP_K, TOP_K,
 )
 from rag.reranker import get_reranker
 from core.config import settings
@@ -98,6 +98,6 @@ def get_retriever():
             sparse_vector_name="sparse",
         )
         hybrid = vectorstore.as_retriever(search_kwargs={"k": RERANKER_CANDIDATE_K})
-        reranked = RerankedRetriever(hybrid, reranker=get_reranker(), top_k=TOP_K * 3)
+        reranked = RerankedRetriever(hybrid, reranker=get_reranker(), top_k=RERANKER_TOP_K)
         _retriever = ParentDocumentRetriever(reranked, max_parent_docs=TOP_K)
     return _retriever

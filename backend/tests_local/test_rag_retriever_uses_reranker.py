@@ -158,6 +158,22 @@ def test_get_retriever_respects_reranker_disabled():
         reranker_mod._singleton = original_singleton
 
 
+def test_get_retriever_uses_configured_reranker_top_k():
+    """RerankedRetriever.top_k should come from RERANKER_TOP_K, not TOP_K * 3."""
+    from core.config import settings
+    from rag.retriever import RerankedRetriever
+
+    originals = _patch_retriever_module()
+    try:
+        r = retriever_mod.get_retriever()
+        rr = r.child_retriever
+    finally:
+        _unpatch_retriever_module(originals)
+
+    assert isinstance(rr, RerankedRetriever)
+    assert rr.top_k == settings.rag_reranker_top_k
+
+
 if __name__ == "__main__":
     test_reranked_retriever_passthrough_when_reranker_is_none()
     test_reranked_retriever_uses_reranker_when_provided()
@@ -165,4 +181,5 @@ if __name__ == "__main__":
     test_get_retriever_requests_candidate_k_from_hybrid()
     test_get_retriever_chain_is_parent_of_reranked_of_hybrid()
     test_get_retriever_respects_reranker_disabled()
+    test_get_retriever_uses_configured_reranker_top_k()
     print("rag retriever uses reranker tests passed")

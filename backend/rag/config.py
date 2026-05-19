@@ -7,6 +7,7 @@ BM25_SPARSE_MODEL = settings.rag_bm25_model
 RERANKER_MODEL = settings.rag_reranker_model
 RERANKER_ENABLED = settings.rag_reranker_enabled
 RERANKER_CANDIDATE_K = settings.rag_reranker_candidate_k
+RERANKER_TOP_K = settings.rag_reranker_top_k
 TOP_K = settings.rag_top_k
 
 QDRANT_URL = settings.qdrant_url
