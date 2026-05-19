@@ -31,8 +31,11 @@ from rag.prompts import chat_prompt
 from rag.retriever import get_retriever
 from rag.router import classify_intent, needs_retrieval
 
+from threading import Lock
+
 logger = logging.getLogger(__name__)
 
+_chain_lock = Lock()
 _chain = None
 
 
@@ -40,15 +43,17 @@ def get_chain() -> Any:
     """Return the cached LangChain LCEL chain (prompt | llm | parser)."""
     global _chain
     if _chain is None:
-        llm = ChatOpenAI(
-            model=LLM_MODEL,
-            openai_api_key=settings.openrouter_api_key,
-            openai_api_base=OPENROUTER_BASE_URL,
-            temperature=0.3,
-            timeout=settings.rag_llm_timeout_seconds,
-            max_retries=settings.rag_llm_max_retries,
-        )
-        _chain = chat_prompt | llm | StrOutputParser()
+        with _chain_lock:
+            if _chain is None:
+                llm = ChatOpenAI(
+                    model=LLM_MODEL,
+                    openai_api_key=settings.openrouter_api_key,
+                    openai_api_base=OPENROUTER_BASE_URL,
+                    temperature=0.3,
+                    timeout=settings.rag_llm_timeout_seconds,
+                    max_retries=settings.rag_llm_max_retries,
+                )
+                _chain = chat_prompt | llm | StrOutputParser()
     return _chain
 
 

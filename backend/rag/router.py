@@ -124,21 +124,26 @@ Phân loại câu hỏi của khách hàng vào ĐÚNG MỘT trong các intent s
 Trả lời CHỈ bằng JSON: {"intent": "<intent>", "confidence": <0.0-1.0>}
 Không giải thích thêm."""
 
+from threading import Lock
+
+_classifier_llm_lock = Lock()
 _classifier_llm = None
 
 
 def _get_classifier_llm() -> ChatOpenAI:
     global _classifier_llm
     if _classifier_llm is None:
-        _classifier_llm = ChatOpenAI(
-            model=LLM_MODEL,
-            openai_api_key=settings.openrouter_api_key,
-            openai_api_base=OPENROUTER_BASE_URL,
-            temperature=0,
-            max_tokens=60,
-            timeout=settings.rag_llm_timeout_seconds,
-            max_retries=settings.rag_llm_max_retries,
-        )
+        with _classifier_llm_lock:
+            if _classifier_llm is None:
+                _classifier_llm = ChatOpenAI(
+                    model=LLM_MODEL,
+                    openai_api_key=settings.openrouter_api_key,
+                    openai_api_base=OPENROUTER_BASE_URL,
+                    temperature=0,
+                    max_tokens=60,
+                    timeout=settings.rag_llm_timeout_seconds,
+                    max_retries=settings.rag_llm_max_retries,
+                )
     return _classifier_llm
 
 
