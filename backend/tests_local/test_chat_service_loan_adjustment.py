@@ -250,6 +250,48 @@ def test_adjustment_question_without_proposal_does_not_store_pending_action():
     assert "Phương án tốt nhất quan sát được" in rag_calls[0]["context"]
 
 
+def test_direct_term_change_with_personal_help_triggers_adjustment_tool():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    source_application_id = uuid.uuid4()
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common()
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+    original_build = chat_service.loan_adjustment_tool.build_pending_action
+    find_calls = []
+
+    def fake_find(db, user_id):
+        find_calls.append((db, user_id))
+        return _proposal_result(source_application_id)
+
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = fake_find
+    chat_service.loan_adjustment_tool.build_pending_action = lambda result: {
+        "type": "loan_term_adjustment",
+        "status": "pending_confirmation",
+        "source_application_id": result.source_application_id,
+        "proposal": {"term": 36},
+    }
+
+    try:
+        result = chat_service.send(
+            db,
+            "loan@example.com",
+            "Đổi kỳ hạn giúp tôi",
+            session_id=session.id,
+        )
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        chat_service.loan_adjustment_tool.build_pending_action = original_build
+        restore_common()
+
+    assert result["response"].startswith("Đề xuất kỳ hạn 36 tháng")
+    assert len(find_calls) == 1
+    assert len(rag_calls) == 1
+    assert "Kết quả tool mô phỏng điều chỉnh khoản vay" in rag_calls[0]["context"]
+    assert session.pending_action is not None
+
+
 def test_adjustment_tool_model_error_persists_assistant_error():
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     session = _session(user.id)
@@ -323,6 +365,20 @@ def test_term_policy_faq_does_not_trigger_adjustment_tool():
     _assert_message_does_not_trigger_adjustment_tool(
         "Kỳ hạn nào ảnh hưởng đến kết quả xét duyệt?",
         "Kỳ hạn là một trong các yếu tố được xem xét trong hồ sơ vay.",
+    )
+
+
+def test_term_approval_chance_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Kỳ hạn nào giúp tăng khả năng được duyệt?",
+        "Kỳ hạn dài hơn có thể giảm áp lực trả nợ nhưng còn phụ thuộc toàn bộ hồ sơ.",
+    )
+
+
+def test_easier_approval_term_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Kỳ hạn nào dễ được duyệt hơn?",
+        "Khả năng được duyệt phụ thuộc vào thu nhập, DTI, lịch sử tín dụng và hồ sơ vay.",
     )
 
 
@@ -405,11 +461,14 @@ def test_whitespace_rag_answer_does_not_store_pending_action():
 if __name__ == "__main__":
     test_adjustment_question_stores_pending_action_without_submitting()
     test_adjustment_question_without_proposal_does_not_store_pending_action()
+    test_direct_term_change_with_personal_help_triggers_adjustment_tool()
     test_adjustment_tool_model_error_persists_assistant_error()
     test_reapplication_faq_does_not_trigger_adjustment_tool()
     test_generic_credit_score_improvement_does_not_trigger_adjustment_tool()
     test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool()
     test_supported_terms_faq_does_not_trigger_adjustment_tool()
     test_term_policy_faq_does_not_trigger_adjustment_tool()
+    test_term_approval_chance_faq_does_not_trigger_adjustment_tool()
+    test_easier_approval_term_faq_does_not_trigger_adjustment_tool()
     test_whitespace_rag_answer_does_not_store_pending_action()
     print("chat service loan adjustment tests passed")

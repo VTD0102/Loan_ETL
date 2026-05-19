@@ -297,10 +297,9 @@ def _is_loan_adjustment_request(message: str) -> bool:
     has_contextual_action = any(term in text for term in _ADJUSTMENT_CONTEXTUAL_ACTION_TERMS)
     has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
     has_personal_action = any(term in text for term in _ADJUSTMENT_PERSONAL_ACTION_TERMS)
-    has_adjustment_context = has_context or has_contextual_action
     return (
-        (has_direct_action and (has_adjustment_context or has_personal_action))
-        or (has_adjustment_context and (has_term_question or has_help_action))
+        (has_direct_action and (has_context or has_contextual_action or has_personal_action))
+        or (has_context and (has_term_question or has_help_action or has_contextual_action))
     )
 
 
