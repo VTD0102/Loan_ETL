@@ -14,7 +14,7 @@ from langchain_openai import OpenAIEmbeddings
 from rag.chunking import split_documents_semantically
 
 from rag.config import (
-    EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
 )
 from core.config import settings
@@ -54,14 +54,15 @@ def get_embeddings():
 
 
 def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recreate=False):
-    """Upsert chunks into Qdrant.
+    """Upsert chunks into Qdrant in HYBRID mode (dense + BM25 sparse).
 
     With ``recreate=True``, deletes the collection first (destructive).
     With ``recreate=False`` (default), appends to the existing collection.
     """
-    from langchain_qdrant import QdrantVectorStore
+    from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
     from qdrant_client import QdrantClient
 
+    sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     if recreate and client.collection_exists(collection_name=collection_name):
@@ -71,6 +72,8 @@ def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recr
         QdrantVectorStore.from_documents(
             documents=chunks,
             embedding=embeddings,
+            sparse_embedding=sparse_embeddings,
+            retrieval_mode=RetrievalMode.HYBRID,
             url=QDRANT_URL,
             api_key=QDRANT_API_KEY,
             collection_name=collection_name,
@@ -81,6 +84,8 @@ def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recr
         client=client,
         collection_name=collection_name,
         embedding=embeddings,
+        sparse_embedding=sparse_embeddings,
+        retrieval_mode=RetrievalMode.HYBRID,
     )
     store.add_documents(chunks)
 
