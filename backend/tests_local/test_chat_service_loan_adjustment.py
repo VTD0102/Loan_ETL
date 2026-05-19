@@ -158,21 +158,10 @@ def _source_app(app_id, user_id):
 
 
 def _pending_action(app_id):
-    return {
-        "type": "loan_term_adjustment",
-        "status": "pending_confirmation",
-        "source_application_id": str(app_id),
-        "proposal": {
-            "loan_amount": "35000",
-            "term": 36,
-            "default_probability": 0.28,
-            "risk_level": "Medium",
-            "risk_score": 72,
-            "model_version": "test-model",
-        },
-        "created_at": "2026-05-19T10:00:00",
-        "expires_at": "2099-05-19T10:30:00",
-    }
+    action = chat_service.loan_adjustment_tool.build_pending_action(_proposal_result(app_id))
+    action["created_at"] = "2026-05-19T10:00:00"
+    action["expires_at"] = "2099-05-19T10:30:00"
+    return action
 
 
 def _patch_common(rag_answer="Đề xuất kỳ hạn 36 tháng. Bạn có muốn nộp lại với phương án này không?"):

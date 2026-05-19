@@ -188,15 +188,15 @@ def build_pending_action(
     created_at = now or datetime.utcnow()
     expires_at = created_at + timedelta(minutes=PENDING_ACTION_TTL_MINUTES)
     proposal = result.proposal
+    if proposal is None:
+        raise ValueError("Cannot build pending action without a loan adjustment proposal")
     return {
         "type": "loan_term_adjustment",
-        "status": result.status,
+        "status": "pending_confirmation",
         "source_application_id": result.source_application_id,
         "created_at": created_at.isoformat(),
         "expires_at": expires_at.isoformat(),
-        "proposal": None
-        if proposal is None
-        else {
+        "proposal": {
             "loan_amount": str(proposal.loan_amount),
             "term": proposal.term,
             "default_probability": proposal.default_probability,

@@ -298,9 +298,30 @@ def test_pending_action_expiry_helpers():
     action = tool.build_pending_action(result, now=now)
 
     assert action["type"] == "loan_term_adjustment"
+    assert action["status"] == "pending_confirmation"
     assert action["proposal"]["loan_amount"] == "35000"
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=29)) is False
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=31)) is True
+
+
+def test_build_pending_action_requires_proposal():
+    result = tool.LoanAdjustmentResult(
+        status="no_proposal",
+        source_application_id=str(uuid.uuid4()),
+        current_loan_amount=Decimal("50000"),
+        current_term=12,
+        current_default_probability=0.55,
+        proposal=None,
+        best_observed=None,
+        message="No safe adjustment candidate was found.",
+    )
+
+    try:
+        tool.build_pending_action(result)
+    except ValueError as exc:
+        assert "proposal" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for pending action without proposal")
 
 
 def test_pending_action_expiry_accepts_timezone_aware_iso_strings():
@@ -372,6 +393,7 @@ if __name__ == "__main__":
     test_tool_uses_newest_same_user_auto_rejected_application()
     test_tool_returns_no_proposal_for_cic_blacklist()
     test_pending_action_expiry_helpers()
+    test_build_pending_action_requires_proposal()
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()
     test_application_to_confirm_payload_defaults_legacy_nullable_fields()
     print("loan adjustment tool tests passed")
