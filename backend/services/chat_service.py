@@ -40,15 +40,13 @@ _ADJUSTMENT_TERM_QUESTION_TERMS = (
     "thời hạn nào",
     "thoi han nao",
 )
-_ADJUSTMENT_CONTEXTUAL_ACTION_TERMS = (
-    "tăng khả năng",
-    "tang kha nang",
-    "khả năng được duyệt",
-    "kha nang duoc duyet",
-    "dễ được duyệt",
-    "de duoc duyet",
-    "cải thiện",
-    "cai thien",
+_ADJUSTMENT_WORDING_TERMS = (
+    "kỳ hạn",
+    "ky han",
+    "thời hạn",
+    "thoi han",
+    "điều chỉnh",
+    "dieu chinh",
 )
 _ADJUSTMENT_HELP_TERMS = (
     "đề xuất",
@@ -66,6 +64,10 @@ _ADJUSTMENT_PERSONAL_ACTION_TERMS = (
     "hồ sơ của tôi",
     "ho so cua toi",
 )
+
+
+class _LoanAdjustmentToolError(Exception):
+    pass
 
 
 def send(db: Session, user_email: str, payload_message: str, session_id: Any = None) -> dict:
@@ -98,9 +100,12 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         tool_result = None
         pending_action = None
         if _is_loan_adjustment_request(payload_message):
-            tool_result = loan_adjustment_tool.find_best_reapplication_option(db, user.id)
-            if tool_result.proposal is not None:
-                pending_action = loan_adjustment_tool.build_pending_action(tool_result)
+            try:
+                tool_result = loan_adjustment_tool.find_best_reapplication_option(db, user.id)
+                if tool_result.proposal is not None:
+                    pending_action = loan_adjustment_tool.build_pending_action(tool_result)
+            except Exception as exc:
+                raise _LoanAdjustmentToolError from exc
 
         context = build_user_context(db, user.id)
         if tool_result is not None:
@@ -119,7 +124,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             sources = []
         if pending_action is not None and not error_flag:
             session.pending_action = pending_action
-    except (RAGError, ml_service.ModelPredictionError):
+    except (RAGError, ml_service.ModelPredictionError, _LoanAdjustmentToolError):
         logger.exception("Chat pipeline failed")
         answer = _RAG_ERROR_MESSAGE
         error_flag = True
@@ -296,12 +301,16 @@ def _is_loan_adjustment_request(message: str) -> bool:
     has_context = any(term in text for term in _ADJUSTMENT_CONTEXT_TERMS)
     has_direct_action = any(term in text for term in _ADJUSTMENT_DIRECT_ACTION_TERMS)
     has_term_question = any(term in text for term in _ADJUSTMENT_TERM_QUESTION_TERMS)
-    has_contextual_action = any(term in text for term in _ADJUSTMENT_CONTEXTUAL_ACTION_TERMS)
+    has_adjustment_wording = any(term in text for term in _ADJUSTMENT_WORDING_TERMS)
     has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
     has_personal_action = any(term in text for term in _ADJUSTMENT_PERSONAL_ACTION_TERMS)
     return (
-        (has_direct_action and (has_context or has_contextual_action or has_personal_action))
-        or (has_context and (has_term_question or has_help_action or has_contextual_action))
+        has_direct_action
+        and (has_context or has_help_action or has_personal_action)
+    ) or (
+        has_context
+        and has_help_action
+        and (has_direct_action or has_term_question or has_adjustment_wording)
     )
 
 

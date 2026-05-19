@@ -333,10 +333,71 @@ def test_adjustment_tool_model_error_persists_assistant_error():
     assert db.committed >= 2
 
 
+def test_adjustment_tool_unexpected_error_persists_assistant_error():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    session = _session(user.id)
+    db = FakeDB(user, session=session)
+    rag_calls, restore_common = _patch_common()
+
+    original_find = chat_service.loan_adjustment_tool.find_best_reapplication_option
+
+    def raise_unexpected_error(db, user_id):
+        raise RuntimeError("boom")
+
+    chat_service.loan_adjustment_tool.find_best_reapplication_option = raise_unexpected_error
+    try:
+        raised = None
+        try:
+            chat_service.send(
+                db,
+                "loan@example.com",
+                "Tôi bị từ chối, đổi kỳ hạn nào để dễ được duyệt hơn?",
+                session_id=session.id,
+            )
+        except HTTPException as exc:
+            raised = exc
+    finally:
+        chat_service.loan_adjustment_tool.find_best_reapplication_option = original_find
+        restore_common()
+
+    assert raised is not None
+    assert raised.status_code == 503
+    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert rag_calls == []
+    assert session.pending_action is None
+    user_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "user"]
+    assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
+    assert len(user_messages) == 1
+    assert len(assistant_messages) == 1
+    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].error is True
+
+
 def test_reapplication_faq_does_not_trigger_adjustment_tool():
     _assert_message_does_not_trigger_adjustment_tool(
         "Tôi có thể nộp lại sau khi bị từ chối không?",
         "Bạn có thể nộp lại sau khi cập nhật hồ sơ.",
+    )
+
+
+def test_rejected_loan_profile_improvement_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Tôi bị từ chối, làm sao cải thiện hồ sơ vay?",
+        "Bạn có thể cải thiện hồ sơ vay bằng cách bổ sung giấy tờ thu nhập.",
+    )
+
+
+def test_rejected_credit_score_improvement_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Tôi bị từ chối, làm sao cải thiện điểm tín dụng?",
+        "Bạn có thể cải thiện điểm tín dụng bằng cách thanh toán đúng hạn.",
+    )
+
+
+def test_rejected_supported_terms_faq_does_not_trigger_adjustment_tool():
+    _assert_message_does_not_trigger_adjustment_tool(
+        "Sau khi bị từ chối, kỳ hạn nào hiện được hỗ trợ?",
+        "Các kỳ hạn hiện được hỗ trợ là 12, 24, 36, 48 và 60 tháng.",
     )
 
 
@@ -463,7 +524,11 @@ if __name__ == "__main__":
     test_adjustment_question_without_proposal_does_not_store_pending_action()
     test_direct_term_change_with_personal_help_triggers_adjustment_tool()
     test_adjustment_tool_model_error_persists_assistant_error()
+    test_adjustment_tool_unexpected_error_persists_assistant_error()
     test_reapplication_faq_does_not_trigger_adjustment_tool()
+    test_rejected_loan_profile_improvement_does_not_trigger_adjustment_tool()
+    test_rejected_credit_score_improvement_does_not_trigger_adjustment_tool()
+    test_rejected_supported_terms_faq_does_not_trigger_adjustment_tool()
     test_generic_credit_score_improvement_does_not_trigger_adjustment_tool()
     test_generic_loan_profile_improvement_does_not_trigger_adjustment_tool()
     test_supported_terms_faq_does_not_trigger_adjustment_tool()
