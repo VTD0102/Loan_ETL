@@ -7,8 +7,10 @@ from qdrant_client import QdrantClient
 from rag.chunking import expand_child_documents_to_parents
 from rag.config import (
     BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
-    QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL, TOP_K,
+    QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
+    RERANKER_CANDIDATE_K, TOP_K,
 )
+from rag.reranker import get_reranker
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,7 @@ def get_retriever():
             vector_name="dense",
             sparse_vector_name="sparse",
         )
-        child_retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K * 3})
-        _retriever = ParentDocumentRetriever(child_retriever, max_parent_docs=TOP_K)
+        hybrid = vectorstore.as_retriever(search_kwargs={"k": RERANKER_CANDIDATE_K})
+        reranked = RerankedRetriever(hybrid, reranker=get_reranker(), top_k=TOP_K * 3)
+        _retriever = ParentDocumentRetriever(reranked, max_parent_docs=TOP_K)
     return _retriever

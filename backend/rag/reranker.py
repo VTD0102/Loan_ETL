@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from rag.config import RERANKER_ENABLED, RERANKER_MODEL
+from rag.config import RERANKER_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ class Reranker:
 def get_reranker() -> "Reranker | None":
     """Singleton accessor. Returns None if rerank is disabled by config."""
     global _singleton
-    if not RERANKER_ENABLED:
+    from rag import config as rag_config
+    if not rag_config.RERANKER_ENABLED:
         return None
     if _singleton is None:
         _singleton = Reranker()
