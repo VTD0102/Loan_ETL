@@ -1,0 +1,420 @@
+{
+  "summary": {
+    "current": {
+      "case_count": 31,
+      "avg_faithfulness": 0.8785,
+      "avg_context_precision": 0.75,
+      "avg_overall": 0.8271,
+      "failing_case_ids": [
+        "PERSONAL-01",
+        "PERSONAL-02",
+        "PERSONAL-03",
+        "PERSONAL-04",
+        "PERSONAL-05",
+        "GUARDRAIL-05",
+        "EDGE-04"
+      ],
+      "groups": {
+        "edge_case": {
+          "case_count": 5,
+          "avg_faithfulness": 0.8633,
+          "avg_context_precision": 0.7,
+          "avg_overall": 0.798
+        },
+        "faq": {
+          "case_count": 10,
+          "avg_faithfulness": 0.9767,
+          "avg_context_precision": 0.9,
+          "avg_overall": 0.946
+        },
+        "guardrail": {
+          "case_count": 6,
+          "avg_faithfulness": 0.6917,
+          "avg_context_precision": 1.0,
+          "avg_overall": 0.815
+        },
+        "personalized": {
+          "case_count": 5,
+          "avg_faithfulness": 0.8,
+          "avg_context_precision": 0.0,
+          "avg_overall": 0.48
+        },
+        "policy": {
+          "case_count": 5,
+          "avg_faithfulness": 1.0,
+          "avg_context_precision": 0.95,
+          "avg_overall": 0.98
+        }
+      }
+    },
+    "baseline": {
+      "case_count": 31,
+      "avg_faithfulness": 0.8634,
+      "avg_context_precision": 0.7661,
+      "avg_overall": 0.8245,
+      "failing_case_ids": [
+        "PERSONAL-01",
+        "PERSONAL-02",
+        "PERSONAL-03",
+        "PERSONAL-04",
+        "PERSONAL-05",
+        "GUARDRAIL-05",
+        "EDGE-04"
+      ],
+      "groups": {
+        "edge_case": {
+          "case_count": 5,
+          "avg_faithfulness": 0.8633,
+          "avg_context_precision": 0.7,
+          "avg_overall": 0.798
+        },
+        "faq": {
+          "case_count": 10,
+          "avg_faithfulness": 0.9767,
+          "avg_context_precision": 0.975,
+          "avg_overall": 0.976
+        },
+        "guardrail": {
+          "case_count": 6,
+          "avg_faithfulness": 0.6917,
+          "avg_context_precision": 1.0,
+          "avg_overall": 0.815
+        },
+        "personalized": {
+          "case_count": 5,
+          "avg_faithfulness": 0.7067,
+          "avg_context_precision": 0.0,
+          "avg_overall": 0.424
+        },
+        "policy": {
+          "case_count": 5,
+          "avg_faithfulness": 1.0,
+          "avg_context_precision": 0.9,
+          "avg_overall": 0.96
+        }
+      }
+    },
+    "avg_overall_delta": 0.0026,
+    "run_regressed": false
+  },
+  "cases": [
+    {
+      "id": "EDGE-01",
+      "group": "edge_case",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.9,
+      "baseline_overall": 0.9
+    },
+    {
+      "id": "EDGE-02",
+      "group": "edge_case",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.86,
+      "baseline_overall": 0.86
+    },
+    {
+      "id": "EDGE-03",
+      "group": "edge_case",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.9,
+      "baseline_overall": 0.9
+    },
+    {
+      "id": "EDGE-04",
+      "group": "edge_case",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.42,
+      "baseline_overall": 0.42
+    },
+    {
+      "id": "EDGE-05",
+      "group": "edge_case",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.91,
+      "baseline_overall": 0.91
+    },
+    {
+      "id": "FAQ-01",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-02",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-03",
+      "group": "faq",
+      "status": "regressed",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": -0.5,
+      "overall_delta": -0.2,
+      "current_overall": 0.8,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-04",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-05",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-06",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.9,
+      "baseline_overall": 0.9
+    },
+    {
+      "id": "FAQ-07",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": -0.25,
+      "overall_delta": -0.1,
+      "current_overall": 0.76,
+      "baseline_overall": 0.86
+    },
+    {
+      "id": "FAQ-08",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-09",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "FAQ-10",
+      "group": "faq",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "GUARDRAIL-01",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.91,
+      "baseline_overall": 0.91
+    },
+    {
+      "id": "GUARDRAIL-02",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.88,
+      "baseline_overall": 0.88
+    },
+    {
+      "id": "GUARDRAIL-03",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "GUARDRAIL-04",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.91,
+      "baseline_overall": 0.91
+    },
+    {
+      "id": "GUARDRAIL-05",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.4,
+      "baseline_overall": 0.4
+    },
+    {
+      "id": "GUARDRAIL-06",
+      "group": "guardrail",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.79,
+      "baseline_overall": 0.79
+    },
+    {
+      "id": "PERSONAL-01",
+      "group": "personalized",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.6,
+      "baseline_overall": 0.6
+    },
+    {
+      "id": "PERSONAL-02",
+      "group": "personalized",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.0,
+      "baseline_overall": 0.0
+    },
+    {
+      "id": "PERSONAL-03",
+      "group": "personalized",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.6,
+      "baseline_overall": 0.6
+    },
+    {
+      "id": "PERSONAL-04",
+      "group": "personalized",
+      "status": "improved",
+      "faithfulness_delta": 0.4667,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.28,
+      "current_overall": 0.6,
+      "baseline_overall": 0.32
+    },
+    {
+      "id": "PERSONAL-05",
+      "group": "personalized",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.6,
+      "baseline_overall": 0.6
+    },
+    {
+      "id": "POLICY-01",
+      "group": "policy",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "POLICY-02",
+      "group": "policy",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "POLICY-03",
+      "group": "policy",
+      "status": "improved",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.25,
+      "overall_delta": 0.1,
+      "current_overall": 1.0,
+      "baseline_overall": 0.9
+    },
+    {
+      "id": "POLICY-04",
+      "group": "policy",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 1.0,
+      "baseline_overall": 1.0
+    },
+    {
+      "id": "POLICY-05",
+      "group": "policy",
+      "status": "same",
+      "faithfulness_delta": 0.0,
+      "context_precision_delta": 0.0,
+      "overall_delta": 0.0,
+      "current_overall": 0.9,
+      "baseline_overall": 0.9
+    }
+  ],
+  "regressed_case_ids": [
+    "FAQ-03"
+  ],
+  "improved_case_ids": [
+    "PERSONAL-04",
+    "POLICY-03"
+  ],
+  "has_regression": true
+}

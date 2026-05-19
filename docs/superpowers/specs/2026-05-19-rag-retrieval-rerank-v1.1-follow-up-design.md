@@ -53,6 +53,17 @@ Run the same 31-case eval for small retrieval shape variants:
 Acceptance: choose a variant only if `avg_overall_delta >= +0.02` and no case
 regresses by more than the current `FAQ-03` drop.
 
+### Candidate/top-k result
+
+The candidate/top-k variants did not beat Stage 2's `+0.0152` soft-pass result.
+Keep Stage 2 defaults for now:
+
+- `rag_reranker_candidate_k=20`
+- `rag_reranker_top_k=12`
+
+Next investigation step: prototype FAQ source preservation before considering
+the heavier `BAAI/bge-reranker-v2-m3` model swap.
+
 ### Experiment 2 - FAQ source preservation
 
 Prototype a retrieval-only rule that preserves at least one high-ranked FAQ
