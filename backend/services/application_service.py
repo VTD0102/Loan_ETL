@@ -10,7 +10,7 @@ from schemas.application import ApplicationCreate, ApplicationConfirm
 from schemas.personal_info import PersonalInfoCreate
 from services import ml_service, cic_service
 from services.loan_suggestion_service import validate_confirmed_values
-from services.model_feature_builder import fetch_previous_applications
+from services.model_feature_builder import compute_combined_dti, fetch_previous_applications
 from decimal import Decimal
 import logging
 
@@ -77,11 +77,10 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
 
-    # ── Compute DTI for display (but do NOT set on payload yet — ML needs original dti=None) ──
+    # ── Compute DTI once and use the same value for display, storage, and ML input ──
     monthly_income = float(payload.monthly_income)
     loan_amount = float(payload.loan_amount)
     term = int(payload.term)
-    monthly_payment = loan_amount / term if term > 0 else 0
 
     # Try to get existing debt from CIC
     existing_monthly_debt = 0.0
@@ -91,9 +90,17 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         if cic_record:
             existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
-    computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
-    # NOTE: Do NOT set payload.dti here — it would break the binary search in ML suggestion.
-    # The model was trained/tuned with dti=None; setting it changes predictions.
+    computed_dti = compute_combined_dti(
+        monthly_income,
+        loan_amount,
+        term,
+        existing_monthly_debt,
+    )
+    computed_dti_decimal = Decimal(str(round(computed_dti, 4)))
+    # CIC monthly debt is passed to model_feature_builder so it can recompute
+    # DTI correctly for each binary-search probe in loan_suggestion_service.
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
+    payload.dti = None
 
     # ── CIC enrichment: replace self-reported bureau fields with verified data ──
     cic_comparison = {}
@@ -101,6 +108,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         # Blacklist check — reject immediately without ML
         if cic_record.blacklist_flag:
             logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
+            payload.dti = computed_dti_decimal
             new_app = LoanApplication(
                 user_id=user.id,
                 status="AUTO_REJECTED",
@@ -162,8 +170,8 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
 
-    # ── NOW set DTI on payload for DB storage ──
-    payload.dti = Decimal(str(round(computed_dti, 4)))
+    # ── Set the exact DTI used by ML on payload for DB storage ──
+    payload.dti = computed_dti_decimal
 
     prob = prediction["default_probability"]
 
@@ -244,6 +252,9 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
             cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
             existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
+    payload.dti = None
+
     try:
         artifact = ml_service._load()
         previous = fetch_previous_applications(db, user.id)
@@ -254,12 +265,13 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
-    # ── NOW compute & set DTI for DB storage (after ML is done) ──
-    monthly_income = float(payload.monthly_income)
-    loan_amount = float(payload.loan_amount)
-    term_val = int(payload.term)
-    monthly_payment = loan_amount / term_val if term_val > 0 else 0
-    computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
+    # ── Set the exact DTI used by ML on payload for DB storage ──
+    computed_dti = compute_combined_dti(
+        payload.monthly_income,
+        payload.loan_amount,
+        payload.term,
+        existing_monthly_debt,
+    )
     payload.dti = Decimal(str(round(computed_dti, 4)))
 
     prob       = prediction["default_probability"]
