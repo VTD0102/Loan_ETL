@@ -144,12 +144,20 @@ def fetch_previous_applications(db: Any, user_id: Any) -> list[Any]:
     if db is None or user_id is None:
         return []
     from models.application import LoanApplication
-    return (
+    import datetime
+    all_apps = (
         db.query(LoanApplication)
         .filter(LoanApplication.user_id == user_id)
         .order_by(LoanApplication.submitted_at.desc())
         .all()
     )
+    if not all_apps:
+        return []
+    # Exclude applications submitted in the last 30 minutes to prevent counting
+    # the current session's rejection as a historical default.
+    now = datetime.datetime.now(all_apps[0].submitted_at.tzinfo) if all_apps[0].submitted_at.tzinfo else datetime.datetime.utcnow()
+    cutoff = now - datetime.timedelta(minutes=30)
+    return [app for app in all_apps if app.submitted_at < cutoff]
 
 
 def _history_features(previous_applications: list[Any], high_threshold: float) -> dict[str, Any]:
