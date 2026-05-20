@@ -96,11 +96,14 @@ _STATUS_TONES: dict[str | None, dict[str, str]] = {
 
 _INTENT_INSTRUCTIONS: dict[str, str] = {
     "loan_inquiry": (
-        "Khách hàng đang hỏi về khoản vay. Tập trung vào: số tiền vay, kỳ hạn, "
-        "trạng thái đơn, so sánh với hạn mức đề xuất. Trích dẫn dữ liệu cụ thể "
-        "từ hồ sơ nếu có. Chỉ nêu trạng thái đơn hiện tại khi khách hàng hỏi trực tiếp "
-        "về trạng thái hiện tại; nếu họ hỏi một tình huống/chính sách, hãy trả lời đúng "
-        "tình huống đó trước."
+        "Khách hàng đang hỏi về khoản vay CỦA HỌ. "
+        "LUÔN ưu tiên dữ liệu từ THÔNG TIN HỒ SƠ KHÁCH HÀNG để trả lời trực tiếp: "
+        "trạng thái đơn, xác suất vỡ nợ, risk score, hạn mức đề xuất. "
+        "Tài liệu trong TÀI LIỆU LIÊN QUAN chỉ dùng để bổ sung giải thích chính sách khi cần, "
+        "KHÔNG dùng làm nội dung chính khi đã có dữ liệu hồ sơ. "
+        "Trả lời ngắn gọn, trực tiếp. Không giải thích khái niệm học thuật dài dòng (DTI, LTV...) "
+        "trừ khi khách hàng yêu cầu cụ thể. "
+        "Nếu họ hỏi tình huống/chính sách (không phải hỏi về đơn của họ), trả lời đúng tình huống đó."
     ),
     "risk_explanation": (
         "Khách hàng muốn hiểu kết quả đánh giá rủi ro. Giải thích: xác suất vỡ nợ, "

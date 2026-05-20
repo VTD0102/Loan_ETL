@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+
 const normalizeAssistantContent = (content) => (
   String(content || '')
     .replace(/\r\n/g, '\n')
@@ -51,8 +53,28 @@ const renderAssistantContent = (content) => {
   )
 }
 
-const ChatMessage = ({ message }) => {
+const ChatMessage = ({ message, typewriter = false }) => {
   const isUser = message.role === 'user'
+  const fullContent = message.content
+  const [displayed, setDisplayed] = useState(typewriter ? '' : fullContent)
+
+  useEffect(() => {
+    if (!typewriter) {
+      setDisplayed(fullContent)
+      return
+    }
+    setDisplayed('')
+    let pos = 0
+    const len = fullContent.length
+    // Adaptive chunk: longer text reveals faster so total time stays ~1–1.5s
+    const chunk = len > 500 ? 10 : len > 200 ? 5 : 2
+    const id = setInterval(() => {
+      pos = Math.min(pos + chunk, len)
+      setDisplayed(fullContent.slice(0, pos))
+      if (pos >= len) clearInterval(id)
+    }, 16)
+    return () => clearInterval(id)
+  }, [fullContent, typewriter])
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -68,8 +90,8 @@ const ChatMessage = ({ message }) => {
           ? 'bg-primary-600 text-white rounded-tr-sm'
           : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'}`}>
         {isUser
-          ? <div className="whitespace-pre-wrap">{message.content}</div>
-          : renderAssistantContent(message.content)}
+          ? <div className="whitespace-pre-wrap">{displayed}</div>
+          : renderAssistantContent(displayed)}
       </div>
     </div>
   )

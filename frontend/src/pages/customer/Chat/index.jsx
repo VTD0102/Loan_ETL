@@ -18,23 +18,30 @@ const DEFAULT_MESSAGE = {
 
 const TypingIndicator = () => (
   <div className="flex gap-3">
-    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-semibold text-gray-600 flex-shrink-0">
-      AI
+    <div className="relative w-8 h-8 flex-shrink-0">
+      <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-xs font-semibold text-primary-600">
+        AI
+      </div>
+      <span className="absolute inset-0 rounded-full border-2 border-primary-400 animate-ping opacity-60" />
     </div>
-    <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm flex items-center gap-1.5">
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-      ))}
+    <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm flex items-center gap-2">
+      <span className="text-xs text-gray-400">Đang suy nghĩ</span>
+      <span className="flex gap-1 ml-0.5">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="w-1.5 h-1.5 bg-primary-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.18}s` }} />
+        ))}
+      </span>
     </div>
   </div>
 )
 
 const ChatbotPage = () => {
-  const [messages,  setMessages]  = useState([DEFAULT_MESSAGE])
-  const [input,     setInput]     = useState('')
-  const [loading,   setLoading]   = useState(false)
-  const [sessionId, setSessionId] = useState(null)
-  const [hydrating, setHydrating] = useState(true)
+  const [messages,     setMessages]     = useState([DEFAULT_MESSAGE])
+  const [input,        setInput]        = useState('')
+  const [loading,      setLoading]      = useState(false)
+  const [sessionId,    setSessionId]    = useState(null)
+  const [hydrating,    setHydrating]    = useState(true)
+  const [typingMsgId,  setTypingMsgId]  = useState(null)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
 
@@ -88,7 +95,9 @@ const ChatbotPage = () => {
         localStorage.setItem(CHAT_SESSION_KEY, res.data.session_id)
       }
       const reply = res.data?.response || res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }])
+      const msgId = Date.now()
+      setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: reply }])
+      setTypingMsgId(msgId)
     } catch {
       setMessages((prev) => [...prev, {
         role: 'assistant',
@@ -137,7 +146,7 @@ const ChatbotPage = () => {
             </div>
           )}
           {messages.map((msg, i) => (
-            <ChatMessage key={i} message={msg} />
+            <ChatMessage key={msg.id || i} message={msg} typewriter={!!msg.id && msg.id === typingMsgId} />
           ))}
           {loading && <TypingIndicator />}
           <div ref={bottomRef} />
