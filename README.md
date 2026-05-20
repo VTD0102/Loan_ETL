@@ -8,7 +8,7 @@
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
-flowchart LR
+flowchart TB
     %% ===== CỘT 1: CLIENT-SIDE (REACT APP) =====
     subgraph CLIENT["🖥️ Client-Side (React 18 + Zustand)"]
         direction TB
