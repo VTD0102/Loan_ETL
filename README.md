@@ -9,77 +9,62 @@ Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng
 
 ```mermaid
 graph TB
-    User(("👤 Người dùng")) --> AUTH["🔐 Đăng ký / Đăng nhập"]
-    AUTH --> JWT["🛂 JWT Token\nZustand authStore"]
+    User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
+    Login --> JWT["🔑 Zustand Store\n(Bearer JWT Auth)"]
 
-    JWT --> CUSTOMER_FLOW
-    JWT --> ADMIN_FLOW
+    %% Phân nhánh theo vai trò
+    JWT -->|Role: Customer| FE_C
+    JWT -->|Role: Admin| FE_A
 
-    subgraph CUSTOMER_FLOW["📋 Customer — React 18 + Vite"]
-        C_DASH["📊 Dashboard\nXem đơn · Credit Score"]
-        C_APPLY["📝 Nộp đơn vay\nForm → ML auto-review"]
-        C_HISTORY["📂 Lịch sử đơn\nTrạng thái · Chi tiết"]
-        C_CHAT["💬 Chat AI\nHỏi đáp · Tư vấn"]
+    subgraph FE_C["📋 Giao diện Khách hàng (React)"]
+        direction TB
+        C_MAIN["📊 Portal (Dashboard / Apply / History)"]
+        C_CHAT["💬 Chat AI (RAG Chatbot)"]
     end
 
-    subgraph ADMIN_FLOW["🛡️ Admin Panel"]
-        A_DASH["📊 Admin Dashboard"]
-        A_REVIEW["📋 Duyệt / Từ chối đơn"]
-        A_STATS["📈 Thống kê hệ thống"]
+    subgraph FE_A["🛡️ Giao diện Admin (React)"]
+        direction TB
+        A_PANEL["🖥️ Admin Panel (Review & Stats)"]
     end
 
-    CUSTOMER_FLOW -->|"REST API"| BACKEND
-    ADMIN_FLOW -->|"REST API"| BACKEND
+    %% Kết nối Frontend -> API Gateway
+    C_MAIN -->|"REST API"| API
+    C_CHAT -->|"REST API"| API
+    A_PANEL -->|"REST API"| API
 
-    subgraph BACKEND["⚙️ Backend — FastAPI"]
-        API["🌐 API Routers\n/auth · /applications · /admin · /chat · /credit-score"]
-        API --> GUARD_MW["🛂 JWT Middleware"]
+    subgraph BACKEND["⚙️ Backend & API Layer (FastAPI)"]
+        API["🌐 API Gateway & JWT Middleware"]
 
-        GUARD_MW --> SVC_AUTH["auth_service"]
-        GUARD_MW --> SVC_APP["application_service"]
-        GUARD_MW --> SVC_ADMIN["admin_service"]
-        GUARD_MW --> SVC_ML["ml_service"]
-        GUARD_MW --> SVC_CS["credit_score_service"]
-        GUARD_MW --> SVC_CHAT["chat_service"]
-
-        SVC_APP --> SVC_ML
-        SVC_CHAT --> ADJ["loan_adjustment_tool"]
-        SVC_CHAT --> SVC_APP
-        ADJ --> SVC_ML
+        subgraph SERVICES["📦 Business Services"]
+            direction LR
+            SVC_APP["application_service\n(Quản lý hồ sơ vay)"]
+            SVC_ML["ml_service\n(Dự đoán rủi ro vỡ nợ)"]
+            SVC_CHAT["chat_service & Adjustment Tool\n(Điều phối RAG)"]
+        end
+        API --> SERVICES
     end
 
-    SVC_CHAT -->|"Gọi RAG pipeline"| RAG_MODULE
-    SVC_ML -->|"Load model"| ML_MODULE
-    SVC_CS -->|"Load model"| ML_MODULE
+    %% Kết nối Services -> Chuyên sâu RAG / ML
+    SVC_CHAT -->|"Gọi RAG Pipeline"| RAG_MOD
+    SVC_ML -->|"Chạy mô hình"| ML_MOD
 
-    subgraph RAG_MODULE["🤖 RAG Module — backend/rag/"]
-        CHAIN["chain.py · LCEL Pipeline"]
-        CHAIN --> G["guardrails.py"]
-        CHAIN --> RO["router.py"]
-        CHAIN --> RW["query_rewriter.py"]
-        CHAIN --> RT["retriever.py"]
-        CHAIN --> PE["personalizer.py"]
-        CHAIN --> ME["memory.py"]
-        RT --> CH["chunking.py"]
+    subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
+        direction TB
+        CHAIN["chain.py (RAG Pipeline)"]
+        RETRIEVER["retriever.py (Hybrid Search)"]
+        CHAIN --> RETRIEVER
     end
 
-    subgraph ML_MODULE["🧠 ML Module"]
-        RISK["customer_risk_model.pkl\nLightGBM v4"]
-        SCORE["scorecard_model.pkl\nLogistic Regression"]
+    subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
+        direction TB
+        RISK_M["customer_risk_model.pkl\n(LightGBM v4)"]
+        SCORE_M["scorecard_model.pkl\n(FICO score)"]
     end
 
-    RAG_MODULE -->|"Vector search"| QD
-    RAG_MODULE -->|"Chat history"| PG
-    RAG_MODULE -->|"LLM + Embed"| OR
-    BACKEND -->|"CRUD"| PG
-
-    subgraph STORAGE["💾 Tầng Lưu Trữ"]
-        PG[("🐘 PostgreSQL")]
-        QD[("🔷 Qdrant")]
-        DK[("🦆 DuckDB")]
-    end
-
-    OR["☁️ OpenRouter API\nGemini 2.5 Flash"]
+    %% Kết nối xuống Cơ sở dữ liệu và API ngoài
+    RAG_MOD -->|"Search vector"| QD[("🔷 Qdrant\nVector DB")]
+    RAG_MOD -->|"LLM & Embed"| OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
+    BACKEND -->|"Lưu đơn/Chat"| PG[("🐘 PostgreSQL")]
 
     %% ===== STYLING =====
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
@@ -88,30 +73,30 @@ graph TB
     classDef cust fill:#0ea5e9,stroke:#0284c7,color:#fff
     classDef adm fill:#f97316,stroke:#c2410c,color:#fff
     classDef be fill:#f59e0b,stroke:#d97706,color:#fff
-    classDef mw fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef svc fill:#fbbf24,stroke:#d97706,color:#000
     classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
     classDef ml fill:#10b981,stroke:#059669,color:#fff
     classDef db fill:#64748b,stroke:#475569,color:#fff
     classDef ext fill:#ec4899,stroke:#db2777,color:#fff
 
     class User user
-    class AUTH auth
+    class Login auth
     class JWT jwt
-    class C_DASH,C_APPLY,C_HISTORY,C_CHAT cust
-    class A_DASH,A_REVIEW,A_STATS adm
-    class API,SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,ADJ be
-    class GUARD_MW mw
-    class CHAIN,G,RO,RW,RT,PE,ME,CH rag
-    class RISK,SCORE ml
-    class PG,QD,DK db
+    class C_MAIN,C_CHAT cust
+    class A_PANEL adm
+    class API be
+    class SVC_APP,SVC_ML,SVC_CHAT svc
+    class CHAIN,RETRIEVER rag
+    class RISK_M,SCORE_M ml
+    class PG,QD db
     class OR ext
 
-    style CUSTOMER_FLOW fill:transparent,stroke:#0ea5e9,stroke-width:2px
-    style ADMIN_FLOW fill:transparent,stroke:#f97316,stroke-width:2px
+    style FE_C fill:transparent,stroke:#0ea5e9,stroke-width:2px
+    style FE_A fill:transparent,stroke:#f97316,stroke-width:2px
     style BACKEND fill:transparent,stroke:#f59e0b,stroke-width:2px
-    style RAG_MODULE fill:transparent,stroke:#7c3aed,stroke-width:3px
-    style ML_MODULE fill:transparent,stroke:#10b981,stroke-width:3px
-    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px
+    style SERVICES fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
+    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:3px
 ```
 
 
