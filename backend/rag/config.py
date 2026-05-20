@@ -3,6 +3,11 @@ from core.config import settings
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 LLM_MODEL = settings.rag_llm_model
 EMBEDDING_MODEL = settings.rag_embedding_model
+BM25_SPARSE_MODEL = settings.rag_bm25_model
+RERANKER_MODEL = settings.rag_reranker_model
+RERANKER_ENABLED = settings.rag_reranker_enabled
+RERANKER_CANDIDATE_K = settings.rag_reranker_candidate_k
+RERANKER_TOP_K = settings.rag_reranker_top_k
 TOP_K = settings.rag_top_k
 
 QDRANT_URL = settings.qdrant_url

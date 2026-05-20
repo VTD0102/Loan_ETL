@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -98,19 +98,28 @@ def _format_messages_for_summary(rows: list) -> str:
     return "\n".join(lines)
 
 
+_summary_llm = None
+
+
+def _get_summary_llm():
+    global _summary_llm
+    if _summary_llm is None:
+        from langchain_openai import ChatOpenAI
+        _summary_llm = ChatOpenAI(
+            model=LLM_MODEL,
+            openai_api_key=settings.openrouter_api_key,
+            openai_api_base=OPENROUTER_BASE_URL,
+            temperature=0.2,
+            max_tokens=settings.rag_memory_summary_max_tokens,
+            timeout=settings.rag_llm_timeout_seconds,
+            max_retries=settings.rag_llm_max_retries,
+        )
+    return _summary_llm
+
+
 def _summarize(db, session, messages_to_summarize: list, previous_summary: str | None) -> str:
     """Call the main LLM to produce an updated summary and persist it."""
-    from langchain_openai import ChatOpenAI
-
-    llm = ChatOpenAI(
-        model=LLM_MODEL,
-        openai_api_key=settings.openrouter_api_key,
-        openai_api_base=OPENROUTER_BASE_URL,
-        temperature=0.2,
-        max_tokens=settings.rag_memory_summary_max_tokens,
-        timeout=settings.rag_llm_timeout_seconds,
-        max_retries=settings.rag_llm_max_retries,
-    )
+    llm = _get_summary_llm()
 
     user_block = (
         f"Tóm tắt cũ:\n{previous_summary or '(chưa có)'}\n\n"
@@ -135,7 +144,7 @@ def _summarize(db, session, messages_to_summarize: list, previous_summary: str |
     new_summary = (response.content or "").strip()
     session.summary = new_summary
     session.summary_covers_until_id = messages_to_summarize[-1].id
-    session.summary_updated_at = datetime.utcnow()
+    session.summary_updated_at = datetime.now(timezone.utc)
     try:
         db.commit()
     except SQLAlchemyError as exc:
@@ -159,8 +168,6 @@ def load_memory(db, session, exclude_message_id: Any | None = None) -> MemoryCon
         query = query.filter(ChatMessage.id != exclude_message_id)
 
     rows = query.order_by(ChatMessage.created_at.desc()).all()
-    if exclude_message_id is not None:
-        rows = [row for row in rows if row.id != exclude_message_id]
     if not rows:
         return MemoryContext(summary=session.summary, recent_messages=[])
 

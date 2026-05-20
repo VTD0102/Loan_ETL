@@ -37,6 +37,11 @@ class FakeVectorStore:
         return self
 
 
+class FakeSparse:
+    def __init__(self, **kwargs):
+        _captured["sparse"] = kwargs
+
+
 def test_chat_chain_timeout_kwargs():
     chain_mod._chain = None
     original = chain_mod.ChatOpenAI
@@ -72,9 +77,11 @@ def test_retriever_timeout_kwargs():
     original_emb = retriever_mod.OpenAIEmbeddings
     original_client = retriever_mod.QdrantClient
     original_vs = retriever_mod.QdrantVectorStore
+    original_sparse = retriever_mod.FastEmbedSparse
     retriever_mod.OpenAIEmbeddings = FakeEmbeddings
     retriever_mod.QdrantClient = FakeQdrantClient
     retriever_mod.QdrantVectorStore = FakeVectorStore
+    retriever_mod.FastEmbedSparse = FakeSparse
     try:
         retriever_mod.get_retriever()
         assert retriever_mod._retriever.max_parent_docs == settings.rag_top_k
@@ -82,6 +89,7 @@ def test_retriever_timeout_kwargs():
         retriever_mod.OpenAIEmbeddings = original_emb
         retriever_mod.QdrantClient = original_client
         retriever_mod.QdrantVectorStore = original_vs
+        retriever_mod.FastEmbedSparse = original_sparse
         retriever_mod._retriever = None
 
     assert _captured["embeddings"]["timeout"] == settings.rag_embedding_timeout_seconds

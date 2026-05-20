@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import services.chat_service as chat_service
 from models.chat import ChatMessage, ChatSession
+from rag.memory import MemoryContext
 
 
 class FakeQuery:
@@ -117,15 +118,30 @@ def test_chat_service_excludes_current_user_message_from_memory_window():
     def fake_build_user_context(db, user_id):
         return "ctx"
 
+    def fake_load_memory(db, session, exclude_message_id=None):
+        assert exclude_message_id is not None
+        rows = [
+            message
+            for message in db._messages
+            if message.session_id == session.id
+            and message.id != exclude_message_id
+            and not getattr(message, "error", False)
+        ]
+        rows.sort(key=lambda message: message.created_at)
+        return MemoryContext(recent_messages=rows)
+
     original_invoke = chat_service._rag_invoke
     original_ctx = chat_service.build_user_context
+    original_load_memory = chat_service.load_memory
     chat_service._rag_invoke = fake_invoke
     chat_service.build_user_context = fake_build_user_context
+    chat_service.load_memory = fake_load_memory
     try:
         chat_service.send(db, "c@d.com", "Tôi muốn vay 50tr", session_id=session.id)
     finally:
         chat_service._rag_invoke = original_invoke
         chat_service.build_user_context = original_ctx
+        chat_service.load_memory = original_load_memory
 
     assert rag_call["question"] == "Tôi muốn vay 50tr"
     assert "Tôi muốn vay 50tr" not in rag_call["chat_history"]

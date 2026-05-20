@@ -14,7 +14,7 @@ from langchain_openai import OpenAIEmbeddings
 from rag.chunking import split_documents_semantically
 
 from rag.config import (
-    EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
 )
 from core.config import settings
@@ -54,33 +54,34 @@ def get_embeddings():
 
 
 def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recreate=False):
-    """Upsert chunks into Qdrant.
+    from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
+    from qdrant_client import QdrantClient, models
 
-    With ``recreate=True``, deletes the collection first (destructive).
-    With ``recreate=False`` (default), appends to the existing collection.
-    """
-    from langchain_qdrant import QdrantVectorStore
-    from qdrant_client import QdrantClient
-
+    sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     if recreate and client.collection_exists(collection_name=collection_name):
         client.delete_collection(collection_name=collection_name)
 
-    if recreate or not client.collection_exists(collection_name=collection_name):
-        QdrantVectorStore.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-            url=QDRANT_URL,
-            api_key=QDRANT_API_KEY,
+    if not client.collection_exists(collection_name=collection_name):
+        client.create_collection(
             collection_name=collection_name,
+            vectors_config={
+                "dense": models.VectorParams(size=1536, distance=models.Distance.COSINE),
+            },
+            sparse_vectors_config={
+                "sparse": models.SparseVectorParams(),
+            },
         )
-        return
 
     store = QdrantVectorStore(
         client=client,
         collection_name=collection_name,
         embedding=embeddings,
+        sparse_embedding=sparse_embeddings,
+        retrieval_mode=RetrievalMode.HYBRID,
+        vector_name="dense",
+        sparse_vector_name="sparse",
     )
     store.add_documents(chunks)
 

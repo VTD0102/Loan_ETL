@@ -10,6 +10,7 @@ _COLUMN_MIGRATIONS = [
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary TEXT",
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary_covers_until_id UUID",
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary_updated_at TIMESTAMP",
+    "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_action JSONB",
     # CIC integration: CCCD on users
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS cccd VARCHAR(12) UNIQUE",
     "ALTER TABLE loan_applications ALTER COLUMN credit_score DROP NOT NULL",

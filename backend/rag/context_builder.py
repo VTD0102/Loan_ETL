@@ -304,8 +304,6 @@ def _json_to_text(ctx: dict) -> str:
         lines.append(f"- Risk score: {ml['risk_score']}/100 (càng cao càng an toàn)")
         if ml["recommended_amount"] is not None:
             lines.append(f"- Hạn mức hệ thống đề xuất: {_usd(ml['recommended_amount'])} / {ml['recommended_term']} tháng")
-        if ml["model_version"]:
-            lines.append(f"- Phiên bản model: {ml['model_version']}")
         if ad.get("loan_vs_recommended"):
             lines.append(f"- So sánh số tiền: {ad['loan_vs_recommended']}")
         if ad.get("term_vs_recommended"):
@@ -359,7 +357,9 @@ def _pct(value: Any) -> str:
     return f"{v:.1%}" if v <= 1 else f"{v / 100:.1%}"
 
 
-def _band(value: float, bands: list[tuple]) -> str:
+def _band(value: float | None, bands: list[tuple]) -> str:
+    if value is None or value == 0:
+        return "Không có dữ liệu"
     for threshold, label in bands:
         if value < threshold:
             return label

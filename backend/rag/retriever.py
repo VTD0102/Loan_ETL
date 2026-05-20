@@ -1,13 +1,40 @@
-from langchain_qdrant import QdrantVectorStore
+import logging
+from threading import Lock
+
 from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
 from qdrant_client import QdrantClient
 
 from rag.chunking import expand_child_documents_to_parents
 from rag.config import (
-    EMBEDDING_MODEL, OPENROUTER_BASE_URL,
-    QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL, TOP_K,
+    BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
+    RERANKER_CANDIDATE_K, RERANKER_TOP_K, TOP_K,
 )
+from rag.reranker import get_reranker
 from core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Observability counters for rerank fallback. Read via get_rerank_fallback_count().
+_rerank_fallback_count = 0
+_rerank_call_count = 0
+
+
+def get_rerank_stats() -> dict:
+    """Return cumulative rerank stats since process start.
+
+    Useful for /admin or a simple liveness endpoint to surface silent
+    reranker degradation. Reset on process restart.
+    """
+    return {
+        "rerank_calls": _rerank_call_count,
+        "rerank_fallbacks": _rerank_fallback_count,
+        "fallback_rate": (
+            _rerank_fallback_count / _rerank_call_count
+            if _rerank_call_count else 0.0
+        ),
+    }
 
 
 class ParentDocumentRetriever:
@@ -31,29 +58,76 @@ class ParentDocumentRetriever:
         return self.invoke(query)
 
 
+class RerankedRetriever:
+    """Pulls candidates from base_retriever; if a reranker is provided,
+    scores+sorts via reranker; otherwise pure slice to top_k.
+
+    Any reranker exception is caught and we fall back to the raw
+    candidate slice — never let a reranker failure break retrieval.
+    """
+
+    def __init__(self, base_retriever, reranker, top_k: int):
+        self.base_retriever = base_retriever
+        self.reranker = reranker
+        self.top_k = top_k
+
+    def invoke(self, query):
+        if hasattr(self.base_retriever, "invoke"):
+            candidates = self.base_retriever.invoke(query)
+        else:
+            candidates = self.base_retriever.get_relevant_documents(query)
+
+        if self.reranker is None:
+            return candidates[: self.top_k]
+
+        global _rerank_call_count, _rerank_fallback_count
+        _rerank_call_count += 1
+        try:
+            return self.reranker.rerank(query, candidates, self.top_k)
+        except Exception:
+            _rerank_fallback_count += 1
+            logger.exception(
+                "Reranker failed (fallback %d/%d), returning raw candidates",
+                _rerank_fallback_count, _rerank_call_count,
+            )
+            return candidates[: self.top_k]
+
+    def get_relevant_documents(self, query):
+        return self.invoke(query)
+
+
+_retriever_lock = Lock()
 _retriever = None
 
 
 def get_retriever():
     global _retriever
     if _retriever is None:
-        embeddings = OpenAIEmbeddings(
-            model=EMBEDDING_MODEL,
-            openai_api_key=settings.openrouter_api_key,
-            openai_api_base=OPENROUTER_BASE_URL,
-            timeout=settings.rag_embedding_timeout_seconds,
-            max_retries=settings.rag_embedding_max_retries,
-        )
-        client = QdrantClient(
-            url=QDRANT_URL,
-            api_key=QDRANT_API_KEY,
-            timeout=settings.rag_qdrant_timeout_seconds,
-        )
-        vectorstore = QdrantVectorStore(
-            client=client,
-            collection_name=QDRANT_COLLECTION,
-            embedding=embeddings,
-        )
-        child_retriever = vectorstore.as_retriever(search_kwargs={"k": TOP_K * 3})
-        _retriever = ParentDocumentRetriever(child_retriever, max_parent_docs=TOP_K)
+        with _retriever_lock:
+            if _retriever is None:
+                embeddings = OpenAIEmbeddings(
+                    model=EMBEDDING_MODEL,
+                    openai_api_key=settings.openrouter_api_key,
+                    openai_api_base=OPENROUTER_BASE_URL,
+                    timeout=settings.rag_embedding_timeout_seconds,
+                    max_retries=settings.rag_embedding_max_retries,
+                )
+                sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
+                client = QdrantClient(
+                    url=QDRANT_URL,
+                    api_key=QDRANT_API_KEY,
+                    timeout=settings.rag_qdrant_timeout_seconds,
+                )
+                vectorstore = QdrantVectorStore(
+                    client=client,
+                    collection_name=QDRANT_COLLECTION,
+                    embedding=embeddings,
+                    sparse_embedding=sparse_embeddings,
+                    retrieval_mode=RetrievalMode.HYBRID,
+                    vector_name="dense",
+                    sparse_vector_name="sparse",
+                )
+                hybrid = vectorstore.as_retriever(search_kwargs={"k": RERANKER_CANDIDATE_K})
+                reranked = RerankedRetriever(hybrid, reranker=get_reranker(), top_k=RERANKER_TOP_K)
+                _retriever = ParentDocumentRetriever(reranked, max_parent_docs=TOP_K)
     return _retriever
