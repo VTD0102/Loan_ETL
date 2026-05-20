@@ -10,15 +10,15 @@ KEY CHANGE vs v1:
   - credit_score from app is stored but NOT used as model input
 
 Feature mapping from Supabase application data → v2 scorecard features:
-- debt_to_income_ratio   : (loan_amount / term) / monthly_income
-- payment_to_income      : same as above
+- debt_to_income_ratio   : stored combined DTI, fallback to (loan_amount / term) / monthly_income
+- payment_to_income      : same combined DTI value
 - loan_amount_to_income  : loan_amount / (monthly_income * 12)
 - log_monthly_income     : ln(1 + monthly_income)
 - current_debt_ratio     : total_overdue_amount / loan_amount (proxy)
 - total_debt_to_income   : total_overdue_amount / (monthly_income * 12) (proxy)
 - is_homeowner_flag      : 1/0 from is_homeowner
 - income_verifiable_flag : 1 if employed/self-employed, else 0
-- high_dti_flag          : 1 if HC-DTI > dti_p75 from training data
+- high_dti_flag          : 1 if combined DTI > dti_p75 from training data
 - num_previous_loans     : prior APPROVED applications for this user
 - previous_default_rate  : fraction of prior applications that were rejected
 - employment_status_grouped: normalised employment category
@@ -113,6 +113,13 @@ def _number(obj, name: str, default=0.0) -> float:
     return float(_value(obj, name, default))
 
 
+def _ratio(value, default=0.0) -> float:
+    if value is None:
+        return default
+    number = float(value)
+    return number / 100 if number > 5 else number
+
+
 def _int(obj, name: str, default=0) -> int:
     return int(_value(obj, name, default))
 
@@ -129,7 +136,8 @@ def _build_features(app, num_previous_loans: int, previous_default_rate: float,
     term = int(app.term)
 
     # Derived features
-    hc_dti            = (la / term) / mi if mi > 0 and term > 0 else 0.0
+    requested_dti     = (la / term) / mi if mi > 0 and term > 0 else 0.0
+    hc_dti            = _ratio(getattr(app, "dti", None), requested_dti)
     loan_to_income    = la / (mi * 12) if mi > 0 else 0.0
     log_income        = math.log1p(max(mi, 0))
     homeowner_flag    = 1 if app.is_homeowner else 0

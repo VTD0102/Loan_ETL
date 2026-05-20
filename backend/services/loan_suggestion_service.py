@@ -147,14 +147,22 @@ def _binary_search(payload, artifact, term, threshold, prev) -> float:
 
 
 def _predict(payload, artifact, loan_amount: float, term: int, prev: list) -> float:
-    from services.model_feature_builder import build_model_input
+    from services.model_feature_builder import apply_dti_risk_floor, build_model_input
     modified = payload.model_copy(update={
         "loan_amount": Decimal(str(round(loan_amount, 2))),
         "term":        int(term),
+        "dti":         None,
     })
     built    = build_model_input(modified, artifact, previous_applications=prev)
     pipeline = artifact["pipeline"]
     feature_cols = artifact["feature_cols"]
     row      = pd.DataFrame([built.features], columns=feature_cols)
-    return float(pipeline.predict_proba(row)[0, 1])
+    raw_prob = float(pipeline.predict_proba(row)[0, 1])
+    thresholds = artifact["thresholds"]
+    return apply_dti_risk_floor(
+        raw_prob,
+        built.features.get("dti", 0.0),
+        low_threshold=float(thresholds["low"]),
+        high_threshold=float(thresholds["high"]),
+    )
 
