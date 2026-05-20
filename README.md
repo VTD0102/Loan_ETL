@@ -337,12 +337,43 @@ flowchart TD
     style RUNTIME fill:transparent,stroke:#dc2626,stroke-width:2px
 ```
 
-> **Chú thích ETL & ML:**
-> - **Bronze**: Load raw Parquet của Home Credit Credit Risk Model Stability vào DuckDB, giữ nguyên schema gốc.
-> - **Silver**: Làm sạch dữ liệu (xử lý null, chuẩn hóa kiểu dữ liệu, loại bỏ outliers) theo SQL transforms.
-> - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ bureau/previous applications/CB queries) → bảng `gold.hc_features_v2`.
-> - **Training**: 2 model được train: LightGBM v4 cho dự đoán rủi ro vỡ nợ (35 feature, không dùng `credit_score` tự khai báo) và Logistic Regression scorecard (30 feature, FICO-style 300–850).
-> - **Runtime**: Backend load model artifacts bằng `joblib` và chạy inference real-time khi khách hàng nộp đơn.
+### Giải thích chi tiết Kiến trúc ETL & Machine Learning
+
+#### 1. Quy Trình Xử Lý Dữ Liệu 3 Lớp (ETL Pipeline via DuckDB)
+Hệ thống sử dụng cơ sở dữ liệu **DuckDB** cục bộ để thực thi lưu trữ và biến đổi dữ liệu thông qua các tập lệnh SQL tối ưu:
+* **Lớp Bronze (`load_bronze.py`)**: Đọc dữ liệu thô (định dạng CSV/Parquet) từ bộ dữ liệu ổn định tài chính *Home Credit Credit Risk Model Stability* (bao gồm bảng tĩnh `train_static`, các bảng quan hệ nhiều dòng `train_person_1`, `train_credit_bureau_a_1`, `train_applprev_1`) và tải trực tiếp vào DuckDB dưới schema `bronze` mà không làm thay đổi cấu trúc gốc.
+* **Lớp Silver (`etl_silver.py` & `transform_silver_hcv2.sql`)**: 
+  * Thực hiện làm sạch dữ liệu: xử lý giá trị khuyết thiếu (Null/None), ép kiểu dữ liệu chuẩn, chuẩn hóa dữ liệu dạng chuỗi, và loại bỏ ngoại lai.
+  * Xử lý quan hệ bảng đa chiều (Multi-depth tables): Các bảng có `depth=0` (như thông tin cá nhân cơ bản) được liên kết trực tiếp theo `case_id`. Các bảng có `depth=1` (như lịch sử tín dụng tại trung tâm thông tin tín dụng - Bureau, hoặc các đơn vay trước đó - Previous Applications) được thực hiện tổng hợp (aggregate) gom nhóm theo `case_id` (ví dụ: đếm số hợp đồng đang hoạt động, tính tổng nợ quá hạn tối đa, tỷ lệ đơn vay trước bị từ chối) trước khi join phẳng.
+  * Dữ liệu sau khi làm sạch được ghi vào bảng `silver.hc_v2_cleansed`.
+* **Lớp Gold (`etl_gold.py` & `transform_gold_hcv2.sql`)**:
+  * Thực hiện xây dựng các thuộc tính đặc trưng (Feature Engineering): tính toán tỷ lệ nợ trên thu nhập (Debt-to-Income - DTI), tỷ lệ giá trị khoản vay trên thu nhập năm, logarit hóa thu nhập, gán cờ cảnh báo rủi ro cao (high DTI flag), gán cờ nợ xấu, cờ gia hạn nợ (prolongations), cờ số lần truy vấn lịch sử tín dụng trong 30 ngày qua.
+  * Toàn bộ 35 đặc trưng được lọc và lưu trữ tại bảng phẳng `gold.hc_features_v2`. Đặc biệt: **Không sử dụng các biến tự khai báo hoặc điểm số tự định biên của khách hàng** nhằm đảm bảo tính khách quan và kiểm chứng được.
+
+#### 2. Huấn Luyện Mô Hình & Quy Đổi Điểm Số (Machine Learning Training)
+* **Kiểm định chất lượng dữ liệu (`validate_data.py`)**: Trước khi huấn luyện, pipeline tự động chạy kiểm tra chất lượng dữ liệu: tỷ lệ khuyết thiếu (null rate) của từng cột đặc trưng không được vượt ngưỡng cho phép, kiểm tra sự tồn tại của các giá trị vô cực (Infinity), và kiểm tra độ lệch phân bổ của nhãn mục tiêu (`is_default`).
+* **Mô hình Dự Báo Rủi Ro Khách Hàng (LightGBM - `retrain_customer_model.py`)**:
+  * Sử dụng thuật toán tăng cường độ dốc LightGBM phiên bản v4 với 35 đặc trưng hành vi thực tế.
+  * Huấn luyện trên tập dữ liệu phân tách 80/20 có phân tầng (stratified split) theo tỷ lệ vỡ nợ để tránh mất cân bằng nhãn.
+  * Cấu hình siêu tham số: `n_estimators=800`, `learning_rate=0.03`, `num_leaves=63`, `min_child_samples=50`, kích hoạt cờ cân bằng trọng số tự động `is_unbalance=True`.
+  * Mô hình xuất ra file đóng gói `customer_risk_model.pkl` kèm theo danh sách đặc trưng mặc định (feature defaults) để thay thế khi dữ liệu đầu vào của ứng dụng bị thiếu hụt tại runtime.
+* **Mô hình Thẻ Điểm Tín Dụng (Logistic Regression Scorecard - `train_scorecard.py`)**:
+  * Nhằm giải thích lý do từ chối/phê duyệt trực quan cho khách hàng, hệ thống huấn luyện thêm một mô hình hồi quy Logistic kết hợp chuẩn hóa dữ liệu đầu vào (`StandardScaler`).
+  * Điểm số vỡ nợ P(default) được quy đổi sang thang điểm **FICO chuẩn quốc tế (từ 300 đến 850)** sử dụng các tham số PDO (Points to Double the Odds):
+    * `factor = PDO / ln(2)`
+    * `base_logit = -ln(base_odds_good)`
+    * `Score = base_score - factor * (model_logit - base_logit)`
+  * Với cấu hình mặc định: `base_score = 600`, `base_odds_good = 50`, `PDO = 20`. Điểm số tối đa là 850 (cực kỳ an toàn) và tối thiểu là 300 (rủi ro vỡ nợ cực cao).
+  * Mô hình và trọng số hệ số điểm (scorecard scaling params) được đóng gói vào file `scorecard_model.pkl`.
+
+#### 3. Vận Hành Và Suy Luận Trực Tuyến (Runtime Inference)
+* Khi khách hàng gửi đơn vay mới thông qua Giao diện hoặc khi RAG chatbot kích hoạt công cụ đề xuất khoản vay tối ưu, Backend sẽ gọi các service tương ứng:
+  * **`ml_service`**: Tải mô hình LightGBM từ file `.pkl`, đối chiếu các trường thông tin trong đơn vay của khách hàng, tự động điền các đặc trưng lịch sử tín dụng lấy từ DB hoặc điền giá trị mặc định của hệ thống (`feature_defaults`), chạy dự đoán xác suất vỡ nợ P(default). Kết quả được phân loại theo ngưỡng quyết định tự động:
+    * **Rủi ro thấp** (P <= 0.20): Phê duyệt tự động.
+    * **Rủi ro trung bình** (0.20 < P <= 0.40): Chờ duyệt thủ công từ admin.
+    * **Rủi ro cao** (P > 0.40): Từ chối tự động.
+  * **`credit_score_service`**: Tải mô hình Logistic Regression, tính toán điểm FICO chi tiết cho người dùng và trích xuất lý do đóng góp đặc trưng (Feature Contributions) tương tự SHAP để giải thích rõ vì sao điểm số của họ tăng hoặc giảm (ví dụ: do tỷ lệ nợ quá cao, hoặc có lịch sử trả nợ tốt).
+
 ---
 
 ## Cấu Trúc Dự Án
