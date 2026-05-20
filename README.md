@@ -183,11 +183,11 @@ flowchart TD
     IntentRoute -->|Loan adjustment| AdjCheck
 
     subgraph PROMPT["📝 Prompt Assembly"]
-        SysPrompt["System Prompt + Rules"]
-        UserCtx["4-Block User Context\n· DB: Info, ML, Rec"]
-        RetContext["Retrieved Docs\n· Knowledge Base"]
-        ToneCtx["Personalization Tone\n· Status-based"]
-        ConvMem["Conversation Summary\n+ Window History"]
+        SysPrompt["System Prompt + Rules\n([prompts.py](backend/rag/prompts.py))"]
+        UserCtx["4-Block User Context\n· DB: Info, ML, Rec\n([context_builder.py](backend/rag/context_builder.py))"]
+        RetContext["Retrieved Docs\n· Knowledge Base\n([ingest.py](backend/rag/ingest.py))"]
+        ToneCtx["Personalization Tone\n· Status-based\n([personalizer.py](backend/rag/personalizer.py))"]
+        ConvMem["Conversation Summary\n+ Window History\n([memory.py](backend/rag/memory.py))"]
     end
 
     ParentExpand --> PROMPT

@@ -90,7 +90,8 @@ Dự án được tổ chức theo kiến trúc modular MVC-lite để dễ bả
 
 ### Data Science và ML
 - **Pandas:** Xử lý và phân tích dữ liệu.
-- **Scikit-learn:** Thư viện ML cho Random Forest và preprocessing.
+- **LightGBM:** Thư viện gradient boosting cho mô hình rủi ro chính (`customer_lgbm_v4_stability`).
+- **Scikit-learn:** Logistic Regression cho scorecard (FICO 300–850) và preprocessing.
 - **Plotly:** Trực quan hóa dữ liệu tương tác.
 
 ### Công cụ Khác

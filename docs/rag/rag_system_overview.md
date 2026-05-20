@@ -1,22 +1,33 @@
-# 🤖 Tổng Quan Hệ Thống AI RAG — CreditIntel
+# Tổng Quan Hệ Thống AI RAG — CreditIntel
 
-> **Phạm vi:** `backend/rag/` · `backend/services/chat_service.py` · `backend/api/routers/chat.py` · `backend/services/loan_adjustment_tool.py`  
-> **Ngày cập nhật:** 2026-05-20 (Cập nhật kiến trúc RAG phình to nâng cao)  
-> **Tác giả:** Đội ngũ phát triển AI/RAG CreditIntel  
+> **Phạm vi:** `backend/rag/` · `backend/services/chat_service.py` · `backend/api/routers/chat.py` · `backend/services/loan_adjustment_tool.py`
+> **Ngày cập nhật:** 2026-05-21
+> **Tác giả:** Đội ngũ phát triển AI/RAG CreditIntel
 
 ---
 
 ## 1. Tổng Quan Kiến Trúc Đa Giai Đoạn (Multi-stage RAG Pipeline)
 
-Hệ thống RAG (Retrieval-Augmented Generation) của CreditIntel không chỉ dừng lại ở mô hình tìm kiếm-nhận diện thông thường mà đã phát triển thành một **Pipeline xử lý đa giai đoạn** tích hợp các bộ lọc an toàn, phân loại ý định tối ưu, tìm kiếm hỗn hợp (Hybrid Search), tái xếp hạng (Reranking), cá nhân hóa giọng điệu (Personalization) và máy trạng thái hỗ trợ điều chỉnh đơn vay (Loan Adjustment State Machine).
+Hệ thống RAG (Retrieval-Augmented Generation) của CreditIntel là một **Pipeline xử lý đa giai đoạn** tích hợp bộ lọc an toàn, phân loại ý định, tìm kiếm hỗn hợp (Hybrid Search), tái xếp hạng (Reranking), cá nhân hóa giọng điệu (Personalization) và máy trạng thái hỗ trợ điều chỉnh đơn vay (Loan Adjustment State Machine).
 
 ```mermaid
 flowchart TD
-    User([👤 Câu hỏi của User]) --> IG{🛂 Input Guardrail}
-    IG -->|Không an toàn| Reject[❌ Trả lời từ chối]
-    IG -->|An toàn| IR
+    User([👤 Câu hỏi của User]) --> RL{⏱️ Rate Limit}
+    RL -->|Vượt 20 msg/phút| RLReject[❌ HTTP 429]
+    RL -->|OK| IG
 
-    subgraph RAG_BLOCK["🤖 RAG Pipeline"]
+    subgraph CHAT_SERVICE["🔧 chat_service.py"]
+        IG{🛂 Input Guardrail}
+        IG -->|Không an toàn| Reject[❌ Trả lời từ chối]
+        IG -->|An toàn| LoanAdj
+
+        LoanAdj{🔄 Loan Adj State Machine}
+        LoanAdj -->|Pending confirmation| PendingResp[Xử lý xác nhận/hủy]
+        LoanAdj -->|Kích hoạt mới| AdjTool[loan_adjustment_tool]
+        LoanAdj -->|Bình thường| IR
+    end
+
+    subgraph RAG_BLOCK["🤖 chain.py — RAG Pipeline (6 bước)"]
         IR{🔀 Intent Router}
         IR -->|Cần tìm kiếm| QR[🔄 Query Rewriter]
         QR --> HS[🔍 Hybrid Search]
@@ -26,6 +37,7 @@ flowchart TD
         PD --> PS[🎨 Personalizer]
         Skip --> PS
         PS --> LLM[🤖 LLM Gemini 2.5 Flash]
+        LLM --> OG{🚷 Output Guardrail}
     end
 
     subgraph STORAGE_BLOCK["💾 Tầng Lưu Trữ"]
@@ -36,28 +48,18 @@ flowchart TD
     HS -.->|Truy vấn vector| DB_QD
     LLM -.->|Lưu memory| DB_PG
 
-    LLM --> OG{🚷 Output Guardrail}
     OG --> Response([💬 Phản hồi + Nguồn trích dẫn])
 
-    %% ====== SUBGRAPH: chỉ kẻ viền, nền trong suốt ======
+    style CHAT_SERVICE fill:transparent,stroke:#0891b2,stroke-width:3px
     style RAG_BLOCK fill:transparent,stroke:#7c3aed,stroke-width:3px
-    style STORAGE_BLOCK fill:transparent,stroke:#0891b2,stroke-width:3px
-
-    %% ====== NODE: tô màu các khối chức năng ======
-    classDef guard fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
-    classDef store fill:#64748b,stroke:#475569,color:#fff
-
-    class IG,OG guard
-    class IR,QR,HS,RR,PD,PS,LLM,Skip,Reject,Response rag
-    class DB_QD,DB_PG store
+    style STORAGE_BLOCK fill:transparent,stroke:#64748b,stroke-width:3px
 ```
 
 **Các thông số kỹ thuật cốt lõi:**
 - **Mô hình LLM chính:** `google/gemini-2.5-flash` (qua OpenRouter)
 - **Embedding Model (Dense):** `openai/text-embedding-3-small` (1536 chiều)
-- **Embedding Model (Sparse):** BM25 (thư viện FastEmbed `FastEmbedSparse` local)
-- **Reranker Model:** `BAAI/bge-reranker-large` (thông qua FastEmbed `TextCrossEncoder` local)
+- **Embedding Model (Sparse):** `Qdrant/bm25` (thư viện FastEmbedSparse local)
+- **Reranker Model:** `jinaai/jina-reranker-v2-base-multilingual` (thông qua FastEmbed `TextCrossEncoder` local)
 - **Vector Store:** Qdrant local server/Docker (`http://localhost:6333`)
 - **Framework:** LangChain LCEL (`chat_prompt | llm | StrOutputParser`)
 
@@ -67,221 +69,370 @@ flowchart TD
 
 ```
 backend/rag/
-├── __init__.py          # Export các API giao tiếp bên ngoài (invoke)
-├── config.py            # Cấu hình: model, API keys, ngưỡng top-K
-├── ingest.py            # Pipeline nạp và phân mảnh tài liệu faq.md/policy.md
-├── chunking.py          # Thuật toán phân đoạn hierarchical (Parent-Child)
-├── router.py            # Phân loại ý định hội thoại (Regex + LLM JSON)
-├── query_rewriter.py    # Viết lại câu hỏi hội thoại thành truy vấn độc lập
-├── retriever.py         # Qdrant Hybrid Search & Reranking & Parent-Child mapping
-├── reranker.py          # Cross-Encoder Reranker chấm điểm và sắp xếp lại kết quả
-├── guardrails.py        # Kiểm soát an toàn đầu vào (safety input) và đầu ra (output leaks)
-├── personalizer.py      # Tự động thay đổi giọng điệu AI theo trạng thái đơn vay của user
-├── memory.py            # Quản lý sliding window + lazy summarization lịch sử hội thoại
-├── prompts.py           # Định nghĩa cấu trúc System Prompt (Vietnamese)
+├── __init__.py          # Lazy-loading facade — export các API giao tiếp bên ngoài
+├── config.py            # Cấu hình: model, API keys, ngưỡng top-K (đọc từ core/config.py)
+├── chain.py             # Orchestrator chính — pipeline 6 bước từ guardrail đến output
+├── ingest.py            # Pipeline nạp và phân mảnh tài liệu từ knowledge/ + docs/data_dictionary/
+├── chunking.py          # Thuật toán phân đoạn hierarchical (Parent-Child, Markdown-aware)
+├── context_builder.py   # Xây dựng 4-block user context (form, ML, advisory, data quality)
+├── router.py            # Phân loại ý định hội thoại (6 loại: Regex + LLM JSON fallback)
+├── query_rewriter.py    # Viết lại câu hỏi hội thoại thành truy vấn độc lập (tối đa 500 ký tự)
+├── retriever.py         # Qdrant Hybrid Search → Reranking → Parent-Child mapping
+├── reranker.py          # Cross-Encoder Reranker singleton (có thể tắt qua config)
+├── guardrails.py        # Kiểm soát đầu vào (injection, PII) và đầu ra (leak, promise, length)
+├── personalizer.py      # Tự động điều chỉnh giọng điệu theo 7 trạng thái đơn vay
+├── memory.py            # Sliding window + lazy summarization lịch sử hội thoại
+├── prompts.py           # ChatPromptTemplate 5-biến cho system prompt (Vietnamese)
+├── exceptions.py        # Cây exception: RAGError → RetrievalError, LLMError, RAGTimeoutError
 ├── eval_runner.py       # Công cụ chạy kiểm thử tự động offline cho RAG
 ├── eval_metrics.py      # Định nghĩa các chỉ số đo lường (Faithfulness, Relevance, Groundedness)
 └── knowledge/
-    ├── faq.md           # FAQ: 17 câu hỏi & giải đáp thường gặp
+    ├── faq.md           # FAQ: câu hỏi & giải đáp thường gặp về dịch vụ
     └── policy.md        # Chính sách tín dụng cho vay của CreditIntel
 ```
+
+**Nguồn tri thức nạp vào Qdrant (`ingest.py`):**
+- `backend/rag/knowledge/` — FAQ và chính sách
+- `docs/data_dictionary/` — Từ điển dữ liệu (tất cả file `**/*.md`)
 
 ---
 
 ## 3. Giai Đoạn 1 — INGEST: Hierarchical Parent-Child Chunking
 
-Để tăng độ chính xác trong việc tìm kiếm thông tin mà không làm mất đi ngữ cảnh rộng của tài liệu, CreditIntel triển khai phương thức **Parent-Child Chunking** (Phân đoạn cây phân cấp) thay thế cho việc cắt đoạn văn bản đều đặn truyền thống.
+Để tăng độ chính xác trong việc tìm kiếm thông tin mà không làm mất đi ngữ cảnh rộng của tài liệu, CreditIntel triển khai phương thức **Parent-Child Chunking** (Phân đoạn cây phân cấp).
 
 ### 3.1 Quy trình Ingest
-1. **Load Documents:** `faq.md` và `policy.md` được đọc bằng `TextLoader`.
-2. **Parent Parsing (`chunking.py`):** Tài liệu được phân nhỏ thành các **Parent Documents** (các Section lớn có ý nghĩa trọn vẹn, thường dựa trên tiêu đề `##` hoặc `###`). Độ dài tối đa 3500 ký tự.
-3. **Child Splitting:** Mỗi Parent Section lại tiếp tục được chia nhỏ thành các **Child Chunks** (độ dài tối đa 700 ký tự, overlap 100).
+
+1. **Load Documents:** Tất cả file `*.md` trong `knowledge/` và `docs/data_dictionary/` được đọc bằng `DirectoryLoader`.
+2. **Parent Parsing (`chunking.py`):** Tài liệu được phân nhỏ thành các **Parent Documents** (các Section lớn có ý nghĩa trọn vẹn, dựa trên tiêu đề Markdown `#`/`##`). Độ dài tối đa **3500 ký tự**.
+3. **Child Splitting:** Mỗi Parent Section lại tiếp tục được chia nhỏ thành các **Child Chunks** (độ dài tối đa **700 ký tự**, overlap **80 ký tự**).
 4. **Vector Database Store:**
-   - Chỉ có **Child Chunks** mới được encode bằng `OpenAIEmbeddings` (Dense) và `FastEmbedSparse` (Sparse BM25) rồi lưu trữ vào Qdrant để đối sánh similarity search.
-   - Mỗi Child Chunk được gắn metadata `parent_id` và lưu giữ toàn bộ nội dung text của parent section tương ứng.
-   - Khi Qdrant trả về kết quả khớp với Child Chunk, retriever sẽ tự động truy vết ngược lên để trả về **Parent Document** tương ứng, sau đó de-duplicate (loại bỏ trùng lặp).
+   - Chỉ có **Child Chunks** mới được encode bằng `OpenAIEmbeddings` (Dense) và `FastEmbedSparse` (Sparse BM25) rồi lưu trữ vào Qdrant.
+   - Mỗi Child Chunk được gắn metadata `parent_id`, `parent_content`, `section_title`, `source`, `source_type`, `retrieval_unit`.
+   - Khi Qdrant trả về kết quả khớp với Child Chunk, retriever tự động truy vết ngược lên **Parent Document** tương ứng, rồi de-duplicate.
 
-Điều này giúp:
-- Tối ưu hóa việc khớp vector ở mức độ chi tiết (Child chunk ngắn và tập trung).
-- Giữ vững ngữ cảnh mạch lạc của tài liệu gốc khi đưa vào LLM (Parent section chứa đầy đủ tiêu đề, bảng biểu và các đoạn giải thích liên đới).
+**Lợi ích:**
+- Vector matching ở mức chi tiết (Child chunk ngắn, tập trung → khớp tốt hơn).
+- LLM nhận Parent section đầy đủ với tiêu đề, bảng biểu và đoạn giải thích liên đới.
 
-Chạy script Ingest:
+**Chạy script Ingest:**
 ```bash
 cd backend
+
+# Dry run — liệt kê docs + chunks, không ghi dữ liệu
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest --dry-run
+
+# Incremental upsert (mặc định — giữ collection hiện có)
 PYTHONPATH=. ../.venv/bin/python -m rag.ingest
+
+# Recreate collection (phá hủy — xóa collection cũ trước)
+PYTHONPATH=. ../.venv/bin/python -m rag.ingest --recreate
 ```
 
 ---
 
-## 4. Giai Đoạn 2 — RUNTIME: Xử Lý Đa Giai Đoạn Chi Tiết
+## 4. Giai Đoạn 2 — RUNTIME: Luồng Xử Lý Chi Tiết
 
-Khi có một API request gửi tới endpoint `POST /api/v1/chat`, luồng xử lý thực hiện qua 10 bước nghiêm ngặt:
+### 4.1 Xử lý tại `chat_service.py` (trước RAG)
 
-### Bước 1: Rate Limiting
-- Giới hạn tối đa 20 tin nhắn/phút cho mỗi người dùng thông qua bảng `chat_messages` nhằm ngăn chặn tấn công spam hoặc quá tải API.
+Khi có một API request gửi tới endpoint `POST /api/v1/chat`, `chat_service.send()` thực hiện:
 
-### Bước 2: Input Guardrail (`guardrails.py`)
-- Kiểm tra độ dài câu hỏi tối đa 2000 ký tự.
-- Quét qua Regex để phát hiện Prompt Injection (các cụm từ cố gắng phá vỡ chỉ thị hệ thống như `ignore earlier rules`, `hãy đóng vai`, `reveal system prompt`) hoặc PII Probing (cố tình hỏi thông tin/hồ sơ của khách hàng khác). Nếu vi phạm, trả về thông báo từ chối an toàn ngay lập tức.
+**Bước 1: Kiểm tra Rate Limit**
+- Giới hạn tối đa **20 tin nhắn/phút** cho mỗi người dùng thông qua bảng `chat_messages`.
+- Vượt ngưỡng → HTTP 429: *"Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút."*
 
-### Bước 3: Intent Classification (`router.py`)
-- Phân loại câu hỏi thành 6 loại ý định.
-- **Fast-path matching:** Sử dụng Regex để bắt nhanh các trường hợp chào hỏi (`greeting`), lạc đề (`off_topic`) hoặc đề xuất thay đổi kỳ hạn (`loan_adjustment_trigger`).
-- **LLM-path matching:** Nếu không khớp Regex, gọi Gemini-2.5-Flash phân loại trả về JSON.
-- Nếu ý định là `greeting` hoặc `off_topic`, bỏ qua bước tìm kiếm tài liệu (Retrieval) để tối ưu chi phí và độ trễ.
+**Bước 2: Chuẩn bị dữ liệu**
+- Lấy thông tin user, đảm bảo đơn vay mới nhất đã có dự đoán ML.
+- Lấy hoặc tạo `ChatSession`; lưu tin nhắn user vào DB ngay lập tức (trước RAG để đảm bảo không mất dữ liệu nếu RAG lỗi).
 
-### Bước 4: Máy trạng thái điều chỉnh khoản vay (Loan Adjustment State Machine)
-- Điều phối trực tiếp trong `chat_service.py` và `loan_adjustment_tool.py`.
-- Nếu người dùng có đơn hàng bị từ chối tự động (`AUTO_REJECTED`) và hỏi về phương án xử lý hoặc đổi kỳ hạn, hệ thống sẽ đề xuất một phương án có xác suất vỡ nợ dưới `0.4` thông qua chạy thử nghiệm ML model real-time.
-- Thông tin phương án được lưu vào `pending_action` trong DB nghiệp vụ.
-- Chatbot hỏi người dùng có đồng ý nộp lại không. Nếu người dùng trả lời bằng từ khóa xác nhận ("đồng ý", "xác nhận", "ok"), hệ thống tự động khởi tạo đơn vay mới dựa trên cấu hình đề xuất.
+**Bước 3: Tải Memory**
+- Gọi `memory.py` để lấy `MemoryContext` (recent messages + lazy summary).
 
-### Bước 5: Viết lại câu hỏi (`query_rewriter.py`)
-- Chuyển đổi câu hỏi hội thoại (vốn thường ngắn hoặc dùng đại từ thay thế như "Tại sao tôi bị từ chối?", "Đổi kỳ hạn giúp tôi") thành một câu truy vấn độc lập và đầy đủ ngữ nghĩa (ví dụ: "Tại sao hồ sơ vay của khách hàng Nguyễn Văn A bị từ chối tự động?") bằng cách kết hợp lịch sử chat và tóm tắt hội thoại.
+**Bước 4: Máy trạng thái Loan Adjustment**
+- Nếu session có `pending_action` chưa hết hạn (TTL: 30 phút): kiểm tra câu trả lời của user.
+  - Từ khóa xác nhận ("đồng ý", "xác nhận", "ok") → tự động khởi tạo đơn vay mới qua `loan_adjustment_tool`.
+  - Từ khóa từ chối ("thôi", "không", "hủy") → hủy đề xuất.
+  - Khác → tiếp tục vào RAG pipeline bình thường.
+- Nếu không có `pending_action`: kiểm tra xem tin nhắn có kích hoạt yêu cầu điều chỉnh mới không (dựa trên tổ hợp từ khóa từ `_ADJUSTMENT_*_TERMS`). Nếu có → gọi `loan_adjustment_tool.find_best_reapplication_option()`.
 
-### Bước 6: Hybrid Retrieval & Cross-Encoder Reranking (`retriever.py`, `reranker.py`)
-- Thực hiện truy vấn Hybrid search trên Qdrant (Dense cosine similarity + Sparse BM25). Lấy ra 20 Child chunks tốt nhất (`RERANKER_CANDIDATE_K = 20`).
-- Dùng model Cross-Encoder Reranker (`Reranker`) chấm điểm trực tiếp sự tương hợp giữa truy vấn độc lập và 20 chunks đó. Sắp xếp lại và lọc lấy 12 chunks có điểm số cao nhất (`RERANKER_TOP_K = 12`).
-- Chuyển đổi 12 Child chunks này thành các Parent sections tương ứng và de-duplicate để lấy tối đa 4 Parent sections lớn nhất (`TOP_K = 4`).
+**Bước 5: Xây dựng Context và gọi RAG chain**
+- Gọi `context_builder.py` → 4-block user context.
+- Gọi `chain.invoke()` → 6-bước pipeline (xem mục 4.2).
 
-### Bước 7: Personalization (`personalizer.py`)
-- Kiểm tra trạng thái đơn vay hiện tại của khách hàng trong DB nghiệp vụ.
-- Sinh ra chỉ thị bổ sung ( tone/giọng điệu ) đưa vào system prompt:
-  - `auto_rejected` / `admin_rejected`: Giọng điệu đồng cảm, nhẹ nhàng, đưa ra lời khuyên cải thiện DTI/Credit score.
-  - `pending_review`: Khách quan, chuyên nghiệp, thông tin quy trình duyệt đơn.
-  - `approved` / `awaiting_info`: Vui vẻ, chúc mừng, hướng dẫn các tài liệu cần chuẩn bị nộp tiếp.
-  - `info_submitted`: Trấn an, cung cấp thông tin thời gian xử lý dự kiến.
-  - Chưa có hồ sơ: Chào đón, khuyến khích tìm hiểu chính sách.
-
-### Bước 8: Memory Assembly & Summary (`memory.py`)
-- Quản lý token budget của lịch sử chat (`rag_memory_window_token_budget`).
-- Dùng cơ chế **Sliding Window** để giữ lại các lượt chat gần nhất trong budget.
-- Các lượt chat cũ hơn được tự động tóm tắt gộp (lazy update) bằng LLM và cập nhật trường `summary` của `chat_sessions` lưu trong Postgres để làm giàu ngữ cảnh dài hạn.
-
-### Bước 9: LLM Generation
-- Ghép prompt hoàn chỉnh (System Prompt + User Context + Parent retrieved documents + Chat History Window + Summary + Personalization Tone).
-- Gọi Gemini 2.5 Flash qua OpenRouter sinh câu trả lời tiếng Việt.
-
-### Bước 10: Output Guardrail (`guardrails.py`)
-- Quét câu trả lời đầu ra.
-- Nếu phát hiện rò rỉ tên bảng, mật khẩu, API key -> che giấu dữ liệu hoặc thay thế bằng thông báo lỗi an toàn.
-- Nếu phát hiện câu từ khẳng định phê duyệt tuyệt đối (như "tôi cam kết duyệt 100%"), tự động đính kèm Disclaimer ở cuối: *"Lưu ý: Quyết định duyệt cuối cùng do bộ phận Thẩm định quản trị viên đưa ra dựa trên hồ sơ đầy đủ."*
-- Lưu tin nhắn mới vào PostgreSQL và trả phản hồi về cho Frontend.
+**Bước 6: Lưu kết quả**
+- Lưu tin nhắn assistant vào DB.
+- Nếu có đề xuất loan adjustment: lưu vào `session.pending_action`.
+- Trả về response + session_id + source documents.
 
 ---
 
-## 5. Cấu Trúc Prompt Thiết Kế
-
-System Prompt được thiết kế tập trung trong `backend/rag/prompts.py` với cấu trúc như sau:
+### 4.2 Pipeline RAG 6 Bước trong `chain.py`
 
 ```
-[SYSTEM INSTRUCTION]
-Bạn là trợ lý ảo tín dụng CreditIntel...
-Hãy tuân thủ nghiêm ngặt các quy tắc ứng xử:
-1. Luôn trả lời tiếng Việt thân thiện, lịch sự.
-2. Chỉ trả lời câu hỏi trong phạm vi nghiệp vụ tín dụng và rủi ro khoản vay.
-3. Tuyệt đối không tự ý hứa hẹn phê duyệt đơn vay.
-4. Tuyệt đối không tiết lộ cấu trúc DB hoặc dữ liệu của người dùng khác.
-5. Luôn trích dẫn tên file tài liệu làm nguồn (Ví dụ: [policy.md]).
+Bước 1: Input Guardrail (guardrails.py)
+├─ Kiểm tra độ dài tối đa 2000 ký tự
+├─ Kiểm tra prompt injection (19 Regex patterns)
+└─ Kiểm tra PII probing (11 Regex patterns)
 
-═══ THÔNG TIN HỒ SƠ KHÁCH HÀNG (Dữ liệu từ Hệ Thống) ═══
-{user_context}   <-- Chứa dữ liệu cá nhân, DTI, thu nhập, dự báo ML, khuyến nghị điều chỉnh
+Bước 2: Intent Classification (router.py)
+├─ Fast-path: Regex cho greeting, off_topic, personal risk, policy
+└─ LLM-path: Gemini 2.5 Flash trả JSON {"intent": ..., "confidence": ...}
+   └─ 6 intent: loan_inquiry | risk_explanation | policy_question
+                 | personal_advice | greeting | off_topic
 
-═══ THÔNG TIN TÀI LIỆU CHÍNH SÁCH (Trích xuất từ Qdrant) ═══
-{context}        <-- Chứa các Parent Document sections liên quan đến câu hỏi
+Bước 3: Retrieval (retriever.py) — bỏ qua nếu greeting/off_topic
+├─ Query Rewriter: viết lại câu hỏi ngắn/có đại từ thành truy vấn độc lập
+├─ Hybrid Search Qdrant: Dense (cosine) + Sparse (BM25) → top-20 child chunks
+├─ Cross-Encoder Reranker: chấm điểm 20 cặp (query, chunk) → giữ top-12
+└─ Parent Expansion: map child → parent, de-duplicate → tối đa 4 parent sections
 
-═══ CHỈ THỊ GIỌNG ĐIỆU CÁ NHÂN HÓA ═══
-{personalization} <-- Chỉ dẫn giọng điệu đồng cảm/chúc mừng dựa trên trạng thái đơn
+Bước 4: Personalization (personalizer.py)
+├─ Xác định tông giọng theo trạng thái đơn vay (7 trạng thái)
+└─ Lấy hướng dẫn ý định (intent_instructions) theo intent đã phân loại
+
+Bước 5: LLM Generation
+├─ Ghép prompt: system + user_context + docs + chat_history + summary + question
+└─ Gọi Gemini 2.5 Flash (temperature=0.3) qua OpenRouter
+
+Bước 6: Output Guardrail (guardrails.py)
+├─ Phát hiện rò rỉ nội bộ (tên bảng, API key) → chặn cứng, trả lỗi an toàn
+├─ Phát hiện cam kết phê duyệt tuyệt đối → đính kèm Disclaimer
+└─ Kiểm tra độ dài tối đa 3000 ký tự → cắt tại câu hoàn chỉnh cuối
+```
+
+**Cấu hình LLM theo mục đích:**
+
+| Mục đích | Temperature | Max Tokens | Timeout |
+|----------|-------------|------------|---------|
+| Generation (chain.py) | 0.3 | Không giới hạn | 30s |
+| Classification (router.py) | 0.0 | 60 | 30s |
+| Query Rewriting | 0.0 | Không giới hạn | 30s |
+| Summarization (memory.py) | 0.2 | 500 | 30s |
+
+---
+
+## 5. Phân Loại Ý Định (Intent Router)
+
+`router.py` phân loại câu hỏi thành **6 loại ý định**:
+
+| Intent | Mô tả | Cần Retrieval |
+|--------|-------|--------------|
+| `loan_inquiry` | Câu hỏi về số tiền vay, kỳ hạn, trạng thái đơn | Có |
+| `risk_explanation` | Câu hỏi về kết quả ML, xác suất vỡ nợ, điểm rủi ro | Có |
+| `policy_question` | Câu hỏi về chính sách, quy trình CreditIntel | Có |
+| `personal_advice` | Yêu cầu tư vấn cải thiện tài chính cá nhân | Có |
+| `greeting` | Chào hỏi, cảm ơn, small talk | Không |
+| `off_topic` | Câu hỏi không liên quan tín dụng/tài chính | Không |
+
+**Lưu ý quan trọng:** Intent `loan_adjustment_trigger` **không** thuộc về router — việc phát hiện và xử lý yêu cầu điều chỉnh đơn vay được thực hiện trực tiếp trong `chat_service.py` (Bước 4 của luồng chat_service), trước khi gọi RAG chain.
+
+---
+
+## 6. Cấu Trúc Prompt
+
+System Prompt được thiết kế tập trung trong `backend/rag/prompts.py` với cấu trúc `ChatPromptTemplate`:
+
+```
+[SYSTEM INSTRUCTIONS — SYSTEM_TEMPLATE]
+
+═══════ THÔNG TIN CÁ NHÂN ═══════
+Tên khách hàng: {user_display_name}
+{personalization_instructions}    ← tông giọng + lời chào theo trạng thái đơn vay
+
+═══════ HƯỚNG DẪN THEO Ý ĐỊNH ═══════
+{intent_instructions}             ← hướng dẫn cụ thể theo intent được phân loại
+
+═══════ THÔNG TIN HỒ SƠ KHÁCH HÀNG ═══════
+{user_context}                    ← 4-block context: form, ML, advisory, data quality
+
+═══════ TÓM TẮT HỘI THOẠI TRƯỚC ĐÓ ═══════
+{conversation_summary}            ← lazy summary của các tin nhắn cũ
+
+═══════ TÀI LIỆU LIÊN QUAN ═══════
+{context}                         ← Parent Document sections truy xuất từ Qdrant [1], [2]...
 
 [CONVERSATION MEMORY]
-Tóm tắt hội thoại trước đó: {conversation_summary}
-Lịch sử chat gần đây:
-{chat_history}
+MessagesPlaceholder: {chat_history}   ← recent HumanMessage/AIMessage objects
 
 [HUMAN QUESTION]
 {question}
 ```
 
+**Các quy tắc cốt lõi trong System Prompt:**
+1. Luôn trả lời tiếng Việt thân thiện, lịch sự và chuyên nghiệp.
+2. Chỉ trả lời câu hỏi trong phạm vi tín dụng, khoản vay, tài chính cá nhân, chính sách CreditIntel.
+3. Tuyệt đối không tự ý hứa hẹn phê duyệt đơn vay.
+4. Tuyệt đối không tiết lộ thông tin người dùng khác, cấu trúc DB hoặc cấu trúc model nội bộ.
+5. Luôn trích dẫn tên file tài liệu làm nguồn (Ví dụ: `[policy.md]`).
+6. Với câu hỏi cá nhân: **ưu tiên dữ liệu hồ sơ khách hàng** trước, tài liệu chính sách là bổ sung.
+7. Nếu không chắc chắn → trả lời *"Tôi không có đủ thông tin"*.
+
 ---
 
-## 6. Cơ Chế Bộ Nhớ (Memory & Summarization)
+## 7. Cơ Chế Bộ Nhớ (Memory & Summarization)
 
 Bộ nhớ được quản lý bằng lớp `MemoryContext` kết hợp với bảng `chat_sessions` và `chat_messages` trong PostgreSQL.
 
-### 6.1 Thuật toán Token Budget trượt (Sliding Window)
-Vì độ dài context window của LLM có hạn và chi phí gọi token tăng cao, hệ thống ước lượng token bằng phương pháp đơn giản: `len(content) // 4`.
-- Lịch sử chat được duyệt từ mới nhất đến cũ nhất.
-- Những tin nhắn nằm trong phạm vi budget (ví dụ: `rag_memory_window_token_budget = 4096`) sẽ được giữ nguyên dưới dạng đối tượng `HumanMessage` / `AIMessage`.
-- Các tin nhắn cũ vượt quá budget sẽ được đưa vào hàng đợi tóm tắt.
+### 7.1 Thuật toán Token Budget trượt (Sliding Window)
 
-### 6.2 Lazy Summarization (Tóm tắt lười)
-Khi số lượng tin nhắn ngoài budget vượt quá cấu hình tối thiểu (`rag_memory_min_messages_to_summarize` - mặc định là 3 tin nhắn mới chưa tóm tắt):
-1. Hệ thống gọi Gemini-2.5-Flash để tóm tắt các tin nhắn cũ kết hợp với tóm tắt trước đó.
-2. Tóm tắt mới nhất được lưu trực tiếp vào database nghiệp vụ: `ChatSession.summary = new_summary`.
-3. Nhờ vậy, ngữ cảnh hội thoại dài hạn được lưu giữ ngắn gọn trong tối đa 500 tokens.
+Token được ước lượng đơn giản: `len(content) // 4`.
 
----
+- Budget mặc định: `rag_memory_window_token_budget = 2000` tokens
+- Lịch sử chat duyệt từ mới nhất đến cũ nhất.
+- Tin nhắn trong phạm vi budget → giữ nguyên dưới dạng `HumanMessage`/`AIMessage`.
+- Tin nhắn cũ vượt budget → đưa vào hàng đợi tóm tắt.
 
-## 7. Tìm Kiếm Hỗn Hợp (Hybrid Search) & Tái Xếp Hạng (Rerank)
+### 7.2 Lazy Summarization (Tóm tắt lười)
 
-### 7.1 Hybrid Retrieval trong Qdrant
-Lớp `get_retriever()` khởi tạo `QdrantVectorStore` với chế độ `RetrievalMode.HYBRID`.
-- **Dense Vector Search:** Dùng `OpenAIEmbeddings` encode câu hỏi thành vector 1536 chiều. Hữu ích cho tìm kiếm ngữ nghĩa, hiểu ý định sâu xa (concept matching).
-- **Sparse Vector Search:** Dùng `FastEmbedSparse` (mô hình BM25) để tìm kiếm từ khóa chính xác (keyword matching), cực kỳ hữu dụng khi người dùng hỏi các từ chuyên ngành hoặc từ viết tắt đặc thù (DTI, FICO, CIC).
+Khi số lượng tin nhắn ngoài budget vượt ngưỡng tối thiểu (`rag_memory_min_messages_to_summarize = 6`):
 
-### 7.2 Cross-Encoder Reranker
-Vì retriever ban đầu chỉ đối sánh độc lập vector của câu hỏi với vector của chunk, nó có thể bỏ qua một số thông tin cấu trúc ngữ pháp. 
-- Hệ thống lấy ra `RERANKER_CANDIDATE_K = 20` ứng viên hàng đầu.
-- Reranker (`BAAI/bge-reranker-large` local) sẽ chấm điểm sự liên quan trực tiếp của từng cặp `(câu hỏi, chunk text)`.
-- Rerank giúp đẩy những chunks thực sự liên quan mật thiết lên đầu bảng trước khi thực hiện bước mở rộng Parent document.
+1. Gọi Gemini 2.5 Flash (temperature=0.2) để tóm tắt kết hợp tóm tắt cũ + tin nhắn chưa được tóm tắt.
+2. Tóm tắt mới được lưu vào `ChatSession.summary` trong PostgreSQL (tối đa 500 tokens).
+3. Nếu lỗi → rollback, không làm gián đoạn luồng retrieval.
 
 ---
 
-## 8. Cấu Hình Môi Trường RAG
+## 8. Tìm Kiếm Hỗn Hợp (Hybrid Search) & Tái Xếp Hạng (Reranking)
+
+### 8.1 Hybrid Retrieval trong Qdrant
+
+`get_retriever()` khởi tạo `QdrantVectorStore` với chế độ `RetrievalMode.HYBRID`:
+
+- **Dense Vector Search:** `OpenAIEmbeddings` (`text-embedding-3-small`, 1536 chiều) — tìm kiếm ngữ nghĩa, hiểu ý định sâu (concept matching).
+- **Sparse Vector Search:** `FastEmbedSparse` (BM25) — tìm kiếm từ khóa chính xác, đặc biệt hữu ích với thuật ngữ chuyên ngành (DTI, FICO, CIC).
+
+### 8.2 Cross-Encoder Reranker
+
+- **Model:** `jinaai/jina-reranker-v2-base-multilingual` (local, tải về `~/.cache/fastembed/` lần đầu ~1.1 GB)
+- **Singleton pattern:** tải một lần, tái dụng toàn bộ session.
+- **Có thể tắt hoàn toàn:** đặt `RAG_RERANKER_ENABLED=False` trong `.env` → fallback về hybrid sliced to TOP_K.
+- **Observability:** `get_rerank_stats()` trả về số lần gọi và số lần fallback.
+
+**Luồng 3 giai đoạn:**
+```
+Hybrid Search → top-20 child chunks  (RERANKER_CANDIDATE_K)
+      ↓
+Cross-Encoder rerank → top-12 docs   (RERANKER_TOP_K)
+      ↓
+Parent expansion + de-dup → top-4 parent sections  (TOP_K)
+```
+
+---
+
+## 9. Personalizer — Cá Nhân Hóa Giọng Điệu
+
+`personalizer.py` ánh xạ **7 trạng thái đơn vay** sang tông giọng tương ứng:
+
+| Trạng thái | Tông giọng |
+|-----------|-----------|
+| `auto_rejected` | Đồng cảm, khuyến khích, không đổ lỗi; gợi ý cải thiện DTI/Credit score |
+| `admin_rejected` | Đồng cảm, chuyên nghiệp; giải thích lý do từ Admin |
+| `pending_review` | Khuyến khích, thông tin; cập nhật quy trình xét duyệt |
+| `approved` | Vui vẻ, chúc mừng; hướng dẫn bước tiếp theo và tài liệu cần nộp |
+| `awaiting_info` | Hướng dẫn cụ thể; nhắc nhở thông tin cần bổ sung |
+| `info_submitted` | Trấn an, chuyên nghiệp; cung cấp thông tin thời gian xử lý dự kiến |
+| `None` (chưa có hồ sơ) | Chào đón, thân thiện; giới thiệu dịch vụ và khuyến khích tìm hiểu |
+
+Ngoài ra, Personalizer cung cấp **hướng dẫn ý định** (`intent_instructions`) riêng biệt cho từng intent (6 loại), giúp LLM biết cách ưu tiên giữa dữ liệu hồ sơ và tài liệu chính sách.
+
+---
+
+## 10. Context Builder — 4-Block User Context
+
+`context_builder.py` xây dựng context người dùng gồm 4 khối:
+
+| Block | Nội dung |
+|-------|----------|
+| **Form Context** | Số tiền vay, kỳ hạn, trạng thái, thu nhập, DTI, credit score, việc làm, tín dụng CIC |
+| **ML Context** | Xác suất vỡ nợ, mức rủi ro, điểm rủi ro, số tiền/kỳ hạn đề xuất, phiên bản model |
+| **Advisory Context** | So sánh vay vs đề xuất, DTI band, Credit score band, yếu tố rủi ro chính (tối đa 4), yếu tố tích cực (tối đa 4), hành động gợi ý (tối đa 5) |
+| **Data Quality Context** | Danh sách feature bị impute, mức độ tin cậy (cao/trung bình/thấp), ghi chú chất lượng |
+
+**Bảng band Credit Score:**
+
+| Điểm | Đánh giá |
+|------|---------|
+| < 580 | Kém |
+| 580–669 | Trung bình |
+| 670–739 | Tốt |
+| 740–799 | Rất tốt |
+| ≥ 800 | Xuất sắc |
+
+**Bảng band DTI:**
+
+| DTI | Đánh giá |
+|-----|---------|
+| < 30% | Tốt |
+| 30–43% | Cần chú ý |
+| > 43% | Rủi ro cao |
+
+---
+
+## 11. Máy Trạng Thái Điều Chỉnh Đơn Vay (Loan Adjustment State Machine)
+
+Tích hợp trong `chat_service.py` và `loan_adjustment_tool.py`. Kích hoạt khi user bị AUTO_REJECTED và gửi tin nhắn chứa tổ hợp từ khóa từ `_ADJUSTMENT_*_TERMS`.
+
+**Hằng số quan trọng:**
+- `AUTO_REVIEW_THRESHOLD = 0.4` — xác suất vỡ nợ tối đa để đề xuất được chấp nhận
+- `SUPPORTED_TERMS = (12, 24, 36, 48, 60)` — các kỳ hạn hợp lệ (tháng)
+- `PENDING_ACTION_TTL_MINUTES = 30` — thời gian hết hạn đề xuất chưa được xác nhận
+
+**Thuật toán tìm phương án:**
+1. Tìm đơn vay `AUTO_REJECTED` gần nhất.
+2. Bỏ qua nếu trạng thái là `CIC_BLACKLIST`.
+3. Thử từng tổ hợp `(loan_amount, term)` từ SUPPORTED_TERMS, chạy ML real-time.
+4. Giữ các phương án có `default_probability ≤ 0.4` và pass business validation.
+5. Xếp hạng: ưu tiên số tiền gốc → xác suất thấp nhất → kỳ hạn gần nhất.
+6. Trả kết quả về với status code: `"proposal"` / `"no_passing_option"` / `"cic_blacklist"` / `"no_rejected_application"`.
+
+---
+
+## 12. Cấu Hình Môi Trường RAG
 
 Các cấu hình chính điều chỉnh hành vi RAG nằm trong `backend/.env`:
 
 ```env
-# Mẫu mô hình LLM & Embeddings qua OpenRouter
+# Mô hình LLM & Embeddings qua OpenRouter
 RAG_LLM_MODEL=google/gemini-2.5-flash
 RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
 RAG_BM25_MODEL=Qdrant/bm25
 
 # Reranker cấu hình
 RAG_RERANKER_ENABLED=True
-RAG_RERANKER_MODEL=BAAI/bge-reranker-large
+RAG_RERANKER_MODEL=jinaai/jina-reranker-v2-base-multilingual
 RAG_RERANKER_CANDIDATE_K=20
 RAG_RERANKER_TOP_K=12
 
 # Retrieval cấu hình (Số lượng parent documents gửi vào LLM)
 RAG_TOP_K=4
 
-# Timeout & Retry cho an toàn kết nối
-RAG_LLM_TIMEOUT_SECONDS=15
-RAG_LLM_MAX_RETRIES=3
+# Timeout & Retry
+RAG_LLM_TIMEOUT_SECONDS=30
+RAG_LLM_MAX_RETRIES=2
 RAG_EMBEDDING_TIMEOUT_SECONDS=10
-RAG_EMBEDDING_MAX_RETRIES=3
+RAG_EMBEDDING_MAX_RETRIES=2
 RAG_QDRANT_TIMEOUT_SECONDS=5
 
 # Memory & Summarization cấu hình
-RAG_MEMORY_WINDOW_TOKEN_BUDGET=4096
-RAG_MEMORY_MIN_MESSAGES_TO_SUMMARIZE=3
+RAG_MEMORY_WINDOW_TOKEN_BUDGET=2000
+RAG_MEMORY_MIN_MESSAGES_TO_SUMMARIZE=6
 RAG_MEMORY_SUMMARY_MAX_TOKENS=500
 ```
 
 ---
 
-## 9. Bộ Đánh Giá Chất Lượng RAG (Offline RAG Evaluation)
+## 13. Bộ Đánh Giá Chất Lượng RAG (Offline RAG Evaluation)
 
-Để đảm bảo RAG hoạt động ổn định và không xảy ra hiện tượng ảo giác (hallucination) khi thay đổi mã nguồn, hệ thống tích hợp bộ công cụ kiểm thử tự động tại `backend/rag/eval_runner.py` và `eval_metrics.py`.
+`backend/rag/eval_runner.py` và `eval_metrics.py` cung cấp bộ kiểm thử tự động để phát hiện regression khi thay đổi prompt hoặc nâng cấp LLM.
 
-### 9.1 Các chỉ số đo lường chính (RAG Metrics)
-1. **Faithfulness (Độ trung thực):** Kiểm tra xem câu trả lời có hoàn toàn dựa trên tài liệu được truy xuất hay không (không tự bịa thông tin ngoài tài liệu).
-2. **Answer Relevance (Độ liên quan câu trả lời):** Đánh giá mức độ câu trả lời giải quyết trực tiếp câu hỏi của người dùng.
-3. **Context Recall (Độ phủ ngữ cảnh):** Đo lường xem retriever có tìm đủ các thông tin cần thiết trong cơ sở tri thức để trả lời câu hỏi hay không.
+### 13.1 Các chỉ số đo lường chính
 
-### 9.2 Cách chạy Evaluation
-Chạy script kiểm thử để xuất bảng báo cáo chất lượng:
+1. **Faithfulness (Độ trung thực):** Câu trả lời có hoàn toàn dựa trên tài liệu truy xuất không (không tự bịa thông tin)?
+2. **Answer Relevance (Độ liên quan):** Câu trả lời có giải quyết trực tiếp câu hỏi không?
+3. **Context Recall (Độ phủ ngữ cảnh):** Retriever có tìm đủ thông tin cần thiết không?
+
+### 13.2 Cách chạy Evaluation
+
 ```bash
 cd backend
 PYTHONPATH=. ../.venv/bin/python -m rag.eval_runner
@@ -289,15 +440,17 @@ PYTHONPATH=. ../.venv/bin/python -m rag.eval_runner
 
 ---
 
-## 10. Điểm Mạnh & Hạn Chế Của Hệ Thống Hiện Tại
+## 14. Điểm Mạnh & Hạn Chế
 
-### ✅ Điểm mạnh
-- **Bảo mật tuyệt đối (Multi-layer Guardrails):** Ngăn chặn prompt injection và rò rỉ dữ liệu hệ thống hiệu quả bằng bộ lọc đầu vào/đầu ra.
-- **Tìm kiếm chính xác & Ngữ cảnh rộng:** Nhờ Hybrid Search + Cross-Encoder Rerank + Parent-Child chunking, hệ thống tìm đúng chi tiết nhỏ nhưng vẫn giữ được toàn cảnh Section tài liệu gốc cho LLM đọc.
-- **Hội thoại cá nhân hóa sâu sắc:** Tông giọng và nội dung câu trả lời tự động điều chỉnh linh hoạt theo trạng thái đơn vay (Rejected, Approved, Pending) giúp tăng tính chuyên nghiệp và đồng cảm tài chính.
-- **Tích hợp Loan Adjustment State Machine:** Biến Chatbot thành một kênh hành động (Actionable Channel), cho phép người dùng thay đổi cấu hình vay và nộp lại trực tiếp qua chat mà không cần quay lại điền form phức tạp.
-- **Bộ đánh giá tự động (Evaluation):** Đảm bảo an toàn hồi quy khi chỉnh sửa prompt hoặc nâng cấp LLM model.
+### Điểm mạnh
+- **Bảo mật đa lớp:** Input/output guardrails ngăn chặn prompt injection, PII probing, và rò rỉ dữ liệu nội bộ hiệu quả.
+- **Tìm kiếm chính xác & ngữ cảnh rộng:** Hybrid Search + Cross-Encoder Rerank + Parent-Child chunking kết hợp để tìm chi tiết nhỏ nhưng giữ được toàn cảnh tài liệu.
+- **Cá nhân hóa sâu sắc:** Tông giọng và nội dung tự động điều chỉnh linh hoạt theo 7 trạng thái đơn vay.
+- **Loan Adjustment State Machine:** Chatbot trở thành kênh hành động — user có thể điều chỉnh cấu hình vay và nộp lại trực tiếp qua chat.
+- **Bộ đánh giá tự động:** Đảm bảo an toàn hồi quy khi chỉnh sửa prompt hoặc nâng cấp LLM.
 
-### ⚠️ Hạn chế & Hướng phát triển tiếp theo
-- **Bộ nhớ cục bộ Cross-Encoder:** Quá trình rerank chạy trên CPU local qua FastEmbed có thể gây trễ khoảng 1-2 giây cho câu trả lời đầu tiên. Hướng khắc phục: Đưa reranker lên GPU hoặc sử dụng API Rerank bên ngoài khi mở rộng quy mô.
-- **Dữ liệu Knowledge Base tĩnh:** Tài liệu chính sách vẫn nạp thủ công dạng file Markdown tĩnh. Hướng khắc phục: Kết nối ETL pipeline để tự động xuất và cập nhật chính sách từ cơ sở dữ liệu hệ thống vào Qdrant khi Admin chỉnh sửa chính sách trực tuyến.
+### Hạn chế & Hướng phát triển
+
+- **Reranker chạy CPU local:** `jinaai/jina-reranker-v2-base-multilingual` chạy trên CPU qua FastEmbed có thể gây trễ 1–10 giây tùy cache trạng thái. Hướng khắc phục: đưa lên GPU hoặc sử dụng Rerank API bên ngoài khi mở rộng quy mô.
+- **Knowledge Base tĩnh:** Tài liệu chính sách vẫn nạp thủ công dạng Markdown. Hướng khắc phục: kết nối ETL pipeline để tự động cập nhật Qdrant khi Admin chỉnh sửa chính sách.
+- **Token estimation đơn giản:** Ước lượng token bằng `len // 4` có thể thiếu chính xác với văn bản tiếng Việt. Hướng khắc phục: dùng tokenizer thực tế hoặc tiktoken.

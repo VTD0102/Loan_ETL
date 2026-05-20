@@ -258,44 +258,45 @@
   {
     "id": "POLICY-02",
     "group": "policy",
-    "question": "Hạn mức vay tối đa cho hồ sơ LOW risk là bao nhiêu?",
-    "ground_truth": "Tối đa $15,000 với kỳ hạn đề xuất 36 tháng.",
+    "question": "Hệ thống CreditIntel đề xuất hạn mức vay theo cơ chế nào?",
+    "ground_truth": "Hệ thống dùng thuật toán binary search động: với mỗi kỳ hạn (12/24/36/48/60 tháng), tìm số tiền vay tối đa sao cho P(default) < 40%. Hạn mức không cố định theo mức rủi ro mà phụ thuộc đầy đủ vào hồ sơ tài chính cá nhân của khách hàng.",
     "expected_sources": [
       "policy.md"
     ],
     "expected_context_terms": [
-      "LOW",
-      "15000",
-      "36"
+      "binary search",
+      "kỳ hạn",
+      "P(default)"
     ],
     "must_include": [
-      "15000|15,000|$15,000",
-      "36 tháng|36"
+      "binary search|động|tìm số tiền|tìm hạn mức",
+      "kỳ hạn|term"
     ],
     "must_not_include": [
-      "8000|8,000|$8,000"
+      "15000|15,000|\\$15,000",
+      "8000|8,000|\\$8,000 cho LOW|\\$8,000 cho MEDIUM"
     ],
     "expected_behavior": "answer"
   },
   {
     "id": "POLICY-03",
     "group": "policy",
-    "question": "Hồ sơ MEDIUM risk được đề xuất hạn mức vay tối đa bao nhiêu?",
-    "ground_truth": "Tối đa $8,000 với kỳ hạn đề xuất 24 tháng.",
+    "question": "Phạm vi số tiền vay tối thiểu và tối đa mà CreditIntel hỗ trợ là gì?",
+    "ground_truth": "Số tiền vay tối thiểu là $500 và tối đa là $150,000. Kỳ hạn hỗ trợ gồm 12, 24, 36, 48 và 60 tháng.",
     "expected_sources": [
       "policy.md"
     ],
     "expected_context_terms": [
-      "MEDIUM",
-      "8000",
-      "24"
+      "500",
+      "150000",
+      "kỳ hạn"
     ],
     "must_include": [
-      "8000|8,000|$8,000",
-      "24 tháng|24"
+      "500|\\$500",
+      "150,000|150000|\\$150,000"
     ],
     "must_not_include": [
-      "15000|15,000|$15,000"
+      "15000 cho LOW|15,000 cho LOW"
     ],
     "expected_behavior": "answer"
   },
