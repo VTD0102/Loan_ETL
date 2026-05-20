@@ -9,154 +9,112 @@ Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng
 
 ```mermaid
 graph TB
-    %% ===== TẦNG NGƯỜI DÙNG =====
-    Customer(("👤 Khách hàng"))
-    Admin(("🛡️ Quản trị viên"))
+    User(("👤 Người dùng")) --> AUTH["🔐 Đăng ký / Đăng nhập"]
+    AUTH --> JWT["🛂 JWT Token\nZustand authStore"]
 
-    subgraph FE_CUSTOMER["📋 Giao diện Khách hàng"]
-        FC1["Landing Page"]
-        FC2["Đăng ký / Đăng nhập"]
-        FC3["Dashboard"]
-        FC4["Nộp đơn vay"]
-        FC5["Chat AI"]
-        FC6["Lịch sử đơn"]
+    JWT --> CUSTOMER_FLOW
+    JWT --> ADMIN_FLOW
+
+    subgraph CUSTOMER_FLOW["📋 Customer — React 18 + Vite"]
+        C_DASH["📊 Dashboard\nXem đơn · Credit Score"]
+        C_APPLY["📝 Nộp đơn vay\nForm → ML auto-review"]
+        C_HISTORY["📂 Lịch sử đơn\nTrạng thái · Chi tiết"]
+        C_CHAT["💬 Chat AI\nHỏi đáp · Tư vấn"]
     end
 
-    subgraph FE_ADMIN["🛡️ Giao diện Admin"]
-        FA1["Admin Dashboard"]
-        FA2["Danh sách đơn chờ duyệt"]
-        FA3["Chi tiết đơn / Duyệt / Từ chối"]
-        FA4["Thống kê hệ thống"]
+    subgraph ADMIN_FLOW["🛡️ Admin Panel"]
+        A_DASH["📊 Admin Dashboard"]
+        A_REVIEW["📋 Duyệt / Từ chối đơn"]
+        A_STATS["📈 Thống kê hệ thống"]
     end
 
-    Customer --> FE_CUSTOMER
-    Admin --> FE_ADMIN
+    CUSTOMER_FLOW -->|"REST API"| BACKEND
+    ADMIN_FLOW -->|"REST API"| BACKEND
 
-    %% ===== TẦNG API =====
     subgraph BACKEND["⚙️ Backend — FastAPI"]
-        subgraph API_LAYER["🌐 API Gateway"]
-            AUTH_API["/api/v1/auth"]
-            APP_API["/api/v1/applications"]
-            ADMIN_API["/api/v1/admin"]
-            CHAT_API["/api/v1/chat"]
-            SCORE_API["/api/v1/credit-score"]
-        end
+        API["🌐 API Routers\n/auth · /applications · /admin · /chat · /credit-score"]
+        API --> GUARD_MW["🛂 JWT Middleware"]
 
-        JWT["🛂 JWT Middleware\nrequire_customer · require_admin"]
+        GUARD_MW --> SVC_AUTH["auth_service"]
+        GUARD_MW --> SVC_APP["application_service"]
+        GUARD_MW --> SVC_ADMIN["admin_service"]
+        GUARD_MW --> SVC_ML["ml_service"]
+        GUARD_MW --> SVC_CS["credit_score_service"]
+        GUARD_MW --> SVC_CHAT["chat_service"]
 
-        subgraph SERVICES["📦 Business Services"]
-            AUTH_SVC["auth_service\nĐăng ký · Đăng nhập · JWT"]
-            APP_SVC["application_service\nCRUD đơn vay · Submit"]
-            ADMIN_SVC["admin_service\nDuyệt · Từ chối đơn"]
-            ML_SVC["ml_service\nDự đoán rủi ro vỡ nợ"]
-            CS_SVC["credit_score_service\nTính FICO · Giải thích SHAP"]
-            CHAT_SVC["chat_service\nĐiều phối RAG · State Machine"]
-            ADJ_TOOL["loan_adjustment_tool\nMô phỏng đổi kỳ hạn/tiền"]
-        end
-
-        API_LAYER --> JWT --> SERVICES
-        CHAT_SVC --> ADJ_TOOL
-        APP_SVC --> ML_SVC
-        CHAT_SVC --> APP_SVC
+        SVC_APP --> SVC_ML
+        SVC_CHAT --> ADJ["loan_adjustment_tool"]
+        SVC_CHAT --> SVC_APP
+        ADJ --> SVC_ML
     end
 
-    FE_CUSTOMER -->|"REST API + Bearer JWT"| API_LAYER
-    FE_ADMIN -->|"REST API + Bearer JWT"| API_LAYER
+    SVC_CHAT -->|"Gọi RAG pipeline"| RAG_MODULE
+    SVC_ML -->|"Load model"| ML_MODULE
+    SVC_CS -->|"Load model"| ML_MODULE
 
-    %% ===== MODULE RAG =====
     subgraph RAG_MODULE["🤖 RAG Module — backend/rag/"]
-        CHAIN["chain.py\nLCEL Pipeline chính"]
-        GUARD["guardrails.py\nInput & Output Safety"]
-        ROUTER["router.py\nIntent Classification"]
-        REWRITER["query_rewriter.py\nLLM Query Rewriter"]
-        RETRIEVER["retriever.py\nHybrid Search + Reranker"]
-        PERSONALIZER["personalizer.py\nCá nhân hóa giọng điệu"]
-        MEMORY["memory.py\nSliding Window + Summary"]
-        CHUNKER["chunking.py\nParent-Child Chunking"]
+        CHAIN["chain.py · LCEL Pipeline"]
+        CHAIN --> G["guardrails.py"]
+        CHAIN --> RO["router.py"]
+        CHAIN --> RW["query_rewriter.py"]
+        CHAIN --> RT["retriever.py"]
+        CHAIN --> PE["personalizer.py"]
+        CHAIN --> ME["memory.py"]
+        RT --> CH["chunking.py"]
     end
 
-    %% ===== MODULE ML =====
-    subgraph ML_MODULE["🧠 ML Module — machinelearning/"]
-        RISK_MODEL["customer_risk_model.pkl\nLightGBM v4 · 35 features"]
-        SCORE_MODEL["scorecard_model.pkl\nLogistic Regression · FICO 300–850"]
-        FEATURE["model_feature_builder.py\nMap form → ML features"]
+    subgraph ML_MODULE["🧠 ML Module"]
+        RISK["customer_risk_model.pkl\nLightGBM v4"]
+        SCORE["scorecard_model.pkl\nLogistic Regression"]
     end
 
-    %% ===== KẾT NỐI SERVICE → MODULE =====
-    CHAT_SVC -->|"Gọi RAG pipeline"| CHAIN
-    ML_SVC -->|"Load model + predict"| RISK_MODEL
-    CS_SVC -->|"Load model + score"| SCORE_MODEL
-    ML_SVC --> FEATURE
-    ADJ_TOOL -->|"Simulate ML"| RISK_MODEL
+    RAG_MODULE -->|"Vector search"| QD
+    RAG_MODULE -->|"Chat history"| PG
+    RAG_MODULE -->|"LLM + Embed"| OR
+    BACKEND -->|"CRUD"| PG
 
-    %% ===== KẾT NỐI NỘI BỘ RAG =====
-    CHAIN --> GUARD
-    CHAIN --> ROUTER
-    CHAIN --> REWRITER
-    CHAIN --> RETRIEVER
-    CHAIN --> PERSONALIZER
-    CHAIN --> MEMORY
-    RETRIEVER --> CHUNKER
-
-    %% ===== TẦNG LƯU TRỮ =====
     subgraph STORAGE["💾 Tầng Lưu Trữ"]
-        PG[("🐘 PostgreSQL\nusers · applications\nchat_sessions · chat_messages")]
-        QD[("🔷 Qdrant Vector DB\ncreditintel-kb\nDense + Sparse")]
-        DK[("🦆 DuckDB\nBronze → Silver → Gold\nETL offline")]
+        PG[("🐘 PostgreSQL")]
+        QD[("🔷 Qdrant")]
+        DK[("🦆 DuckDB")]
     end
 
-    %% ===== DỊCH VỤ BÊN NGOÀI =====
-    subgraph EXTERNAL["☁️ Dịch Vụ Bên Ngoài"]
-        OR["OpenRouter API\nLLM: Gemini 2.5 Flash\nEmbed: text-embedding-3-small"]
-    end
+    OR["☁️ OpenRouter API\nGemini 2.5 Flash"]
 
-    %% ===== KẾT NỐI → STORAGE =====
-    SERVICES -->|"CRUD nghiệp vụ"| PG
-    MEMORY -->|"Lưu/đọc chat history"| PG
-    RETRIEVER -->|"Vector search"| QD
-    CHUNKER -->|"Ingest chunks"| QD
-
-    %% ===== KẾT NỐI → EXTERNAL =====
-    CHAIN -->|"LLM generation"| OR
-    REWRITER -->|"Rewrite query"| OR
-    MEMORY -->|"Summarize"| OR
-
-    %% ===== NODE COLORS =====
-    classDef customer fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
-    classDef admin fill:#f97316,stroke:#ea580c,color:#fff,stroke-width:2px
-    classDef feCustomer fill:#0ea5e9,stroke:#0284c7,color:#fff
-    classDef feAdmin fill:#f97316,stroke:#c2410c,color:#fff
-    classDef api fill:#fbbf24,stroke:#d97706,color:#000
-    classDef jwt fill:#ef4444,stroke:#dc2626,color:#fff
-    classDef svc fill:#f59e0b,stroke:#d97706,color:#fff
+    %% ===== STYLING =====
+    classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
+    classDef auth fill:#14b8a6,stroke:#0d9488,color:#fff
+    classDef jwt fill:#f97316,stroke:#ea580c,color:#fff
+    classDef cust fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef adm fill:#f97316,stroke:#c2410c,color:#fff
+    classDef be fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef mw fill:#ef4444,stroke:#dc2626,color:#fff
     classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
     classDef ml fill:#10b981,stroke:#059669,color:#fff
     classDef db fill:#64748b,stroke:#475569,color:#fff
     classDef ext fill:#ec4899,stroke:#db2777,color:#fff
 
-    class Customer customer
-    class Admin admin
-    class FC1,FC2,FC3,FC4,FC5,FC6 feCustomer
-    class FA1,FA2,FA3,FA4 feAdmin
-    class AUTH_API,APP_API,ADMIN_API,CHAT_API,SCORE_API api
+    class User user
+    class AUTH auth
     class JWT jwt
-    class AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CS_SVC,CHAT_SVC,ADJ_TOOL svc
-    class CHAIN,GUARD,ROUTER,REWRITER,RETRIEVER,PERSONALIZER,MEMORY,CHUNKER rag
-    class RISK_MODEL,SCORE_MODEL,FEATURE ml
+    class C_DASH,C_APPLY,C_HISTORY,C_CHAT cust
+    class A_DASH,A_REVIEW,A_STATS adm
+    class API,SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,ADJ be
+    class GUARD_MW mw
+    class CHAIN,G,RO,RW,RT,PE,ME,CH rag
+    class RISK,SCORE ml
     class PG,QD,DK db
     class OR ext
 
-    %% ===== SUBGRAPH STYLING =====
-    style FE_CUSTOMER fill:transparent,stroke:#0ea5e9,stroke-width:2px
-    style FE_ADMIN fill:transparent,stroke:#f97316,stroke-width:2px
+    style CUSTOMER_FLOW fill:transparent,stroke:#0ea5e9,stroke-width:2px
+    style ADMIN_FLOW fill:transparent,stroke:#f97316,stroke-width:2px
     style BACKEND fill:transparent,stroke:#f59e0b,stroke-width:2px
-    style API_LAYER fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
-    style SERVICES fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
     style RAG_MODULE fill:transparent,stroke:#7c3aed,stroke-width:3px
     style ML_MODULE fill:transparent,stroke:#10b981,stroke-width:3px
     style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px
-    style EXTERNAL fill:transparent,stroke:#ec4899,stroke-width:2px
 ```
+
+
 
 > **Chú thích kiến trúc tổng quan:**
 > 1. **Giao thức & Phân Quyền**: Người dùng đăng nhập qua JWT Bearer. Token được lưu trữ tại Zustand store ở Frontend và được tự động đính kèm vào header của mọi API request. Backend verify JWT thông qua Middleware kiểm tra vai trò khách hàng (`require_customer`) hoặc quản trị viên (`require_admin`).
