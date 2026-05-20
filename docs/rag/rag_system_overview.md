@@ -12,45 +12,45 @@ Hệ thống RAG (Retrieval-Augmented Generation) của CreditIntel không chỉ
 
 ```mermaid
 flowchart TD
-    User([👤 Câu hỏi của User]) --> IG{"Control Layer<br/>🛂 Input Guardrail"}
-    
-    subgraph RAG_BLOCK["🤖 HỆ THỐNG RAG (Core Processing)"]
-        IG -->|An toàn| IR{"🔀 Intent Router"}
-        IR -->|Cần tìm kiếm| QR["🔄 Query Rewriter"]
-        QR --> HS["🔍 Hybrid Search (Dense + Sparse)"]
-        HS --> RR["⚡ Cross-Encoder Reranker"]
-        RR --> PD["📄 Parent Document Retriever"]
-        PD --> PS["🎨 Personalizer (Tone Adjustment)"]
-        PS --> LLM["🤖 LLM Generation (Gemini 2.5)"]
-    end
-    
-    subgraph STORAGE_BLOCK["💾 TẦNG LƯU TRỮ (Storage Layer)"]
-        DB_QD[("🔷 Qdrant Vector DB<br/>(Child Chunks)")]
-        DB_PG[("🐘 PostgreSQL DB<br/>(Chat Messages & Sessions)")]
+    User([👤 Câu hỏi của User]) --> IG{🛂 Input Guardrail}
+    IG -->|Không an toàn| Reject[❌ Trả lời từ chối]
+    IG -->|An toàn| IR
+
+    subgraph RAG_BLOCK["🤖 RAG Pipeline"]
+        IR{🔀 Intent Router}
+        IR -->|Cần tìm kiếm| QR[🔄 Query Rewriter]
+        QR --> HS[🔍 Hybrid Search]
+        HS --> RR[⚡ Cross-Encoder Reranker]
+        RR --> PD[📄 Parent Doc Retriever]
+        IR -->|Greeting / Off-topic| Skip[Bỏ qua Retrieval]
+        PD --> PS[🎨 Personalizer]
+        Skip --> PS
+        PS --> LLM[🤖 LLM Gemini 2.5 Flash]
     end
 
-    %% Tương tác với tầng lưu trữ
+    subgraph STORAGE_BLOCK["💾 Tầng Lưu Trữ"]
+        DB_QD[(🔷 Qdrant Vector DB)]
+        DB_PG[(🐘 PostgreSQL)]
+    end
+
     HS -.->|Truy vấn vector| DB_QD
-    LLM -.->|Lưu tin nhắn & Memory| DB_PG
-    IR -->|Greeting / Off-topic| Skip["Bỏ qua tìm kiếm (Skip Retrieval)"]
-    Skip --> PS
-    
-    LLM --> OG{"Control Layer<br/>🚷 Output Guardrail"}
-    IG -->|Không an toàn| Reject["❌ Trả lời từ chối"]
+    LLM -.->|Lưu memory| DB_PG
+
+    LLM --> OG{🚷 Output Guardrail}
     OG --> Response([💬 Phản hồi + Nguồn trích dẫn])
-    
-    %% ====== SUBGRAPH STYLING (BORDERS & COLORS) ======
-    style RAG_BLOCK fill:#f3e8ff,stroke:#7c3aed,stroke-width:3px
-    style STORAGE_BLOCK fill:#ecfeff,stroke:#0891b2,stroke-width:3px
-    
-    %% ====== NODE STYLING ======
-    classDef control fill:#fee2e2,stroke:#ef4444,color:#991b1b
-    classDef ragNode fill:#f9f5ff,stroke:#7c3aed,color:#5b21b6
-    classDef storageNode fill:#e6fffa,stroke:#00a3c4,color:#004f5e
-    
-    class IG,OG control
-    class IR,QR,HS,RR,PD,PS,LLM,Skip,Reject,Response ragNode
-    class DB_QD,DB_PG storageNode
+
+    %% ====== SUBGRAPH: chỉ kẻ viền, nền trong suốt ======
+    style RAG_BLOCK fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style STORAGE_BLOCK fill:transparent,stroke:#0891b2,stroke-width:3px
+
+    %% ====== NODE: tô màu các khối chức năng ======
+    classDef guard fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef store fill:#64748b,stroke:#475569,color:#fff
+
+    class IG,OG guard
+    class IR,QR,HS,RR,PD,PS,LLM,Skip,Reject,Response rag
+    class DB_QD,DB_PG store
 ```
 
 **Các thông số kỹ thuật cốt lõi:**

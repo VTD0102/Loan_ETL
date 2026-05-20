@@ -119,15 +119,14 @@ graph TB
     class DB_PG,DB_QD,DB_DK storage
     class OR external
 
-    %% ====== SUBGRAPH STYLING (BORDERS & COLORS) ======
-    style RAG fill:#f3e8ff,stroke:#7c3aed,stroke-width:3px
-    style STORAGE fill:#ecfeff,stroke:#0891b2,stroke-width:3px
-    style FE fill:#f8fafc,stroke:#cbd5e1,stroke-width:1px
-    style BE fill:#fff7ed,stroke:#ffedd5,stroke-width:1px
-    style SVC fill:#fffbeb,stroke:#fef3c7,stroke-width:1px
-    style ML_MODELS fill:#f0fdf4,stroke:#dcfce7,stroke-width:1px
-    style EXT fill:#fdf2f8,stroke:#fce7f3,stroke-width:1px
-```
+    %% ====== SUBGRAPH STYLING (BORDERS ONLY, TRANSPARENT BG) ======
+    style RAG fill:transparent,stroke:#7c3aed,stroke-width:3px,stroke-dasharray:0
+    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px,stroke-dasharray:0
+    style FE fill:transparent,stroke:#94a3b8,stroke-width:2px
+    style BE fill:transparent,stroke:#f59e0b,stroke-width:2px
+    style SVC fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
+    style ML_MODELS fill:transparent,stroke:#10b981,stroke-width:2px
+    style EXT fill:transparent,stroke:#ec4899,stroke-width:2px
 ```
 
 > **Chú thích kiến trúc tổng quan:**
