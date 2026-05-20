@@ -10,7 +10,7 @@ from models.application import LoanApplication
 from schemas.application import ApplicationConfirm
 from services import ml_service
 from services.loan_suggestion_service import validate_confirmed_values
-from services.model_feature_builder import fetch_previous_applications
+from services.model_feature_builder import fetch_previous_applications, infer_existing_monthly_debt
 
 SUPPORTED_TERMS = (12, 24, 36, 48, 60)
 AUTO_REVIEW_THRESHOLD = 0.4
@@ -156,12 +156,19 @@ def application_to_confirm_payload(
     loan_amount: Decimal | None = None,
     term: int | None = None,
 ) -> ApplicationConfirm:
+    existing_monthly_debt = infer_existing_monthly_debt(
+        app.monthly_income,
+        app.loan_amount,
+        app.term,
+        app.dti or Decimal("0"),
+    )
     return ApplicationConfirm(
         monthly_income=app.monthly_income,
         loan_amount=loan_amount if loan_amount is not None else app.loan_amount,
         term=term if term is not None else app.term,
         employment_status=app.employment_status,
-        dti=app.dti,
+        dti=None,
+        cic_monthly_installment=Decimal(str(round(existing_monthly_debt, 2))),
         is_homeowner=app.is_homeowner,
         listing_category=app.listing_category,
         credit_score=getattr(app, "credit_score", None),

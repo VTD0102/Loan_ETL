@@ -17,6 +17,7 @@ def test_scorecard_service_builds_current_training_feature_contract():
         loan_amount=Decimal("10000"),
         term=36,
         employment_status="Employed",
+        dti=Decimal("0.45"),
         is_homeowner=True,
         credit_score=720,
         occupation_type="Laborers",
@@ -42,6 +43,9 @@ def test_scorecard_service_builds_current_training_feature_contract():
     assert df.loc[0, "occupation_type"] == "Laborers"
     assert df.loc[0, "num_bureau_records"] == 3
     assert df.loc[0, "age_years"] == 41
+    assert df.loc[0, "debt_to_income_ratio"] == 0.45
+    assert df.loc[0, "payment_to_income"] == 0.45
+    assert df.loc[0, "high_dti_flag"] == 1
 
 
 if __name__ == "__main__":

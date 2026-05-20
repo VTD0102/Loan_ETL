@@ -13,7 +13,7 @@ def _build_payload() -> ApplicationCreate:
         loan_amount=10000,
         term=24,
         employment_status="Employed",
-        dti=0.3,
+        dti=None,
         is_homeowner=True,
         listing_category=1,
         credit_score=700,
@@ -47,6 +47,28 @@ def test_ml_predict_returns_contract():
     assert "model_version" in res and res["model_version"]
 
 
+def test_high_combined_dti_increases_risk_probability():
+    low_payload = _build_payload().model_copy(update={
+        "cic_monthly_installment": 0,
+        "dti": None,
+    })
+    high_payload = _build_payload().model_copy(update={
+        "cic_monthly_installment": 3000,
+        "dti": None,
+    })
+
+    low = ml_service.predict(low_payload)
+    high = ml_service.predict(high_payload)
+
+    assert high["feature_snapshot"]["dti"] > low["feature_snapshot"]["dti"]
+    assert high["feature_snapshot"]["dti"] == high["feature_snapshot"]["payment_to_income"]
+    assert high["default_probability"] > low["default_probability"]
+    assert high["default_probability"] > 0.4
+    assert high["risk_level"] == "High"
+    assert high["dti_risk_floor_applied"] is True
+
+
 if __name__ == "__main__":
     test_ml_predict_returns_contract()
+    test_high_combined_dti_increases_risk_probability()
     print("ml_service smoke test passed")

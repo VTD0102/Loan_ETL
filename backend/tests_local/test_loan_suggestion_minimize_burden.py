@@ -1,13 +1,13 @@
 """
-Unit tests for compute_suggestion() — minimize-burden strategy.
+Unit tests for compute_suggestion() — max-reviewable strategy.
 
 Strategy under test:
-  Step 1 — Honour the requested amount if feasible:
-    find all terms where max_safe >= requested_amount,
-    pick the SHORTEST (minimises total interest).
-  Step 2 — Fallback when amount not achievable at any term:
-    pick the (term, max_safe) that minimises monthly_payment = max_safe / term
-    (minimises DTI); tiebreak by highest amount then shortest term.
+  Step 1 — Find all terms where max_reviewable_amount stays below the
+    auto-reject threshold.
+  Step 2 — If the requested amount is feasible, pick the SHORTEST feasible term
+    and expose that term's maximum reviewable amount.
+  Step 3 — If amount is infeasible everywhere, pick the highest reviewable
+    amount. Tiebreak by shortest term, then lower monthly payment.
 """
 from decimal import Decimal
 from typing import Any
@@ -74,30 +74,30 @@ class _Payload:
 def _make_predictor(safe_caps: dict[int, float]) -> Any:
     """
     Return a fake _predict where:
-      prob = 0.10  (<LOW=0.20)  when loan_amount <= safe_caps[term]
-      prob = 0.25  (>LOW=0.20)  when loan_amount >  safe_caps[term]
+      prob = 0.10  (<LOW=0.20)   when loan_amount <= safe_caps[term]
+      prob = 0.45  (>HIGH=0.40)  when loan_amount >  safe_caps[term]
 
     Step-function ensures binary search converges to exactly safe_caps[term].
-    Terms missing from safe_caps (or cap=0) always return 0.30 — never safe.
+    Terms missing from safe_caps (or cap=0) always return 0.50 — never reviewable.
     """
     def fake(payload, artifact, loan_amount: float, term: int, prev):
         cap = safe_caps.get(term, 0.0)
         if cap == 0.0:
-            return 0.30
-        return 0.10 if loan_amount <= cap else 0.25
+            return 0.50
+        return 0.10 if loan_amount <= cap else 0.45
     return fake
 
 
 # ---------------------------------------------------------------------------
-# Test 1 — Honour requested amount, pick SHORTEST feasible term
+# Test 1 — Pick shortest feasible term and expose its max amount
 # ---------------------------------------------------------------------------
 
 def test_honours_requested_amount_with_shortest_term():
     """
     Safe caps: 12m=0 (infeasible), 24m=25k, 36m=40k, 48m=55k, 60m=70k.
     User requests 20k / 24m.
-    Shortest term where max_safe >= 20k is 24m.
-    Suggested amount must equal requested (20k), suggested term must be 24.
+    Shortest term where max_reviewable >= 20k is 24m.
+    Suggested amount is the maximum reviewable amount for that term.
     """
     caps = {12: 0, 24: 25_000, 36: 40_000, 48: 55_000, 60: 70_000}
     payload = _Payload(loan_amount=20_000, term=24)
@@ -106,7 +106,7 @@ def test_honours_requested_amount_with_shortest_term():
         result = compute_suggestion(payload, _BASE_ARTIFACT)
 
     assert result["suggested_term"]   == 24, "should pick shortest feasible term (24m)"
-    assert result["suggested_amount"] == 20_000, "should honour requested amount"
+    assert result["suggested_amount"] == 25_000, "should expose max reviewable amount"
 
 
 def test_shorter_term_wins_over_higher_amount():
@@ -124,19 +124,19 @@ def test_shorter_term_wins_over_higher_amount():
         result = compute_suggestion(payload, _BASE_ARTIFACT)
 
     assert result["suggested_term"]   == 24
-    assert result["suggested_amount"] == 25_000
+    assert result["suggested_amount"] == 30_000
 
 
 # ---------------------------------------------------------------------------
-# Test 2 — Fallback: amount infeasible → minimise monthly payment
+# Test 2 — Fallback: amount infeasible -> maximise reviewable amount
 # ---------------------------------------------------------------------------
 
-def test_fallback_minimises_monthly_payment():
+def test_fallback_picks_highest_reviewable_amount():
     """
     Caps: 12m=8k  (monthly=667), 24m=20k (monthly=833),
           36m=24k (monthly=667), 48m=24k (monthly=500), 60m=25k (monthly=417).
     User requests 50k — infeasible everywhere.
-    Minimum monthly payment is 60m: 25k/60 = 417/m.
+    Highest reviewable amount is 25k at 60m.
     """
     caps = {12: 8_000, 24: 20_000, 36: 24_000, 48: 24_000, 60: 25_000}
     payload = _Payload(loan_amount=50_000, term=12)
@@ -145,29 +145,28 @@ def test_fallback_minimises_monthly_payment():
         result = compute_suggestion(payload, _BASE_ARTIFACT)
 
     assert result["suggested_term"] == 60, (
-        f"expected term=60 (min monthly_payment), got {result['suggested_term']}"
+        f"expected term=60 (highest reviewable amount), got {result['suggested_term']}"
     )
-    # suggested_amount must be max_safe for that term (~25k)
+    # suggested_amount must be max_reviewable for that term (~25k)
     assert result["suggested_amount"] > 0
     assert result["is_perfect_fit"] is False
 
 
-def test_fallback_term_with_lower_monthly_payment_wins():
+def test_fallback_highest_amount_wins_over_lower_monthly_payment():
     """
-    When 60m has both lower monthly payment AND higher cap than 24m,
-    60m must win the fallback selection.
-    Caps: 24m=14_400 (monthly=600), 60m=30_000 (monthly=500).
+    When a shorter term has a higher cap but a higher monthly payment,
+    it still wins because the UI label is maximum reviewable amount.
+    Caps: 24m=30_000 (monthly=1,250), 60m=25_000 (monthly=417).
     User requests 100k — infeasible everywhere.
-    60m wins on monthly_payment (500 < 600) and also has higher amount.
     """
-    caps = {24: 14_400, 60: 30_000}
+    caps = {24: 30_000, 60: 25_000}
     payload = _Payload(loan_amount=100_000, term=24)
 
     with patch("services.loan_suggestion_service._predict", _make_predictor(caps)):
         result = compute_suggestion(payload, _BASE_ARTIFACT)
 
-    assert result["suggested_term"] == 60
-    assert result["suggested_amount"] > 14_400  # higher than 24m cap
+    assert result["suggested_term"] == 24
+    assert result["suggested_amount"] == 30_000
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +175,7 @@ def test_fallback_term_with_lower_monthly_payment_wins():
 
 def test_all_terms_infeasible_returns_minimum_loan():
     """No safe option at any term → return _MIN_LOAN without crashing."""
-    caps = {}  # all terms return prob=0.30 (above LOW)
+    caps = {}  # all terms return prob=0.50 (above HIGH)
     payload = _Payload(loan_amount=10_000, term=24)
 
     with patch("services.loan_suggestion_service._predict", _make_predictor(caps)):
@@ -203,7 +202,7 @@ def test_perfect_fit_when_requested_term_is_shortest_feasible():
         result = compute_suggestion(payload, _BASE_ARTIFACT)
 
     assert result["suggested_term"]   == 24
-    assert result["suggested_amount"] == 20_000
+    assert result["suggested_amount"] == 22_000
     assert result["is_perfect_fit"]   is True
 
 
@@ -223,13 +222,13 @@ def test_not_perfect_fit_when_shorter_term_is_available():
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — validate_confirmed_values unchanged
+# Test 5 — validate_confirmed_values uses reviewable cap
 # ---------------------------------------------------------------------------
 
-def test_validate_confirmed_values_raises_when_exceeding_max_safe():
-    """validate_confirmed_values must still reject amounts above max_safe."""
+def test_validate_confirmed_values_raises_when_exceeding_reviewable_cap():
+    """validate_confirmed_values must reject amounts above max_reviewable."""
     caps = {24: 20_000}
-    payload = _Payload(loan_amount=25_000, term=24)  # 25k > max_safe ~20k
+    payload = _Payload(loan_amount=25_000, term=24)  # 25k > max_reviewable ~20k
 
     with patch("services.loan_suggestion_service._predict", _make_predictor(caps)):
         try:
@@ -240,7 +239,7 @@ def test_validate_confirmed_values_raises_when_exceeding_max_safe():
 
 
 def test_validate_confirmed_values_passes_when_within_safe():
-    """validate_confirmed_values must pass when amount ≤ max_safe."""
+    """validate_confirmed_values must pass when amount <= max_reviewable."""
     caps = {24: 20_000}
     payload = _Payload(loan_amount=18_000, term=24)
 
@@ -251,11 +250,11 @@ def test_validate_confirmed_values_passes_when_within_safe():
 if __name__ == "__main__":
     test_honours_requested_amount_with_shortest_term()
     test_shorter_term_wins_over_higher_amount()
-    test_fallback_minimises_monthly_payment()
-    test_fallback_term_with_lower_monthly_payment_wins()
+    test_fallback_picks_highest_reviewable_amount()
+    test_fallback_highest_amount_wins_over_lower_monthly_payment()
     test_all_terms_infeasible_returns_minimum_loan()
     test_perfect_fit_when_requested_term_is_shortest_feasible()
     test_not_perfect_fit_when_shorter_term_is_available()
-    test_validate_confirmed_values_raises_when_exceeding_max_safe()
+    test_validate_confirmed_values_raises_when_exceeding_reviewable_cap()
     test_validate_confirmed_values_passes_when_within_safe()
-    print("loan suggestion minimize-burden tests passed")
+    print("loan suggestion max-reviewable tests passed")
