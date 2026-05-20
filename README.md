@@ -8,125 +8,136 @@
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
-flowchart LR
-    %% ====== USER ======
-    User((👤 Người dùng))
-
-    %% ====== FRONTEND ======
-    subgraph FE["🖥️ Frontend · React 18 + Vite + Tailwind"]
+flowchart TB
+    %% ===== CỘT 1: CLIENT-SIDE (REACT APP) =====
+    subgraph CLIENT["🖥️ Client-Side (React 18 + Zustand)"]
         direction TB
-        PortalC["📋 Customer Portal<br/>(Apply, Dashboard, Chat AI)"]
-        PortalA["🛡️ Admin Portal<br/>(Review, Stats)"]
-        Zustand["🔑 Zustand authStore · JWT"]
+        User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
+        Login --> JWT["🔑 Zustand Store\n(JWT Bearer)"]
+        
+        JWT -->|Customer| CustPortal["📋 Customer Portal\n· Dashboard / Apply\n· RAG Chat AI"]
+        JWT -->|Admin| AdminPanel["🛡️ Admin Panel\n· Review & Stats"]
     end
 
-    %% ====== BACKEND ======
-    subgraph BE["⚙️ Backend · FastAPI"]
+    %% ===== CỘT 2: API & BACKEND (FASTAPI) =====
+    subgraph BE["⚙️ Backend Layer (FastAPI)"]
         direction TB
-        API["🌐 API Routers<br/>/auth · /applications · /admin · /chat · /credit-score"]
-        Guard["🛂 JWT Auth Middleware"]
-        API --> Guard
-
-        subgraph SVC["📦 Services"]
+        subgraph API_GW["🌐 API Gateway & Auth"]
+            ROUTERS["🌐 API Routers\n/auth · /applications · /admin\n/chat · /credit-score"]
+            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification)"]
+            ROUTERS --> JWT_MW
+        end
+        
+        subgraph SVCS["📦 Business Services"]
             direction TB
-            AUTH_SVC["auth_service"]
-            APP_SVC["application_service"]
-            ADMIN_SVC["admin_service"]
-            ML_SVC["ml_service<br/>(LightGBM risk)"]
-            CS_SVC["credit_score_service<br/>(Scorecard + SHAP)"]
-            CHAT_SVC["chat_service<br/>(RAG + State Machine)"]
-            ADJ_TOOL["loan_adjustment_tool"]
+            SVC_AUTH["auth_service\n(Xử lý Auth/JWT)"]
+            SVC_APP["application_service\n(Quản lý hồ sơ vay)"]
+            SVC_ADMIN["admin_service\n(Duyệt đơn & Thống kê)"]
+            SVC_ML["ml_service\n(LightGBM risk scoring)"]
+            SVC_CS["credit_score_service\n(FICO score & SHAP)"]
+            SVC_CHAT["chat_service\n(Điều phối RAG chat)"]
+            SVC_ADJ["loan_adjustment_tool\n(Giả lập tái cấu trúc)"]
+            
+            %% Service-to-service internal connections
+            SVC_CHAT --> SVC_ADJ
+            SVC_CHAT --> SVC_APP
+            SVC_APP --> SVC_ML
+            SVC_ADJ --> SVC_ML
+        end
+        
+        JWT_MW --> SVC_AUTH
+        JWT_MW --> SVC_APP
+        JWT_MW --> SVC_ADMIN
+        JWT_MW --> SVC_ML
+        JWT_MW --> SVC_CS
+        JWT_MW --> SVC_CHAT
+    end
+
+    CustPortal -->|"REST API"| ROUTERS
+    AdminPanel -->|"REST API"| ROUTERS
+
+    %% ===== CỘT 3: ENGINE MODULES (RAG & ML) =====
+    subgraph ENGINES["⚙️ Core Engine Modules"]
+        direction TB
+        subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
+            direction TB
+            CHAIN["chain.py\n(LCEL RAG Pipeline)"]
+            RETRIEVER["retriever.py\n(Hybrid Search)"]
+            CHAIN --> RETRIEVER
         end
 
-        Guard --> SVC
-        CHAT_SVC --> ADJ_TOOL
-        CHAT_SVC --> APP_SVC
-        APP_SVC --> ML_SVC
+        subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
+            direction TB
+            RISK_M["customer_risk_model.pkl\n(LightGBM model)"]
+            SCORE_M["scorecard_model.pkl\n(FICO Scorecard)"]
+        end
     end
 
-    %% ====== RAG ======
-    subgraph RAG["🤖 RAG Pipeline · backend/rag/"]
+    SVC_CHAT -->|"Orchestrate RAG"| CHAIN
+    SVC_ML -->|"Predict Risk"| RISK_M
+    SVC_CS -->|"Score FICO"| SCORE_M
+    SVC_ADJ -->|"Simulate ML"| RISK_M
+
+    %% ===== CỘT 4: DATA & EXTERNAL INFRA =====
+    subgraph INFRA["💾 Hạ Tầng & Dịch Vụ"]
         direction TB
-        RAG_CHAIN["chain.py · LCEL Pipeline"]
-        RAG_GUARD["guardrails.py · Safety"]
-        RAG_ROUTER["router.py · Intent"]
-        RAG_REWRITE["query_rewriter.py"]
-        RAG_RET["retriever.py · Hybrid Search"]
-        RAG_PERS["personalizer.py"]
-        RAG_MEM["memory.py · Summarization"]
-        RAG_CHUNK["chunking.py · Parent-Child"]
-
-        RAG_CHAIN --> RAG_GUARD
-        RAG_CHAIN --> RAG_ROUTER
-        RAG_CHAIN --> RAG_REWRITE
-        RAG_CHAIN --> RAG_RET
-        RAG_CHAIN --> RAG_PERS
-        RAG_CHAIN --> RAG_MEM
-        RAG_RET --> RAG_CHUNK
+        subgraph STORAGE["💾 Databases"]
+            PG[("🐘 PostgreSQL\n(Users, Loans, Chat)")]
+            QD[("🔷 Qdrant\n(Vector KB)")]
+        end
+        OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
     end
 
-    %% ====== ML ======
-    subgraph ML_MODELS["🧠 ML Models"]
-        LGBM["customer_risk_model.pkl<br/>LightGBM v4"]
-        SCORECARD["scorecard_model.pkl<br/>Logistic Regression"]
-    end
+    %% Kết nối từ Engines và Services đến Infra
+    CHAIN -->|"LLM Queries"| OR
+    RETRIEVER -->|"Vector query"| QD
+    SVC_AUTH -->|"CRUD Users"| PG
+    SVC_APP -->|"CRUD Đơn vay"| PG
+    SVC_ADMIN -->|"Cập nhật & Thống kê"| PG
+    SVC_CS -->|"Đọc đơn vay"| PG
+    CHAIN -->|"Save session"| PG
 
-    %% ====== STORAGE ======
-    subgraph STORAGE["💾 Cơ Sở Dữ Liệu"]
-        DB_PG[("🐘 PostgreSQL<br/>users · applications<br/>chat_messages")]
-        DB_QD[("🔷 Qdrant<br/>Dense + Sparse")]
-        DB_DK[("🦆 DuckDB<br/>Bronze → Silver → Gold")]
-    end
-
-    %% ====== EXTERNAL ======
-    subgraph EXT["☁️ External"]
-        OR["OpenRouter API<br/>Gemini 2.5 Flash<br/>text-embedding-3-small"]
-    end
-
-    %% ====== CONNECTIONS (tạo luồng dọc rõ ràng) ======
-    User -->|Tương tác| FE
-    FE -->|REST API + JWT| API
-    CHAT_SVC --> RAG_CHAIN
-    ML_SVC --> LGBM
-    CS_SVC --> SCORECARD
-    SVC --> DB_PG
-    RAG_MEM --> DB_PG
-    RAG_CHUNK --> DB_QD
-    RAG_RET --> DB_QD
-    RAG_CHAIN --> OR
-    RAG_REWRITE --> OR
-    RAG_MEM --> OR
-
-    %% ====== NODE STYLING ======
+    %% ===== STYLING =====
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
-    classDef frontend fill:#0ea5e9,stroke:#0284c7,color:#fff
-    classDef backend fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef auth fill:#14b8a6,stroke:#0d9488,color:#fff
+    classDef jwt fill:#f97316,stroke:#ea580c,color:#fff
+    classDef cust fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef adm fill:#f97316,stroke:#c2410c,color:#fff
+    classDef be fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef jwt_mw fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef svc fill:#fbbf24,stroke:#d97706,color:#000
     classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
     classDef ml fill:#10b981,stroke:#059669,color:#fff
-    classDef storage fill:#64748b,stroke:#475569,color:#fff
-    classDef external fill:#ec4899,stroke:#db2777,color:#fff
-    classDef token fill:#f97316,stroke:#ea580c,color:#fff,stroke-width:2px
-    classDef guard fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef db fill:#64748b,stroke:#475569,color:#fff
+    classDef ext fill:#ec4899,stroke:#db2777,color:#fff
 
     class User user
-    class PortalC,PortalA frontend
-    class Zustand token
-    class API,AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CS_SVC,CHAT_SVC,ADJ_TOOL backend
-    class Guard guard
-    class RAG_CHAIN,RAG_GUARD,RAG_ROUTER,RAG_REWRITE,RAG_RET,RAG_PERS,RAG_MEM,RAG_CHUNK rag
-    class LGBM,SCORECARD ml
-    class DB_PG,DB_QD,DB_DK storage
-    class OR external
+    class Login auth
+    class JWT jwt
+    class CustPortal cust
+    class AdminPanel adm
+    class ROUTERS be
+    class JWT_MW jwt_mw
+    class SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,SVC_ADJ svc
+    class CHAIN,RETRIEVER rag
+    class RISK_M,SCORE_M ml
+    class PG,QD db
+    class OR ext
 
-    %% ====== SUBGRAPH: viền rõ, nền trong suốt ======
-    style RAG fill:transparent,stroke:#7c3aed,stroke-width:3px
-    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px
-    style FE fill:transparent,stroke:#94a3b8,stroke-width:2px
+    style CLIENT fill:transparent,stroke:#0ea5e9,stroke-width:2px
+    style CustPortal fill:transparent,stroke:#0ea5e9,stroke-width:1px
+    style AdminPanel fill:transparent,stroke:#f97316,stroke-width:1px
     style BE fill:transparent,stroke:#f59e0b,stroke-width:2px
-    style SVC fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
-    style ML_MODELS fill:transparent,stroke:#10b981,stroke-width:2px
-    style EXT fill:transparent,stroke:#ec4899,stroke-width:2px
+    style API_GW fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
+    style SVCS fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
+    style ENGINES fill:transparent,stroke:#8b5cf6,stroke-width:2px
+    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:1.5px
+    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:1.5px
+    style INFRA fill:transparent,stroke:#64748b,stroke-width:2px
+    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:1.5px
 ```
+
+
 
 > **Chú thích kiến trúc tổng quan:**
 > 1. **Giao thức & Phân Quyền**: Người dùng đăng nhập qua JWT Bearer. Token được lưu trữ tại Zustand store ở Frontend và được tự động đính kèm vào header của mọi API request. Backend verify JWT thông qua Middleware kiểm tra vai trò khách hàng (`require_customer`) hoặc quản trị viên (`require_admin`).
@@ -136,60 +147,84 @@ flowchart LR
 
 ---
 
-## Luồng RAG Chatbot Nâng Cao & State Machine
+## Kiến Trúc RAG Pipeline Chi Tiết
 
 Hệ thống RAG của CreditIntel triển khai một pipeline đa giai đoạn cực kỳ bảo mật, chính xác cao và tích hợp sẵn máy trạng thái (state machine) giúp người dùng thực hiện nộp lại hồ sơ thay đổi kỳ hạn trực tiếp từ giao diện chat.
 
 ```mermaid
 flowchart TD
-    UserMsg(["👤 Câu hỏi của User"]) --> InputGuard{"🛂 Input Guardrail<br/>(guardrails.py)"}
-    
-    %% Input Guardrail branch
-    InputGuard -->|Không an toàn| BlockedMsg["❌ Trả lời từ chối<br/>(Lý do bảo mật/độ dài)"]
-    InputGuard -->|An toàn| IntentRoute{"🔀 Intent Router<br/>(router.py)"}
-    
-    %% Intent Router branch
-    IntentRoute -->|Greeting / Off-topic| SkipRetrieval["Bỏ qua tìm kiếm (Skip Retrieval)"]
-    IntentRoute -->|Inquiry / Policy / Risk / Advice| QueryRewrite["🔄 Query Rewriter<br/>(query_rewriter.py)"]
-    
-    %% Retrieval flow
-    QueryRewrite -->|"Tạo câu hỏi độc lập"| HybridSearch[("🔷 Qdrant Hybrid Search<br/>(Dense + Sparse BM25)")]
-    HybridSearch -->|"Top-20 Chunks"| Rerank["⚡ Cross-Encoder Reranker<br/>(reranker.py)"]
-    Rerank -->|"Top-12 Chunks"| ParentExpand["📂 Parent Document Expansion<br/>(chunking.py)"]
-    ParentExpand -->|"Top-4 Parent Sections"| PromptAssemble
-    SkipRetrieval --> PromptAssemble
-    
-    %% Loan Adjustment logic
-    IntentRoute -->|Loan adjustment trigger| AdjCheck{"Kiểm tra máy trạng thái<br/>(pending_action)"}
-    AdjCheck -->|Chưa có proposal + Bị từ chối| RunAdj["🛠️ Loan Adjustment Tool"]
-    RunAdj -->|Tìm thấy phương án| SetPending["Lưu pending_action JSON<br/>Đề xuất điều chỉnh hạn mức/kỳ hạn"]
-    AdjCheck -->|Nhận phản hồi xác nhận| ProcessConfirm["📝 Tự động nộp lại đơn vay mới"]
-    
-    SetPending --> PromptAssemble
-    ProcessConfirm --> UserResponse
-    
-    %% Prompt Assembly and Generation
-    subgraph PromptAssemble["📝 Prompt Assembly"]
-        direction TB
-        SysPrompt["System Prompt + Rules (Vietnamese)"]
-        UserCtx["4-Block User Context (DB: Info, ML, Rec)"]
-        RetContext["Retrieved Docs Context (Knowledge Base)"]
-        ToneCtx["Status-based Tone & Intent instructions"]
-        ConvMem["Conversation Summary + Window History"]
+    UserMsg(["👤 Câu hỏi của User"]) --> InputGuard{"🛂 Input Guardrail"}
+
+    InputGuard -->|Không an toàn| BlockedMsg["❌ Từ chối\n· Bảo mật / Độ dài"]
+    InputGuard -->|An toàn| IntentRoute{"🔀 Intent Router"}
+
+    subgraph RETRIEVAL["🔍 Retrieval Pipeline"]
+        QueryRewrite["🔄 Query Rewriter\nViết lại truy vấn độc lập"]
+        HybridSearch[("🔷 Qdrant Hybrid Search\nDense + Sparse BM25")]
+        Rerank["⚡ Cross-Encoder Reranker\nTop-20 → Top-12"]
+        ParentExpand["📂 Parent Document Expansion\nTop-12 → Top-4 Sections"]
+
+        QueryRewrite --> HybridSearch --> Rerank --> ParentExpand
     end
-    
-    PromptAssemble --> LLMGen["🤖 LLM (Gemini 2.5 Flash)<br/>temperature = 0.3"]
-    LLMGen --> OutputGuard{"🛂 Output Guardrail<br/>(guardrails.py)"}
-    
-    %% Output Guardrail branch
-    OutputGuard -->|Rò rỉ DB/Key| SanitizeLeak["Thay bằng nội dung lỗi an toàn"]
-    OutputGuard -->|Hứa phê duyệt| AppendDisclaimer["Chèn disclaimer cảnh báo Admin"]
-    OutputGuard -->|Đạt chuẩn| SaveMsg["💾 Lưu Q&A & Cập nhật Memory"]
-    
-    SanitizeLeak --> SaveMsg
-    AppendDisclaimer --> SaveMsg
-    
-    SaveMsg --> UserResponse(["👤 Trả lời + Trích dẫn nguồn (Sources)"])
+
+    IntentRoute -->|Inquiry / Policy / Risk| QueryRewrite
+    IntentRoute -->|Greeting / Off-topic| SkipRetrieval["Bỏ qua Retrieval"]
+
+    subgraph LOAN_ADJ["🛠️ Loan Adjustment State Machine"]
+        AdjCheck{"Kiểm tra\npending_action"}
+        RunAdj["Chạy ML simulate\nTìm phương án tối ưu"]
+        SetPending["Lưu pending_action\nĐề xuất kỳ hạn/hạn mức"]
+        ProcessConfirm["📝 Tự động nộp\nđơn vay mới"]
+
+        AdjCheck -->|Chưa có proposal| RunAdj --> SetPending
+        AdjCheck -->|Nhận xác nhận| ProcessConfirm
+    end
+
+    IntentRoute -->|Loan adjustment| AdjCheck
+
+    subgraph PROMPT["📝 Prompt Assembly"]
+        SysPrompt["System Prompt + Rules"]
+        UserCtx["4-Block User Context\n· DB: Info, ML, Rec"]
+        RetContext["Retrieved Docs\n· Knowledge Base"]
+        ToneCtx["Personalization Tone\n· Status-based"]
+        ConvMem["Conversation Summary\n+ Window History"]
+    end
+
+    ParentExpand --> PROMPT
+    SkipRetrieval --> PROMPT
+    SetPending --> PROMPT
+
+    PROMPT --> LLMGen["🤖 LLM Gemini 2.5 Flash\ntemperature = 0.3"]
+    LLMGen --> OutputGuard{"🛂 Output Guardrail"}
+
+    OutputGuard -->|Rò rỉ DB/Key| Sanitize["Thay nội dung an toàn"]
+    OutputGuard -->|Hứa phê duyệt| Disclaimer["Chèn disclaimer"]
+    OutputGuard -->|Đạt chuẩn| SaveMsg["💾 Lưu Q&A + Memory"]
+
+    Sanitize --> SaveMsg
+    Disclaimer --> SaveMsg
+    ProcessConfirm --> UserResponse
+    SaveMsg --> UserResponse(["👤 Trả lời + Sources"])
+
+    %% ===== Node colors =====
+    classDef guard fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef retrieval fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef prompt fill:#0ea5e9,stroke:#0284c7,color:#fff
+    classDef llm fill:#ec4899,stroke:#db2777,color:#fff
+    classDef adj fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef store fill:#64748b,stroke:#475569,color:#fff
+
+    class InputGuard,OutputGuard,BlockedMsg guard
+    class QueryRewrite,HybridSearch,Rerank,ParentExpand,SkipRetrieval,IntentRoute retrieval
+    class SysPrompt,UserCtx,RetContext,ToneCtx,ConvMem prompt
+    class LLMGen llm
+    class AdjCheck,RunAdj,SetPending,ProcessConfirm adj
+    class Sanitize,Disclaimer,SaveMsg,UserResponse store
+
+    %% ===== Subgraph: viền rõ, nền trong suốt =====
+    style RETRIEVAL fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style LOAN_ADJ fill:transparent,stroke:#f59e0b,stroke-width:3px
+    style PROMPT fill:transparent,stroke:#0ea5e9,stroke-width:2px
 ```
 
 ### Các Giai Đoạn Trong RAG Pipeline:
@@ -229,58 +264,57 @@ flowchart TD
 
 ---
 
-## Luồng ETL & Machine Learning
+## Kiến Trúc ETL & Machine Learning
 
 ```mermaid
-graph TB
-    subgraph DATA_SOURCE["📂 Nguồn dữ liệu"]
-        CSV["Home Credit Stability Parquet<br/>train_base.parquet<br/>train_static_0_*.parquet<br/>bureau + previous application"]
-    end
-
-    subgraph ETL_PIPELINE["🔄 ETL Pipeline (machinelearning/etl/)"]
-        direction TB
-        BRONZE["🥉 load_bronze.py<br/>Load Parquet → DuckDB raw tables"]
-        SILVER["🥈 etl_silver.py<br/>Clean + transform<br/>SQL: transform_silver_hcv2.sql"]
-        GOLD["🥇 etl_gold.py<br/>Feature engineering<br/>SQL: transform_gold_hcv2.sql"]
+flowchart TD
+    subgraph SOURCE["📂 Nguồn Dữ Liệu"]
+        CSV["Home Credit Stability\ntrain_base.parquet\nbureau · previous_application"]
     end
 
     CSV --> BRONZE
-    BRONZE -->|"Raw data"| SILVER
-    SILVER -->|"Clean data"| GOLD
 
-    subgraph ML_TRAINING["🧠 ML Training (machinelearning/ml/)"]
-        direction TB
-        VALIDATE["validate_data.py<br/>Kiểm tra chất lượng data"]
-        TRAIN_RISK["retrain_customer_model.py<br/>LightGBM risk prediction"]
-        TRAIN_SCORE["train_scorecard.py<br/>LR credit scorecard"]
+    subgraph ETL["🔄 ETL Pipeline — machinelearning/etl/"]
+        BRONZE["🥉 load_bronze.py\nLoad Parquet → DuckDB raw"]
+        SILVER["🥈 etl_silver.py\nClean + Transform\ntransform_silver_hcv2.sql"]
+        GOLD["🥇 etl_gold.py\nFeature Engineering\ntransform_gold_hcv2.sql"]
+
+        BRONZE -->|Raw data| SILVER -->|Clean data| GOLD
     end
 
     GOLD -->|"gold.hc_features_v2"| VALIDATE
-    VALIDATE --> TRAIN_RISK
-    VALIDATE --> TRAIN_SCORE
 
-    subgraph ARTIFACTS["📦 Model Artifacts"]
-        PKL_RISK["customer_risk_model.pkl<br/>pipeline + thresholds<br/>+ feature_cols"]
-        PKL_SCORE["scorecard_model.pkl<br/>pipeline + thresholds<br/>+ dti_p75"]
+    subgraph TRAINING["🧠 ML Training — machinelearning/ml/"]
+        VALIDATE["validate_data.py\nKiểm tra chất lượng"]
+        TRAIN_RISK["retrain_customer_model.py\nLightGBM · 35 features\nDự đoán rủi ro vỡ nợ"]
+        TRAIN_SCORE["train_scorecard.py\nLogistic Regression\nFICO Scorecard 300–850"]
+
+        VALIDATE --> TRAIN_RISK
+        VALIDATE --> TRAIN_SCORE
     end
 
-    TRAIN_RISK -->|"Xuất model"| PKL_RISK
-    TRAIN_SCORE -->|"Xuất model"| PKL_SCORE
+    TRAIN_RISK -->|Xuất model| PKL_RISK
+    TRAIN_SCORE -->|Xuất model| PKL_SCORE
 
-    subgraph RUNTIME["⚡ Runtime Inference (backend/services/)"]
-        ML_RT["ml_service.py<br/>predict() → risk level + suggestion"]
-        CS_RT["credit_score_service.py<br/>get_credit_score() → FICO score"]
+    subgraph ARTIFACTS["📦 Model Artifacts — .pkl"]
+        PKL_RISK["customer_risk_model.pkl\npipeline + thresholds + feature_cols"]
+        PKL_SCORE["scorecard_model.pkl\npipeline + thresholds + dti_p75"]
     end
 
     PKL_RISK -->|"joblib.load()"| ML_RT
     PKL_SCORE -->|"joblib.load()"| CS_RT
 
-    DUCKDB2[("🦆 DuckDB<br/>machinelearning/data/")]
+    subgraph RUNTIME["⚡ Runtime Inference — backend/services/"]
+        ML_RT["ml_service.py\npredict → risk level + suggestion"]
+        CS_RT["credit_score_service.py\nget_credit_score → FICO"]
+    end
 
-    BRONZE --> DUCKDB2
-    SILVER --> DUCKDB2
-    GOLD --> DUCKDB2
+    DUCKDB[("🦆 DuckDB\nmachinelearning/data/")]
+    BRONZE -.-> DUCKDB
+    SILVER -.-> DUCKDB
+    GOLD -.-> DUCKDB
 
+    %% ===== Node colors =====
     classDef source fill:#f59e0b,stroke:#d97706,color:#fff
     classDef etl fill:#0ea5e9,stroke:#0284c7,color:#fff
     classDef ml fill:#8b5cf6,stroke:#7c3aed,color:#fff
@@ -293,7 +327,14 @@ graph TB
     class VALIDATE,TRAIN_RISK,TRAIN_SCORE ml
     class PKL_RISK,PKL_SCORE artifact
     class ML_RT,CS_RT runtime
-    class DUCKDB2 db
+    class DUCKDB db
+
+    %% ===== Subgraph: viền rõ, nền trong suốt =====
+    style SOURCE fill:transparent,stroke:#d97706,stroke-width:2px
+    style ETL fill:transparent,stroke:#0284c7,stroke-width:3px
+    style TRAINING fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style ARTIFACTS fill:transparent,stroke:#059669,stroke-width:2px
+    style RUNTIME fill:transparent,stroke:#dc2626,stroke-width:2px
 ```
 
 > **Chú thích ETL & ML:**
@@ -302,7 +343,6 @@ graph TB
 > - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ bureau/previous applications/CB queries) → bảng `gold.hc_features_v2`.
 > - **Training**: 2 model được train: LightGBM v4 cho dự đoán rủi ro vỡ nợ (35 feature, không dùng `credit_score` tự khai báo) và Logistic Regression scorecard (30 feature, FICO-style 300–850).
 > - **Runtime**: Backend load model artifacts bằng `joblib` và chạy inference real-time khi khách hàng nộp đơn.
-
 ---
 
 ## Cấu Trúc Dự Án
