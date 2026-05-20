@@ -178,7 +178,7 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
   const handleConfirm = async () => {
     const amt = parseFloat(confirmAmount)
     if (!amt || amt <= 0) { setError('Vui lòng nhập khoản vay hợp lệ'); return }
-    if (amt > maxAmt) { setError(`Khoản vay không được vượt $${maxAmt.toLocaleString()}`); return }
+    if (amt > maxAmt) { setError(`Khoản vay không được vượt hạn mức xét duyệt $${maxAmt.toLocaleString()}`); return }
     if (!TERM_OPTIONS.includes(Number(confirmTerm))) { setError('Kỳ hạn không hợp lệ'); return }
     setError('')
     setSubmitting(true)
@@ -221,7 +221,7 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
               <p className="font-semibold text-gray-800">${Number(originalData?.loan_amount).toLocaleString()} / {originalData?.term}th</p>
             </div>
             <div>
-              <p className="text-gray-500 text-xs mb-0.5">Gợi ý tối đa an toàn</p>
+              <p className="text-gray-500 text-xs mb-0.5">Hạn mức tối đa có thể xét duyệt</p>
               <p className="font-bold text-primary-600">${maxAmt.toLocaleString()}</p>
             </div>
             <div>
@@ -277,7 +277,7 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
           </div>
           {error && <p className="text-xs text-danger-600 mb-3">{error}</p>}
           <p className="text-xs text-gray-400 mb-5">
-            Khoản vay không được vượt ${maxAmt.toLocaleString()} (giới hạn an toàn).
+            Khoản vay không được vượt ${maxAmt.toLocaleString()} (ngưỡng trước khi bị từ chối tự động).
           </p>
 
           {/* Actions */}
