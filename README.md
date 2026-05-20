@@ -1,7 +1,9 @@
 # CreditIntel - Hệ Thống Quản Lý & Đánh Giá Rủi Ro Khoản Vay
 
 > Dự án môn Hệ Quản Trị CSDL - Nhóm KH086  
-> FastAPI Backend + React Frontend + Home Credit Stability ETL + Machine Learn## Kiến Trúc Tổng Quan Hệ Thống
+> FastAPI Backend + React Frontend + Home Credit Stability ETL + Machine Learning
+
+## Kiến Trúc Tổng Quan Hệ Thống
 
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
@@ -116,6 +118,16 @@ graph TB
     class LGBM,SCORECARD ml
     class DB_PG,DB_QD,DB_DK storage
     class OR external
+
+    %% ====== SUBGRAPH STYLING (BORDERS & COLORS) ======
+    style RAG fill:#f3e8ff,stroke:#7c3aed,stroke-width:3px
+    style STORAGE fill:#ecfeff,stroke:#0891b2,stroke-width:3px
+    style FE fill:#f8fafc,stroke:#cbd5e1,stroke-width:1px
+    style BE fill:#fff7ed,stroke:#ffedd5,stroke-width:1px
+    style SVC fill:#fffbeb,stroke:#fef3c7,stroke-width:1px
+    style ML_MODELS fill:#f0fdf4,stroke:#dcfce7,stroke-width:1px
+    style EXT fill:#fdf2f8,stroke:#fce7f3,stroke-width:1px
+```
 ```
 
 > **Chú thích kiến trúc tổng quan:**

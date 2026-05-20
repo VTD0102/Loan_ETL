@@ -10,61 +10,47 @@
 
 Hệ thống RAG (Retrieval-Augmented Generation) của CreditIntel không chỉ dừng lại ở mô hình tìm kiếm-nhận diện thông thường mà đã phát triển thành một **Pipeline xử lý đa giai đoạn** tích hợp các bộ lọc an toàn, phân loại ý định tối ưu, tìm kiếm hỗn hợp (Hybrid Search), tái xếp hạng (Reranking), cá nhân hóa giọng điệu (Personalization) và máy trạng thái hỗ trợ điều chỉnh đơn vay (Loan Adjustment State Machine).
 
-```
-                             Câu hỏi người dùng
-                                     │
-                                     ▼
-                       ┌───────────────────────────┐
-                       │   Input Guardrail Filter  │ (Chặn prompt-injection, PII)
-                       └─────────────┬─────────────┘
-                                     │
-                                     ▼
-                       ┌───────────────────────────┐
-                       │ Intent Routing Classifier │ (Keywords + LLM phân loại)
-                       └──────┬─────────────┬──────┘
-                              │             │
-                    Bỏ qua    │             │ Cần tìm kiếm
-                   retrieval  │             │ tài liệu
-                              │             ▼
-                              │     ┌───────────────┐
-                              │     │Query Rewriter │ (LLM viết lại truy vấn độc lập)
-                              │     └───────┬───────┘
-                              │             │
-                              │             ▼
-                              │     ┌───────────────┐
-                              │     │ Hybrid Search │ (OpenAI Dense + BM25 Sparse)
-                              │     └───────┬───────┘
-                              │             │ (Top 20 chunks)
-                              │             ▼
-                              │     ┌───────────────┐
-                              │     │   Reranker    │ (Cross-Encoder BAAI bge-reranker)
-                              │     └───────┬───────┘
-                              │             │ (Top 12 chunks)
-                              │             ▼
-                              │     ┌───────────────┐
-                              │     │Parent Document│ (Expand child chunks lên parent)
-                              │     │   Retriever   │ (Top 4 parent sections)
-                              │     └───────┬───────┘
-                              │             │
-                              ▼             ▼
-                       ┌───────────────────────────┐
-                       │  Personalizer Generator   │ (Điều chỉnh tone theo trạng thái đơn)
-                       └─────────────┬─────────────┘
-                                     │
-                                     ▼
-                       ┌───────────────────────────┐
-                       │     LLM OpenRouter        │ (Gemini 2.5 Flash Generation)
-                       └─────────────┬─────────────┘
-                                     │
-                                     ▼
-                       ┌───────────────────────────┐
-                       │  Output Guardrail Filter  │ (Quét rò rỉ DB/Key, chèn disclaimer)
-                       └─────────────┬─────────────┘
-                                     │
-                                     ▼
-                        Phản hồi + Trích dẫn nguồn
-                         Lưu DB chat_messages & 
-                       Cập nhật Memory Summarization
+```mermaid
+flowchart TD
+    User([👤 Câu hỏi của User]) --> IG{"Control Layer<br/>🛂 Input Guardrail"}
+    
+    subgraph RAG_BLOCK["🤖 HỆ THỐNG RAG (Core Processing)"]
+        IG -->|An toàn| IR{"🔀 Intent Router"}
+        IR -->|Cần tìm kiếm| QR["🔄 Query Rewriter"]
+        QR --> HS["🔍 Hybrid Search (Dense + Sparse)"]
+        HS --> RR["⚡ Cross-Encoder Reranker"]
+        RR --> PD["📄 Parent Document Retriever"]
+        PD --> PS["🎨 Personalizer (Tone Adjustment)"]
+        PS --> LLM["🤖 LLM Generation (Gemini 2.5)"]
+    end
+    
+    subgraph STORAGE_BLOCK["💾 TẦNG LƯU TRỮ (Storage Layer)"]
+        DB_QD[("🔷 Qdrant Vector DB<br/>(Child Chunks)")]
+        DB_PG[("🐘 PostgreSQL DB<br/>(Chat Messages & Sessions)")]
+    end
+
+    %% Tương tác với tầng lưu trữ
+    HS -.->|Truy vấn vector| DB_QD
+    LLM -.->|Lưu tin nhắn & Memory| DB_PG
+    IR -->|Greeting / Off-topic| Skip["Bỏ qua tìm kiếm (Skip Retrieval)"]
+    Skip --> PS
+    
+    LLM --> OG{"Control Layer<br/>🚷 Output Guardrail"}
+    IG -->|Không an toàn| Reject["❌ Trả lời từ chối"]
+    OG --> Response([💬 Phản hồi + Nguồn trích dẫn])
+    
+    %% ====== SUBGRAPH STYLING (BORDERS & COLORS) ======
+    style RAG_BLOCK fill:#f3e8ff,stroke:#7c3aed,stroke-width:3px
+    style STORAGE_BLOCK fill:#ecfeff,stroke:#0891b2,stroke-width:3px
+    
+    %% ====== NODE STYLING ======
+    classDef control fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    classDef ragNode fill:#f9f5ff,stroke:#7c3aed,color:#5b21b6
+    classDef storageNode fill:#e6fffa,stroke:#00a3c4,color:#004f5e
+    
+    class IG,OG control
+    class IR,QR,HS,RR,PD,PS,LLM,Skip,Reject,Response ragNode
+    class DB_QD,DB_PG storageNode
 ```
 
 **Các thông số kỹ thuật cốt lõi:**
