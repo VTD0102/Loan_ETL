@@ -8,97 +8,96 @@
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
-graph TB
-    %% ====== USER & FRONTEND ======
-    User(("👤 Người dùng")) -->|"Tương tác"| FE
-    
-    subgraph FE["🖥️ Giao diện (React 18 + Vite + Tailwind)"]
+flowchart LR
+    %% ====== USER ======
+    User((👤 Người dùng))
+
+    %% ====== FRONTEND ======
+    subgraph FE["🖥️ Frontend · React 18 + Vite + Tailwind"]
         direction TB
         PortalC["📋 Customer Portal<br/>(Apply, Dashboard, Chat AI)"]
-        PortalA["🛡️ Admin Portal<br/>(Review, Stats Dashboard)"]
-        Zustand["🔑 Zustand authStore<br/>(JWT Token)"]
+        PortalA["🛡️ Admin Portal<br/>(Review, Stats)"]
+        Zustand["🔑 Zustand authStore · JWT"]
     end
-    
-    FE -->|"REST API + Bearer JWT"| API
-    
-    %% ====== BACKEND FASTAPI ======
-    subgraph BE["⚙️ Xử lý (FastAPI Backend)"]
+
+    %% ====== BACKEND ======
+    subgraph BE["⚙️ Backend · FastAPI"]
         direction TB
-        API["🌐 API Routers<br/>/auth · /applications · /admin<br/>/chat · /credit-score"]
-        Guard["🛂 JWT Auth Middleware<br/>(require_customer / require_admin)"]
-        
+        API["🌐 API Routers<br/>/auth · /applications · /admin · /chat · /credit-score"]
+        Guard["🛂 JWT Auth Middleware"]
         API --> Guard
-        
-        subgraph SVC["📦 Business Logic Services (backend/services/)"]
-            AUTH_SVC["auth_service<br/>(JWT + Bcrypt)"]
-            APP_SVC["application_service<br/>(CRUD đơn vay)"]
-            ADMIN_SVC["admin_service<br/>(Admin duyệt/từ chối)"]
-            ML_SVC["ml_service<br/>(Dự đoán rủi ro LightGBM)"]
-            CS_SVC["credit_score_service<br/>(Scorecard LR + SHAP)"]
-            CHAT_SVC["chat_service<br/>(Điều phối Chat + State Machine)"]
-            ADJ_TOOL["loan_adjustment_tool<br/>(Mô phỏng đổi kỳ hạn/tiền)"]
+
+        subgraph SVC["📦 Services"]
+            direction TB
+            AUTH_SVC["auth_service"]
+            APP_SVC["application_service"]
+            ADMIN_SVC["admin_service"]
+            ML_SVC["ml_service<br/>(LightGBM risk)"]
+            CS_SVC["credit_score_service<br/>(Scorecard + SHAP)"]
+            CHAT_SVC["chat_service<br/>(RAG + State Machine)"]
+            ADJ_TOOL["loan_adjustment_tool"]
         end
-        
-        Guard -->|"Xác thực & phân quyền"| SVC
+
+        Guard --> SVC
         CHAT_SVC --> ADJ_TOOL
         CHAT_SVC --> APP_SVC
         APP_SVC --> ML_SVC
     end
-    
-    %% ====== RAG MODULE ======
-    subgraph RAG["🤖 Hệ thống RAG Nâng Cao (backend/rag/)"]
+
+    %% ====== RAG ======
+    subgraph RAG["🤖 RAG Pipeline · backend/rag/"]
         direction TB
-        RAG_CHAIN["chain.py<br/>(LCEL Pipeline)"]
-        RAG_GUARD["guardrails.py<br/>(Input & Output Safety)"]
-        RAG_ROUTER["router.py<br/>(Intent Classification)"]
-        RAG_REWRITE["query_rewriter.py<br/>(LLM Query Rewriter)"]
-        RAG_RET["retriever.py<br/>(Hybrid Search + Reranker)"]
-        RAG_PERS["personalizer.py<br/>(Status-based Personalization)"]
-        RAG_MEM["memory.py<br/>(Window + Summarization)"]
-        RAG_CHUNK["chunking.py / ingest.py<br/>(Parent-Child Chunking)"]
+        RAG_CHAIN["chain.py · LCEL Pipeline"]
+        RAG_GUARD["guardrails.py · Safety"]
+        RAG_ROUTER["router.py · Intent"]
+        RAG_REWRITE["query_rewriter.py"]
+        RAG_RET["retriever.py · Hybrid Search"]
+        RAG_PERS["personalizer.py"]
+        RAG_MEM["memory.py · Summarization"]
+        RAG_CHUNK["chunking.py · Parent-Child"]
+
+        RAG_CHAIN --> RAG_GUARD
+        RAG_CHAIN --> RAG_ROUTER
+        RAG_CHAIN --> RAG_REWRITE
+        RAG_CHAIN --> RAG_RET
+        RAG_CHAIN --> RAG_PERS
+        RAG_CHAIN --> RAG_MEM
+        RAG_RET --> RAG_CHUNK
     end
-    
-    CHAT_SVC --> RAG_CHAIN
-    RAG_CHAIN --> RAG_GUARD
-    RAG_CHAIN --> RAG_ROUTER
-    RAG_CHAIN --> RAG_REWRITE
-    RAG_CHAIN --> RAG_RET
-    RAG_CHAIN --> RAG_PERS
-    RAG_CHAIN --> RAG_MEM
-    RAG_RET --> RAG_CHUNK
-    
-    %% ====== ML TRAINING ======
-    subgraph ML_MODELS["🧠 ML Models (machinelearning/ml/)"]
-        LGBM["customer_risk_model.pkl<br/>(LightGBM v4 - Default risk)"]
-        SCORECARD["scorecard_model.pkl<br/>(Logistic Regression Scorecard)"]
+
+    %% ====== ML ======
+    subgraph ML_MODELS["🧠 ML Models"]
+        LGBM["customer_risk_model.pkl<br/>LightGBM v4"]
+        SCORECARD["scorecard_model.pkl<br/>Logistic Regression"]
     end
-    
-    ML_SVC --> LGBM
-    CS_SVC --> SCORECARD
 
     %% ====== STORAGE ======
     subgraph STORAGE["💾 Cơ Sở Dữ Liệu"]
-        DB_PG[("🐘 PostgreSQL / Supabase<br/>(users, applications, chat_messages, ...)")]
-        DB_QD[("🔷 Qdrant Vector DB<br/>(Collection: creditintel-kb<br/>Dense + Sparse indices)")]
-        DB_DK[("🦆 DuckDB Local<br/>(Bronze → Silver → Gold ETL)")]
+        DB_PG[("🐘 PostgreSQL<br/>users · applications<br/>chat_messages")]
+        DB_QD[("🔷 Qdrant<br/>Dense + Sparse")]
+        DB_DK[("🦆 DuckDB<br/>Bronze → Silver → Gold")]
     end
-    
+
+    %% ====== EXTERNAL ======
+    subgraph EXT["☁️ External"]
+        OR["OpenRouter API<br/>Gemini 2.5 Flash<br/>text-embedding-3-small"]
+    end
+
+    %% ====== CONNECTIONS (tạo luồng dọc rõ ràng) ======
+    User -->|Tương tác| FE
+    FE -->|REST API + JWT| API
+    CHAT_SVC --> RAG_CHAIN
+    ML_SVC --> LGBM
+    CS_SVC --> SCORECARD
     SVC --> DB_PG
     RAG_MEM --> DB_PG
     RAG_CHUNK --> DB_QD
     RAG_RET --> DB_QD
-    
-    %% ====== EXTERNAL ======
-    subgraph EXT["☁️ Dịch Vụ Bên Ngoài"]
-        OR["OpenRouter API<br/>(LLM: gemini-2.5-flash<br/>Embed: text-embedding-3-small)"]
-    end
-    
     RAG_CHAIN --> OR
     RAG_REWRITE --> OR
     RAG_MEM --> OR
-    RAG_RET --> OR
 
-    %% ====== STYLING ======
+    %% ====== NODE STYLING ======
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
     classDef frontend fill:#0ea5e9,stroke:#0284c7,color:#fff
     classDef backend fill:#f59e0b,stroke:#d97706,color:#fff
@@ -119,9 +118,9 @@ graph TB
     class DB_PG,DB_QD,DB_DK storage
     class OR external
 
-    %% ====== SUBGRAPH STYLING (BORDERS ONLY, TRANSPARENT BG) ======
-    style RAG fill:transparent,stroke:#7c3aed,stroke-width:3px,stroke-dasharray:0
-    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px,stroke-dasharray:0
+    %% ====== SUBGRAPH: viền rõ, nền trong suốt ======
+    style RAG fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:3px
     style FE fill:transparent,stroke:#94a3b8,stroke-width:2px
     style BE fill:transparent,stroke:#f59e0b,stroke-width:2px
     style SVC fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
