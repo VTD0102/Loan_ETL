@@ -5,18 +5,43 @@ import { toast } from 'react-toastify'
 import { getApplicationById, submitPersonalInfo, uploadDocuments } from '../../../services/applications'
 import Modal from '../../../components/common/Modal'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import useAuthStore from '../../../store/authStore'
 
 const ACCEPTED = '.pdf,.doc,.docx,.jpg,.jpeg,.png'
 const MAX_MB   = 10
 
+const BANK_OPTIONS = [
+  'Vietcombank',
+  'BIDV',
+  'VietinBank',
+  'Techcombank',
+  'MB Bank',
+  'ACB',
+  'Sacombank',
+  'VPBank',
+  'TPBank',
+  'Agribank',
+  'Khác',
+]
+
+const BRANCH_OPTIONS = [
+  'Chi nhánh Trung tâm - TP.HCM',
+  'Chi nhánh Hoàng Kiếm - Hà Nội',
+  'Chi nhánh Hải Châu - Đà Nẵng',
+  'Chi nhánh Ninh Kiều - Cần Thơ',
+  'Chi nhánh Thủ Đức - TP.HCM',
+]
+
 const SubmitPersonalInfoPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
+  const user     = useAuthStore(s => s.user)
 
   const [appLoading, setAppLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [done,       setDone]       = useState(false)
   const [files,      setFiles]      = useState([])
+  const [disbursementMethod, setDisbursementMethod] = useState('bank') // 'bank' | 'cash'
   const fileInputRef = useRef(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm()
@@ -59,21 +84,25 @@ const SubmitPersonalInfoPage = () => {
   const onSubmit = async (data) => {
     setSubmitting(true)
     try {
-      // Bước 1: nộp thông tin cá nhân + số tài khoản
+      const bankInfo = disbursementMethod === 'bank'
+        ? `${data.bank_name} - ${data.bank_account_number}`
+        : `Tiền mặt - ${data.branch}`
+
+      // Backend still needs full personal_info — auto-fill from user registration
       await submitPersonalInfo(id, {
-        full_name:           data.full_name,
-        id_card_number:      data.id_card_number,
-        phone:               data.phone,
-        email:               data.email,
-        date_of_birth:       data.date_of_birth,
-        address:             data.address,
-        bank_account_number: data.bank_account_number,
+        full_name:           user?.full_name || user?.username || 'N/A',
+        id_card_number:      user?.cccd || '000000000000',
+        phone:               user?.phone || '0000000000',
+        email:               user?.email || 'n/a@example.com',
+        date_of_birth:       '1990-01-01',  // Placeholder — already on record
+        address:             user?.address || 'N/A',
+        bank_account_number: bankInfo,
       })
 
-      // Bước 2: tải lên tài liệu nếu có
+      // Upload documents if any
       if (files.length > 0) {
         const form = new FormData()
-        form.append('bank_account_number', data.bank_account_number)
+        form.append('bank_account_number', bankInfo)
         files.forEach(f => form.append('files', f))
         await uploadDocuments(id, form)
       }
@@ -104,94 +133,107 @@ const SubmitPersonalInfoPage = () => {
         </button>
 
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Nộp thông tin cá nhân</h1>
-          <p className="text-gray-500 mt-1 text-sm">Thông tin được mã hoá và bảo mật theo tiêu chuẩn ngân hàng.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Thông tin nhận giải ngân</h1>
+          <p className="text-gray-500 mt-1 text-sm">Đơn vay đã được duyệt! Vui lòng chọn phương thức nhận tiền.</p>
         </div>
 
-        <div className="bg-success-50 border border-success-200 rounded-xl p-4 mb-6">
-          <p className="text-sm font-medium text-success-800">
-            Đơn vay #{id} đã được duyệt! Vui lòng điền thông tin bên dưới để hoàn tất.
-          </p>
+        {/* Auto-filled Personal Info Preview */}
+        <div className="card p-5 mb-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Thông tin cá nhân (đã đăng ký)</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-0.5">Họ tên</p>
+              <p className="font-medium text-gray-800">{user?.full_name || user?.username || '—'}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-0.5">CCCD</p>
+              <p className="font-medium text-gray-800">{user?.cccd || '—'}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-0.5">Điện thoại</p>
+              <p className="font-medium text-gray-800">{user?.phone || '—'}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-0.5">Email</p>
+              <p className="font-medium text-gray-800">{user?.email || '—'}</p>
+            </div>
+          </div>
         </div>
 
         <div className="card p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
 
-            {/* Họ tên */}
+            {/* Phương thức nhận tiền */}
             <div>
-              <label className="label">Họ và tên đầy đủ</label>
-              <input type="text" placeholder="Nguyễn Văn A"
-                className={`input ${errors.full_name ? 'input-error' : ''}`}
-                {...register('full_name', { required: 'Bắt buộc' })} />
-              {errors.full_name && <p className="error-msg">{errors.full_name.message}</p>}
-            </div>
-
-            {/* CCCD + SĐT */}
-            <div className="grid sm:grid-cols-2 gap-5">
-              <div>
-                <label className="label">Số CCCD / CMND</label>
-                <input type="text" placeholder="012345678901"
-                  className={`input ${errors.id_card_number ? 'input-error' : ''}`}
-                  {...register('id_card_number', {
-                    required: 'Bắt buộc',
-                    pattern: { value: /^\d{9,12}$/, message: 'CCCD phải có 9–12 chữ số' },
-                  })} />
-                {errors.id_card_number && <p className="error-msg">{errors.id_card_number.message}</p>}
-              </div>
-              <div>
-                <label className="label">Số điện thoại</label>
-                <input type="tel" placeholder="0912345678"
-                  className={`input ${errors.phone ? 'input-error' : ''}`}
-                  {...register('phone', {
-                    required: 'Bắt buộc',
-                    pattern: { value: /^[0-9+\-\s]{9,15}$/, message: 'Số điện thoại không hợp lệ' },
-                  })} />
-                {errors.phone && <p className="error-msg">{errors.phone.message}</p>}
+              <label className="label mb-3">Phương thức nhận tiền</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button"
+                  onClick={() => setDisbursementMethod('bank')}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    disbursementMethod === 'bank'
+                      ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className="font-semibold text-gray-900 text-sm">🏦 Chuyển khoản</p>
+                  <p className="text-xs text-gray-500 mt-1">Nhận tiền qua tài khoản ngân hàng</p>
+                </button>
+                <button type="button"
+                  onClick={() => setDisbursementMethod('cash')}
+                  className={`p-4 rounded-xl border-2 text-left transition-all ${
+                    disbursementMethod === 'cash'
+                      ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className="font-semibold text-gray-900 text-sm">💵 Tiền mặt</p>
+                  <p className="text-xs text-gray-500 mt-1">Nhận tại chi nhánh CreditIntel</p>
+                </button>
               </div>
             </div>
 
-            {/* Email + Ngày sinh */}
-            <div className="grid sm:grid-cols-2 gap-5">
-              <div>
-                <label className="label">Email</label>
-                <input type="email" placeholder="you@example.com"
-                  className={`input ${errors.email ? 'input-error' : ''}`}
-                  {...register('email', {
-                    required: 'Bắt buộc',
-                    pattern: { value: /^\S+@\S+\.\S+$/, message: 'Email không hợp lệ' },
-                  })} />
-                {errors.email && <p className="error-msg">{errors.email.message}</p>}
-              </div>
-              <div>
-                <label className="label">Ngày sinh</label>
-                <input type="date"
-                  className={`input ${errors.date_of_birth ? 'input-error' : ''}`}
-                  max={new Date().toISOString().split('T')[0]}
-                  {...register('date_of_birth', { required: 'Bắt buộc' })} />
-                {errors.date_of_birth && <p className="error-msg">{errors.date_of_birth.message}</p>}
-              </div>
-            </div>
+            {/* Bank fields */}
+            {disbursementMethod === 'bank' && (
+              <>
+                <div>
+                  <label className="label">Ngân hàng</label>
+                  <select
+                    className={`input ${errors.bank_name ? 'input-error' : ''}`}
+                    {...register('bank_name', { required: disbursementMethod === 'bank' ? 'Bắt buộc' : false })}
+                  >
+                    <option value="">Chọn ngân hàng</option>
+                    {BANK_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  {errors.bank_name && <p className="error-msg">{errors.bank_name.message}</p>}
+                </div>
 
-            {/* Địa chỉ */}
-            <div>
-              <label className="label">Địa chỉ thường trú</label>
-              <textarea rows={3} placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố"
-                className={`input resize-none ${errors.address ? 'input-error' : ''}`}
-                {...register('address', { required: 'Bắt buộc', minLength: { value: 10, message: 'Địa chỉ quá ngắn' } })} />
-              {errors.address && <p className="error-msg">{errors.address.message}</p>}
-            </div>
+                <div>
+                  <label className="label">Số tài khoản</label>
+                  <input type="text" placeholder="Nhập số tài khoản nhận giải ngân"
+                    className={`input ${errors.bank_account_number ? 'input-error' : ''}`}
+                    {...register('bank_account_number', {
+                      required: disbursementMethod === 'bank' ? 'Bắt buộc' : false,
+                      pattern: { value: /^\d{6,20}$/, message: 'Số tài khoản phải có 6–20 chữ số' },
+                    })} />
+                  {errors.bank_account_number && <p className="error-msg">{errors.bank_account_number.message}</p>}
+                </div>
+              </>
+            )}
 
-            {/* Số tài khoản ngân hàng */}
-            <div>
-              <label className="label">Số tài khoản ngân hàng</label>
-              <input type="text" placeholder="Nhập số tài khoản nhận giải ngân"
-                className={`input ${errors.bank_account_number ? 'input-error' : ''}`}
-                {...register('bank_account_number', {
-                  required: 'Bắt buộc',
-                  pattern: { value: /^\d{6,20}$/, message: 'Số tài khoản phải có 6–20 chữ số' },
-                })} />
-              {errors.bank_account_number && <p className="error-msg">{errors.bank_account_number.message}</p>}
-            </div>
+            {/* Cash fields */}
+            {disbursementMethod === 'cash' && (
+              <div>
+                <label className="label">Chọn chi nhánh nhận tiền</label>
+                <select
+                  className={`input ${errors.branch ? 'input-error' : ''}`}
+                  {...register('branch', { required: disbursementMethod === 'cash' ? 'Bắt buộc' : false })}
+                >
+                  <option value="">Chọn chi nhánh</option>
+                  {BRANCH_OPTIONS.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+                {errors.branch && <p className="error-msg">{errors.branch.message}</p>}
+              </div>
+            )}
 
             {/* Tải lên tài liệu */}
             <div>
@@ -200,7 +242,7 @@ const SubmitPersonalInfoPage = () => {
                 <span className="text-gray-400 font-normal ml-1">(tuỳ chọn)</span>
               </label>
               <p className="text-xs text-gray-400 mb-2">
-                PDF, DOC, DOCX, JPG, PNG — tối đa {MAX_MB} MB mỗi file. Ví dụ: sao kê lương, hợp đồng lao động, sổ hồng.
+                PDF, DOC, DOCX, JPG, PNG — tối đa {MAX_MB} MB mỗi file.
               </p>
 
               <button type="button"
@@ -236,7 +278,7 @@ const SubmitPersonalInfoPage = () => {
 
             <button type="submit" disabled={submitting} className="btn-primary w-full py-3 text-base mt-2">
               {submitting && <LoadingSpinner size="sm" className="mr-2" />}
-              {submitting ? 'Đang nộp...' : 'Nộp thông tin'}
+              {submitting ? 'Đang nộp...' : 'Xác nhận thông tin nhận tiền'}
             </button>
           </form>
         </div>
@@ -251,7 +293,7 @@ const SubmitPersonalInfoPage = () => {
             </svg>
           </div>
           <p className="text-gray-600 text-sm mb-6">
-            Thông tin cá nhân đã được ghi nhận. Chúng tôi sẽ xử lý và liên hệ với bạn qua email trong thời gian sớm nhất.
+            Thông tin nhận tiền đã được ghi nhận. Hệ thống sẽ xử lý giải ngân và thông báo qua email khi hoàn tất.
           </p>
           <button onClick={() => navigate(`/application/${id}`)} className="btn-primary w-full">
             Xem chi tiết đơn vay

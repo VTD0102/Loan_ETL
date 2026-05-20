@@ -19,6 +19,7 @@ export const STATUS_META = {
   INFO_SUBMITTED: { label: 'Đã nộp thông tin',  color: 'primary', bg: 'bg-primary-50', text: 'text-primary-700', border: 'border-primary-200' },
   APPROVED:       { label: 'Đã duyệt',         color: 'success', bg: 'bg-success-50', text: 'text-success-700', border: 'border-success-200' },
   REJECTED:       { label: 'Đã từ chối',       color: 'danger',  bg: 'bg-danger-50',  text: 'text-danger-700',  border: 'border-danger-200'  },
+  DISBURSED:      { label: 'Đã giải ngân',     color: 'success', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
 }
 
 export const RISK_META = {

@@ -64,12 +64,19 @@ def build_model_input(
     if not isinstance(defaults, dict):
         defaults = {}
 
-    dti            = _ratio(payload.dti)
     monthly_income = _number(payload.monthly_income)
     loan_amount    = _number(payload.loan_amount)
     term           = int(payload.term)
+    cic_monthly    = _number(getattr(payload, "cic_monthly_installment", None))
     payment_to_income = (
         (loan_amount / term) / monthly_income
+        if monthly_income > 0 and term > 0
+        else 0.0
+    )
+    # DTI includes existing CIC debt so the model sees total repayment burden.
+    # cic_monthly is constant across binary-search probes; only loan_amount changes.
+    dti = (
+        (loan_amount / term + cic_monthly) / monthly_income
         if monthly_income > 0 and term > 0
         else 0.0
     )

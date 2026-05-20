@@ -14,6 +14,15 @@ _COLUMN_MIGRATIONS = [
     # CIC integration: CCCD on users
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS cccd VARCHAR(12) UNIQUE",
     "ALTER TABLE loan_applications ALTER COLUMN credit_score DROP NOT NULL",
+    # Phase E: personal info on users
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(15)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR",
+    # Phase E: disbursement & contract
+    "ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS disbursed_at TIMESTAMP",
+    "ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS contract_text TEXT",
+    # Phase E: make DTI nullable
+    "ALTER TABLE loan_applications ALTER COLUMN dti DROP NOT NULL",
 ]
 
 # Idempotent index migrations — prevent race-condition duplicates
