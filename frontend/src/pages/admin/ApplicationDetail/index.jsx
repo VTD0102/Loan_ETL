@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getAdminApplicationById, getAdminApplicationCreditScore } from '../../../services/admin'
+import { getAdminApplicationById, getAdminApplicationCreditScore, disburseApplication } from '../../../services/admin'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import MLResultsDisplay from '../../../components/admin/MLResultsDisplay'
@@ -8,6 +8,7 @@ import ApproveRejectButtons from '../../../components/admin/ApproveRejectButtons
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import CreditScorePanel from '../../../components/common/CreditScorePanel'
 import { formatCurrency, formatDateTime } from '../../../utils/format'
+import { toast } from 'react-toastify'
 
 /* ── Shared sub-components ──────────────────────── */
 
@@ -29,6 +30,44 @@ const InfoGrid = ({ items }) => (
   </div>
 )
 
+/* ── Contract Modal ─────────────────────────────── */
+const ContractModal = ({ open, contractHtml, onClose }) => {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">📋 Hợp đồng vay vốn</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const printWindow = window.open('', '_blank')
+                printWindow.document.write(`<html><head><title>Hợp đồng vay vốn</title></head><body>${contractHtml}</body></html>`)
+                printWindow.document.close()
+                printWindow.print()
+              }}
+              className="btn-outline text-sm px-3 py-1.5 flex items-center gap-1.5"
+            >
+              🖨️ In
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6">
+          <div dangerouslySetInnerHTML={{ __html: contractHtml }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ── Main Page ──────────────────────────────────── */
 
 const AdminApplicationDetailPage = () => {
@@ -38,6 +77,8 @@ const AdminApplicationDetailPage = () => {
   const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+  const [disbursing, setDisbursing] = useState(false)
+  const [contractOpen, setContractOpen] = useState(false)
 
   const fetchApp = useCallback(async () => {
     setLoading(true)
@@ -62,6 +103,20 @@ const AdminApplicationDetailPage = () => {
 
   /* After approve/reject: refresh data */
   const handleActionSuccess = () => fetchApp()
+
+  const handleDisburse = async () => {
+    if (!confirm('Xác nhận giải ngân khoản vay này? Hệ thống sẽ tự động tạo hợp đồng.')) return
+    setDisbursing(true)
+    try {
+      await disburseApplication(id)
+      toast.success('Giải ngân thành công! Hợp đồng đã được tạo.')
+      fetchApp()
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Giải ngân thất bại.')
+    } finally {
+      setDisbursing(false)
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -90,7 +145,7 @@ const AdminApplicationDetailPage = () => {
     { label: 'Số tiền vay',         value: formatCurrency(app.loan_amount) },
     { label: 'Kỳ hạn',             value: `${app.term} tháng` },
     { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income) },
-    { label: 'DTI',                 value: app.dti != null ? `${app.dti}%` : '—' },
+    { label: 'DTI',                 value: app.dti != null ? `${(Number(app.dti) * 100).toFixed(1)}%` : '—' },
     { label: 'Tình trạng việc làm', value: app.employment_status },
     { label: 'Loại thu nhập',      value: app.occupation_type ?? '—' },
     { label: 'Năm kinh nghiệm',    value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
@@ -107,6 +162,7 @@ const AdminApplicationDetailPage = () => {
   const bureauInfo = [
     { label: 'Số hồ sơ tín dụng',  value: app.num_bureau_records ?? '—' },
     { label: 'Tín dụng đang hoạt động', value: app.num_active_credit ?? '—' },
+    { label: 'Tổng dư nợ CIC',     value: app.feature_snapshot?.cic_outstanding_debt != null ? formatCurrency(app.feature_snapshot.cic_outstanding_debt) : '—' },
     { label: 'Tổng nợ quá hạn',    value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
     { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
     { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
@@ -148,18 +204,18 @@ const AdminApplicationDetailPage = () => {
           {/* 1. Thông tin khách hàng */}
           <SectionCard title="Thông tin khách hàng">
             <InfoGrid items={customerInfo} />
-            {app.status === 'INFO_SUBMITTED' && (
+            {(app.status === 'INFO_SUBMITTED' || app.status === 'DISBURSED') && app.personal_info && (
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <button
-                  onClick={() => navigate(`/admin/personal-info/${app.id}`)}
-                  className="btn-primary text-sm flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Xem thông tin cá nhân
-                </button>
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Thông tin bổ sung</h4>
+                <InfoGrid items={[
+                  { label: 'Họ tên', value: app.personal_info.full_name },
+                  { label: 'CCCD', value: app.personal_info.id_card_number },
+                  { label: 'Điện thoại', value: app.personal_info.phone },
+                  { label: 'Email', value: app.personal_info.email },
+                  { label: 'Ngày sinh', value: app.personal_info.date_of_birth },
+                  { label: 'Địa chỉ', value: app.personal_info.address },
+                  { label: 'Số tài khoản NH', value: app.personal_info.bank_account_number || '—' },
+                ]} />
               </div>
             )}
           </SectionCard>
@@ -174,8 +230,8 @@ const AdminApplicationDetailPage = () => {
             <InfoGrid items={demographicInfo} />
           </SectionCard>
 
-          {/* 4. Lịch sử tín dụng */}
-          <SectionCard title="Lịch sử tín dụng (Bureau)">
+          {/* 4. Lịch sử tín dụng / CIC */}
+          <SectionCard title="Lịch sử tín dụng (CIC)">
             {isCicApplied && (
               <div className="mb-4 p-3 bg-success-50 border border-success-200 rounded-lg flex items-center gap-3">
                 <svg className="w-5 h-5 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -188,6 +244,29 @@ const AdminApplicationDetailPage = () => {
               </div>
             )}
             <InfoGrid items={bureauInfo} />
+            {app.feature_snapshot?.cic_outstanding_debt != null && (
+              <p className="text-[10px] text-gray-400 mt-2">
+                ¹ Tổng dư nợ CIC là số liệu từ hệ thống CIC <strong>trước khi</strong> nộp đơn vay này (chưa tính khoản vay đang chờ duyệt).
+              </p>
+            )}
+            {/* DTI bar */}
+            {app.dti != null && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-medium text-gray-600">DTI (nợ/thu nhập)</p>
+                  <p className={`text-sm font-bold ${Number(app.dti) > 0.4 ? 'text-danger-600' : Number(app.dti) > 0.25 ? 'text-warning-600' : 'text-success-600'}`}>
+                    {(Number(app.dti) * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full ${Number(app.dti) > 0.4 ? 'bg-danger-500' : Number(app.dti) > 0.25 ? 'bg-warning-500' : 'bg-success-500'}`}
+                    style={{ width: `${Math.min(Number(app.dti) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">= (trả góp hàng tháng + nợ CIC) ÷ thu nhập. &lt;25% tốt · 25-40% chấp nhận · &gt;40% rủi ro cao</p>
+              </div>
+            )}
           </SectionCard>
 
           {/* 5. Kết quả ML */}
@@ -203,13 +282,52 @@ const AdminApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {/* 6. Actions — chỉ hiện khi PENDING_REVIEW */}
+          {/* 6. Actions — Duyệt (PENDING_REVIEW) */}
           {app.status === 'PENDING_REVIEW' && (
             <SectionCard title="Hành động xét duyệt">
               <p className="text-sm text-gray-500 mb-4">
                 Xem xét hồ sơ và đưa ra quyết định. Hành động này không thể hoàn tác.
               </p>
               <ApproveRejectButtons appId={app.id} onSuccess={handleActionSuccess} />
+            </SectionCard>
+          )}
+
+          {/* 6b. Actions — Giải ngân (INFO_SUBMITTED) */}
+          {app.status === 'INFO_SUBMITTED' && (
+            <SectionCard title="Xác nhận giải ngân">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                <p className="text-sm font-semibold text-amber-800 mb-1">⚠️ Khách hàng đã bổ sung thông tin ngân hàng</p>
+                <p className="text-xs text-amber-700">
+                  Vui lòng kiểm tra thông tin cá nhân và tài khoản nhận tiền ở trên trước khi xác nhận giải ngân.
+                  Hệ thống sẽ tự động tạo Hợp đồng vay vốn.
+                </p>
+              </div>
+              <button
+                onClick={handleDisburse}
+                disabled={disbursing}
+                className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2"
+              >
+                {disbursing && <LoadingSpinner size="sm" />}
+                {disbursing ? 'Đang xử lý...' : '✅ Xác nhận giải ngân'}
+              </button>
+            </SectionCard>
+          )}
+
+          {/* 6c. Hợp đồng — hiển thị khi đã giải ngân */}
+          {app.status === 'DISBURSED' && app.contract_text && (
+            <SectionCard title="Hợp đồng vay vốn">
+              <div className="bg-success-50 border border-success-200 rounded-lg p-4 mb-4">
+                <p className="text-sm font-semibold text-success-800 mb-1">✅ Đã giải ngân</p>
+                <p className="text-xs text-success-700">
+                  Thời gian giải ngân: {app.disbursed_at ? formatDateTime(app.disbursed_at) : '—'}
+                </p>
+              </div>
+              <button
+                onClick={() => setContractOpen(true)}
+                className="btn-outline w-full py-3 text-base flex items-center justify-center gap-2"
+              >
+                📋 Xem hợp đồng
+              </button>
             </SectionCard>
           )}
 
@@ -240,6 +358,13 @@ const AdminApplicationDetailPage = () => {
           </SectionCard>
         </div>
       </div>
+
+      {/* Contract Modal */}
+      <ContractModal
+        open={contractOpen}
+        contractHtml={app?.contract_text || ''}
+        onClose={() => setContractOpen(false)}
+      />
     </div>
   )
 }

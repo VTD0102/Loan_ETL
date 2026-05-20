@@ -298,6 +298,9 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
                 username=full_name,
                 password_hash=hash_password("Synthetic123!"),
                 cccd=cccd,
+                full_name=full_name,
+                phone=f"09{random.randint(10000000, 99999999)}",
+                address=f"Số {random.randint(1, 500)}, Đường {random.choice(['Lê Lợi', 'Nguyễn Huệ', 'Trần Hưng Đạo', 'Hai Bà Trưng', 'Lý Thường Kiệt'])}, TP.HCM",
                 role="customer",
             )
             db.add(user)

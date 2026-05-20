@@ -4,8 +4,9 @@ const STEPS = [
   { key: 'submitted',  label: 'Đã nộp đơn',          desc: 'Hồ sơ đã được tiếp nhận' },
   { key: 'ai_review',  label: 'AI phân tích',         desc: 'Hệ thống AI đánh giá rủi ro' },
   { key: 'admin',      label: 'Admin xét duyệt',      desc: 'Chuyên viên kiểm tra hồ sơ' },
-  { key: 'info',       label: 'Thu thập thông tin',   desc: 'Xác minh thông tin cá nhân' },
-  { key: 'complete',   label: 'Hoàn tất',             desc: 'Quy trình kết thúc' },
+  { key: 'info',       label: 'Thu thập thông tin',   desc: 'Xác minh thông tin ngân hàng' },
+  { key: 'disburse',   label: 'Giải ngân',            desc: 'Chuyển tiền vào tài khoản' },
+  { key: 'complete',   label: 'Hoàn tất',             desc: 'Hợp đồng đã có hiệu lực' },
 ]
 
 const STATUS_STEP_MAP = {
@@ -14,6 +15,7 @@ const STATUS_STEP_MAP = {
   PENDING_REVIEW: 2,
   AWAITING_INFO:  3,
   INFO_SUBMITTED: 4,
+  DISBURSED:      6,   // all steps done
 }
 
 const ApplicationTimeline = ({ app }) => {
@@ -72,6 +74,9 @@ const ApplicationTimeline = ({ app }) => {
                   )}
                   {done && idx === 2 && app.reviewed_at && (
                     <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(app.reviewed_at)}</p>
+                  )}
+                  {done && idx === 4 && app.disbursed_at && (
+                    <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(app.disbursed_at)}</p>
                   )}
                 </div>
               </div>

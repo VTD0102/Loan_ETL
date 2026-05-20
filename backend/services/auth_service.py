@@ -28,6 +28,9 @@ def register(db: Session, payload: UserRegister):
         username=payload.username,
         password_hash=hashed_pwd,
         cccd=payload.cccd,
+        full_name=payload.full_name,
+        phone=payload.phone,
+        address=payload.address,
         role="customer"
     )
     db.add(new_user)
