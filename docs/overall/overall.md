@@ -16,7 +16,7 @@
 - Chuẩn hóa quy trình xử lý dữ liệu từ thô đến phân tích (Data Lakehouse).
 - Cung cấp mô hình ML đánh giá rủi ro và tự động hóa quyết định cho vay.
 - Giao diện Web đầy đủ cho **Customer** (đăng ký, nộp đơn, chat) và **Admin** (quản lý, xét duyệt, dashboard).
-- Tích hợp **RAG Chatbot** (LangChain + Qdrant) hỗ trợ tư vấn tài chính cá nhân hóa.
+- Tích hợp **RAG Chatbot** (LangChain + Pinecone) hỗ trợ tư vấn tài chính cá nhân hóa.
 
 ---
 
@@ -37,13 +37,13 @@ Hệ thống gồm 4 thành phần chính:
        │              │              │
 ┌──────▼───┐  ┌───────▼──────┐  ┌───▼──────────────────┐
 │PostgreSQL│  │ ML Models    │  │ RAG (LangChain +     │
-│(Supabase)│  │(pkl files)   │  │  Qdrant)            │
+│(Supabase)│  │(pkl files)   │  │  Pinecone)           │
 └──────────┘  └──────────────┘  └──────────────────────┘
        ▲
 ┌──────┴───────────────────────────────────────────────────┐
 │  ETL Pipeline (DuckDB local → PostgreSQL)                │
 │  Home Credit: Bronze → Silver → Gold                     │
-│  SQL transforms: machinelearning/database/               │
+│  Prosper: database/ SQL scripts                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -75,15 +75,15 @@ Xử lý Prosper Loan Data thông qua script SQL chạy trên Supabase:
 
 | Model | File | Thuật toán | Mục đích |
 |---|---|---|---|
-| Customer Risk Model | `machinelearning/ml/models/customer_risk_model.pkl` | LightGBM | Dự đoán P(default) để xét duyệt đơn |
-| Scorecard Model | `machinelearning/ml/models/scorecard_model.pkl` | Logistic Regression (FICO PDO) | Tính điểm tín dụng 300–850 cho khách hàng |
+| Customer Risk Model | `ml/models/customer_risk_model.pkl` | LightGBM | Dự đoán P(default) để xét duyệt đơn |
+| Scorecard Model | `ml/models/scorecard_model.pkl` | Logistic Regression (FICO PDO) | Tính điểm tín dụng 300–850 cho khách hàng |
 
 **Thresholds chung:** Low < 0.20 ≤ Medium ≤ 0.40 < High
 
-### 2.4. RAG Chatbot (LangChain + Qdrant)
+### 2.4. RAG Chatbot (LangChain + Pinecone)
 
-- Nhúng tài liệu từ `backend/rag/knowledge/` lên Qdrant collection.
-- LCEL chain dùng OpenRouter LLM và Qdrant retriever.
+- Nhúng tài liệu từ `backend/rag/knowledge/` lên Pinecone index.
+- `ConversationalRetrievalChain` dùng OpenAI/OpenRouter LLM.
 - Lịch sử chat lưu vào PostgreSQL (`chat_messages`, `chat_sessions`).
 - Context builder tổng hợp thông tin đơn vay hiện tại của user vào prompt.
 
@@ -135,12 +135,12 @@ Loan_ETL/
 │   │   ├── application_service.py
 │   │   ├── admin_service.py
 │   │   ├── chat_service.py
-│   │   ├── ml_service.py       # Wrapper gọi model inference (load pkl files)
+│   │   ├── ml_service.py       # Wrapper gọi ml/![alt text](image.png)_customer.py
 │   │   └── credit_score_service.py  # FICO scorecard inference + SHAP
 │   ├── rag/                    # RAG Chatbot module
-│   │   ├── ingest.py           # Embed docs lên Qdrant
-│   │   ├── chain.py            # LCEL chain
-│   │   ├── retriever.py        # Qdrant retriever setup
+│   │   ├── ingest.py           # Embed docs lên Pinecone
+│   │   ├── chain.py            # ConversationalRetrievalChain
+│   │   ├── retriever.py        # Pinecone retriever setup
 │   │   ├── memory.py           # Chat history management
 │   │   ├── context_builder.py  # Build user context từ DB
 │   │   ├── prompts.py          # System/user prompt templates
@@ -149,7 +149,7 @@ Loan_ETL/
 │   └── tests_local/            # Local integration/smoke tests
 │       ├── test_db.py
 │       ├── test_ml.py
-│       ├── test_task_1_3.py through test_task_1_11.py
+│       ├── test_task_1_3.py → test_task_1_11.py
 │       └── test_task_5_3.py
 │
 ├── frontend/                   # React 18 + Vite app
@@ -185,35 +185,62 @@ Loan_ETL/
 │           └── admin/          # Login, Dashboard, PendingList,
 │                               # ApplicationList, ApplicationDetail, PersonalInfoView
 │
-├── docs/
-│   ├── overall/                # Tổng quan dự án, kiến trúc, admin, rebuild
-│   ├── ml/                     # Dataset, feature, model, scorecard, ML integration
-│   └── rag/                    # RAG chatbot, context requirements, readiness
+├── etl/                        # Home Credit ETL pipeline (DuckDB)
+│   ├── __init__.py
+│   ├── pipeline.py             # Orchestrator: bronze → silver → gold
+│   ├── load_bronze.py          # Load CSV → bronze.home_credit_raw + prev + bureau
+│   ├── etl_silver.py           # Bronze → silver.home_credit_cleansed
+│   └── etl_gold.py             # Silver → gold.hc_features_v1
 │
-├── machinelearning/            # ETL, SQL, data, notebooks, ML training
-│   ├── requirements.txt        # ML/ETL dependencies
-│   ├── config/
-│   │   └── etl_db.env          # Cấu hình đường dẫn cho ETL DuckDB
-│   ├── data/
-│   │   ├── etl.duckdb          # Database DuckDB local cho Home Credit
-│   │   └── home_credit/        # CSV files của Home Credit
-│   ├── database/
-│   │   ├── transform_silver_homecredit.sql
-│   │   └── transform_gold_homecredit.sql
-│   ├── etl/
-│   │   ├── pipeline.py
-│   │   ├── load_bronze.py
-│   │   ├── etl_silver.py
-│   │   └── etl_gold.py
-│   ├── ml/
-│   │   ├── retrain_customer_model.py
-│   │   ├── train_scorecard.py
-│   │   ├── validate_data.py
-│   │   └── models/
-│   ├── notebooks/
-│   │   └── home_credit_eda.ipynb
-│   └── utils/
-│       └── db_connection.py    # get_engine(), load_config(), _ETL_ENV_FILE
+├── ml/                         # Machine Learning scripts
+│   ├── __init__.py
+│   ├── ML_INTEGRATION_CHECKLIST.md # Checklist tích hợp ML
+│   ├── retrain_customer_model.py   # Train LightGBM trên Home Credit features
+│   ├── train_scorecard.py          # Train LR Scorecard trên HC features (~25)
+│   ├── predict_customer.py         # Inference engine: 8 inputs → prediction dict
+│   ├── predict.py                  # Batch predict (historical/analysis)
+│   ├── validate_data.py            # Kiểm tra data trước khi train
+│   ├── models/
+│   │   ├── customer_risk_model.pkl # LightGBM artifact (27MB)
+│   │   └── scorecard_model.pkl     # LR Scorecard artifact (6KB)
+│   └── tests/                      # ML unit tests
+│
+├── config/
+│   └── etl_db.env              # Cấu hình đường dẫn cho ETL DuckDB
+│
+├── data/
+│   ├── etl.duckdb              # Database DuckDB local cho Home Credit
+│   └── home_credit/            # Chứa các file CSV của Home Credit
+│
+├── database/                   # SQL scripts cho Prosper/PostgreSQL
+│   ├── init_database.sql       # Tạo Bronze schema
+│   ├── init_core.sql           # Tạo Core schema & tables
+│   ├── transform_silver.sql    # Bronze → Silver (Prosper)
+│   ├── transform_core.sql      # Silver → Core (Prosper)
+│   ├── transform_gold.sql      # Core → Gold (Prosper, loan_features_v1)
+│   ├── transform_silver_homecredit.sql  # Silver HC (PostgreSQL version)
+│   └── transform_gold_homecredit.sql    # Gold HC (hc_features_v1 PostgreSQL)
+│
+├── home-credit-default-risk/   # Raw Kaggle dataset files
+│   ├── application_train.csv   # ~307K rows, nguồn chính
+│   ├── previous_application.csv
+│   ├── bureau.csv
+│   └── ...                     # Các file phụ khác
+│
+├── notebooks/
+│   └── home_credit_eda.ipynb   # EDA notebook
+│
+├── docs/
+│   ├── ADMIN_GUIDE.md
+│   ├── 01_muc_tieu_project.html → 09_van_de_can_giai_quyet.html
+│   ├── data_dictionary/
+│   ├── ml_md/
+│   ├── overall/                # File tài liệu tổng quan (thư mục này)
+│   ├── superpowers/
+│   └── task/
+│
+├── utils/
+│   └── db_connection.py        # get_engine(), load_config(), _ETL_ENV_FILE
 │
 ├── AGENTS.md                   # Project coding guidelines
 ├── AdminRules.md               # Quy tắc nghiệp vụ Admin
@@ -229,54 +256,54 @@ Loan_ETL/
 
 | Script | Input | Output | Mô tả |
 |---|---|---|---|
-| `machinelearning/etl/load_bronze.py` | CSV files (Kaggle `machinelearning/data/home_credit/`) | `bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw` | Load dữ liệu thô, chọn lọc cột cần thiết |
-| `machinelearning/etl/etl_silver.py` | bronze tables | `silver.home_credit_cleansed` | Làm sạch, tính `is_default`, xử lý missing |
-| `machinelearning/etl/etl_gold.py` | silver table | `gold.hc_features_v1` | Feature engineering ~25 features cho Scorecard |
-| `machinelearning/etl/pipeline.py` | — | — | Orchestrator chạy load_bronze→etl_silver→etl_gold tuần tự |
+| `etl/load_bronze.py` | CSV files (Kaggle) | `bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw` | Load dữ liệu thô, chọn lọc cột cần thiết |
+| `etl/etl_silver.py` | bronze tables | `silver.home_credit_cleansed` | Làm sạch, tính `is_default`, xử lý missing |
+| `etl/etl_gold.py` | silver table | `gold.hc_features_v1` | Feature engineering ~25 features cho Scorecard |
+| `etl/pipeline.py` | — | — | Orchestrator chạy bronze→silver→gold tuần tự |
 
 **Chạy pipeline:**
 ```bash
-python -m machinelearning.etl.pipeline
+python -m etl.pipeline
 # Hoặc từng bước:
-python -m machinelearning.etl.load_bronze
-python -m machinelearning.etl.etl_silver
-python -m machinelearning.etl.etl_gold
+python -m etl.load_bronze
+python -m etl.etl_silver
+python -m etl.etl_gold
 ```
 
 ### 4.2. Machine Learning
 
 #### Model 1: Customer Risk Model (LightGBM)
-- **Train:** `machinelearning/ml/retrain_customer_model.py` — Train trên dữ liệu Home Credit (`gold.hc_features_v1`), lưu vào `machinelearning/ml/models/customer_risk_model.pkl`.
-- **Inference:** `backend/services/ml_service.py::predict(payload: ApplicationCreate)` — Nhận input từ form, kết hợp với các feature khác từ schema, load pkl → prediction dict.
-- **Input features (từ ApplicationCreate schema):**
+- **Train:** `ml/retrain_customer_model.py` — Train trên dữ liệu Home Credit (`gold.hc_features_v1`).
+- **Inference:** `ml/predict_customer.py::predict_from_form()` — Nhận input từ form, kết hợp với các feature khác → prediction dict.
+- **Input features:**
 
 | Feature | Type | Mô tả |
 |---|---|---|
 | `monthly_income` | float | Thu nhập hàng tháng (USD) |
 | `loan_amount` | float | Số tiền muốn vay (USD) |
-| `term` | int | Kỳ hạn: 12, 24, 36, 48 hoặc 60 tháng |
+| `term` | int | Kỳ hạn: 12, 36 hoặc 60 tháng |
 | `employment_status` | str | Employed / Self-employed / Retired / Not employed / Other |
 | `dti` | float | Debt-to-income ratio |
 | `is_homeowner` | bool | Sở hữu nhà |
 | `listing_category` | int | Mục đích vay (0–20) |
 | `credit_score` | float | Điểm tín dụng tự khai (300–850) |
 
-- **Output dict:**
+- **Output:**
 
 | Field | Mô tả |
 |---|---|
 | `probability_of_default` | Xác suất vỡ nợ (0.0–1.0) |
 | `risk_level` | Low / Medium / High |
 | `risk_score_internal` | Điểm nội bộ 0–100 (= (1 - PD) × 100) |
-| `auto_decision` | AUTO_REJECTED hoặc PENDING_REVIEW (nếu P(default) > 0.4 → AUTO_REJECTED) |
+| `auto_decision` | AUTO_REJECTED hoặc PENDING_REVIEW |
 | `recommended_amount` | Khuyến nghị số tiền vay |
 | `recommended_term` | Khuyến nghị kỳ hạn |
 
 #### Model 2: LR Scorecard (FICO-style)
-- **Train:** `machinelearning/ml/train_scorecard.py` — Logistic Regression trên `gold.hc_features_v1` (~25 features).
+- **Train:** `ml/train_scorecard.py` — Logistic Regression trên `gold.hc_features_v1` (~25 features).
 - **FICO PDO params:** `base_score=600`, `base_odds_good=50`, `PDO=20`.
 - **Output score:** 300–850. Bands: Poor (<580) / Fair (580–669) / Good (670–739) / Excellent (≥740).
-- **Inference:** `backend/services/credit_score_service.py::get_credit_score()` — Load `machinelearning/ml/models/scorecard_model.pkl` + SHAP.
+- **Inference:** `backend/services/credit_score_service.py::get_credit_score()`.
 - **SHAP:** Dùng `LinearExplainer` để trả về top 3 factors ảnh hưởng điểm.
 
 ### 4.3. Backend Services
@@ -286,7 +313,7 @@ python -m machinelearning.etl.etl_gold
 | `auth_service.py` | Đăng ký, đăng nhập, hash/verify password |
 | `application_service.py` | Nộp đơn (gọi ML), lấy danh sách, nộp thông tin định danh |
 | `admin_service.py` | Dashboard stats, danh sách pending, approve/reject |
-| `ml_service.py` | Load model pkl, predict P(default), fallback mock nếu pkl lỗi |
+| `ml_service.py` | Wrapper gọi `predict_customer.py`, fallback mock nếu pkl lỗi |
 | `chat_service.py` | Lưu/load lịch sử chat, gọi RAG chain |
 | `credit_score_service.py` | Tính FICO score từ scorecard + SHAP top factors |
 
@@ -320,9 +347,9 @@ python -m machinelearning.etl.etl_gold
 
 | Module | Chức năng |
 |---|---|
-| `rag/ingest.py` | Embed tài liệu markdown → Qdrant collection |
-| `rag/chain.py` | LCEL chain + source documents |
-| `rag/retriever.py` | Kết nối Qdrant retriever |
+| `rag/ingest.py` | Embed tài liệu markdown → Pinecone index |
+| `rag/chain.py` | ConversationalRetrievalChain setup |
+| `rag/retriever.py` | Kết nối Pinecone retriever |
 | `rag/memory.py` | Quản lý lịch sử hội thoại |
 | `rag/context_builder.py` | Tổng hợp context từ đơn vay hiện tại của user |
 | `rag/prompts.py` | System prompt, user prompt templates |
@@ -338,7 +365,7 @@ python -m machinelearning.etl.etl_gold
 | **Database** | PostgreSQL (Supabase), SQLAlchemy 2.x, psycopg2-binary |
 | **ETL (HC)** | DuckDB, pandas, duckdb Python client |
 | **ML** | scikit-learn ≥1.4, LightGBM ≥4.6, numpy, pandas, joblib, shap |
-| **RAG** | LangChain ≥0.3, langchain-openai, langchain-qdrant, qdrant-client ≥1.12 |
+| **RAG** | LangChain ≥0.3, langchain-openai, langchain-pinecone, pinecone ≥6.0 |
 | **Frontend** | React 18, Vite, Tailwind CSS, React Router v6, Zustand, Axios |
 | **Dev Tools** | python-dotenv, PyYAML, kaggle CLI, Git |
 
@@ -350,17 +377,14 @@ python -m machinelearning.etl.etl_gold
 ```env
 DATABASE_URL=postgresql://...          # Supabase connection string
 SECRET_KEY=...                         # JWT signing key
-OPENROUTER_API_KEY=sk-or-...           # OpenRouter key cho LLM + embeddings
-RAG_LLM_MODEL=google/gemini-2.5-flash
-RAG_EMBEDDING_MODEL=openai/text-embedding-3-small
-QDRANT_URL=http://localhost:6333
-QDRANT_API_KEY=                        # Để trống khi chạy Qdrant local Docker
-QDRANT_COLLECTION=creditintel-kb
+OPENAI_API_KEY=...                     # Hoặc OpenRouter key
+PINECONE_API_KEY=...
+PINECONE_INDEX_NAME=...
 ```
 
-### ETL (`machinelearning/config/etl_db.env`)
+### ETL (`etl/.env` hoặc file được `_ETL_ENV_FILE` trỏ tới)
 ```env
-ETL_DB_PATH=data/etl.duckdb           # Đường dẫn tương đối từ machinelearning/
+etl_db_path=data/etl.duckdb           # Đường dẫn DuckDB file local
 ```
 
 ### Frontend (`frontend/.env.mock`)
@@ -374,8 +398,8 @@ VITE_USE_MOCK=true                     # Bật mock API mode
 
 ### Backend
 ```bash
-pip install -r backend/requirements.txt
 cd backend
+pip install -r requirements.txt
 python init_db.py          # Tạo bảng PostgreSQL lần đầu
 uvicorn main:app --reload  # Dev server: http://localhost:8000
 # Swagger UI: http://localhost:8000/docs
@@ -392,20 +416,20 @@ npm run build    # Production bundle
 
 ### ETL (Home Credit)
 ```bash
-# Đặt CSV files vào machinelearning/data/home_credit/ (download từ Kaggle)
-python -m machinelearning.etl.pipeline     # Chạy toàn bộ bronze→silver→gold
+# Đặt CSV files vào data/home_credit/ (download từ Kaggle)
+python -m etl.pipeline     # Chạy toàn bộ bronze→silver→gold
 ```
 
 ### Train ML Models
 ```bash
 # Customer Risk Model (Home Credit - LightGBM)
-python -m machinelearning.ml.retrain_customer_model
+python -m ml.retrain_customer_model
 
 # LR Scorecard (Home Credit)
-python -m machinelearning.ml.train_scorecard
+python ml/train_scorecard.py
 
 # Validate data trước khi train
-python -m machinelearning.ml.validate_data
+python ml/validate_data.py
 ```
 
 ### Tests Backend
@@ -443,7 +467,7 @@ python tests_local/test_task_5_3.py
 | ETL engine | pandas + SQLAlchemy (Prosper) | DuckDB (Home Credit) song song với SQL scripts (Prosper) |
 | ML Models | 1 model (loan_risk_model.pkl) | 2 models: customer_risk_model.pkl (LightGBM) + scorecard_model.pkl (LR) |
 | Credit Score | Không có | FICO-style scorecard (300–850) với SHAP explanation |
-| Chatbot | Không có | RAG (LangChain + Qdrant) đầy đủ |
+| Chatbot | Không có | RAG (LangChain + Pinecone) đầy đủ |
 | Dataset | Chỉ Prosper | Prosper + Home Credit Default Risk (Kaggle) |
 | API | Không có | FastAPI với 5 routers đang active |
 
