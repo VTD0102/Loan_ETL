@@ -225,7 +225,7 @@ def is_pending_action_expired(
         current = current.replace(tzinfo=timezone.utc)
     elif _is_timezone_aware(current) and not _is_timezone_aware(expiry):
         expiry = expiry.replace(tzinfo=timezone.utc)
-    return current > expiry
+    return current >= expiry
 
 
 def format_result_for_rag(result: LoanAdjustmentResult) -> str:

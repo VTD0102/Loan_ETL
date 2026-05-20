@@ -353,6 +353,7 @@ def test_pending_action_expiry_helpers():
     assert action["status"] == "pending_confirmation"
     assert action["proposal"]["loan_amount"] == "35000"
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=29)) is False
+    assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=30)) is True
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=31)) is True
 
 

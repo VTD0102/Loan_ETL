@@ -777,6 +777,30 @@ def test_expired_pending_action_clears_without_confirming():
     assert rag_calls == []
 
 
+def test_malformed_pending_action_clears_without_confirming():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    action = _pending_action(app_id)
+    del action["proposal"]["loan_amount"]
+    session = _session(user.id, pending_action=action)
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common()
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_calls = []
+    chat_service.application_service.confirm = lambda *args, **kwargs: confirm_calls.append(args)
+    try:
+        result = chat_service.send(db, "loan@example.com", "đồng ý", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "không còn hợp lệ" in result["response"].lower()
+    assert session.pending_action is None
+    assert confirm_calls == []
+    assert rag_calls == []
+
+
 def test_expired_pending_action_clears_before_rag_for_non_confirmation():
     user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
     app_id = uuid.uuid4()
@@ -885,6 +909,7 @@ if __name__ == "__main__":
     test_pending_action_token_question_uses_rag_not_confirm()
     test_pending_action_su_dung_question_uses_rag_not_cancel()
     test_expired_pending_action_clears_without_confirming()
+    test_malformed_pending_action_clears_without_confirming()
     test_expired_pending_action_clears_before_rag_for_non_confirmation()
     test_pending_adjustment_request_uses_rag_without_overwriting_action()
     test_pending_action_non_confirmation_keeps_existing_rag_path()

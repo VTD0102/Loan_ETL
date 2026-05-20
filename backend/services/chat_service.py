@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -403,11 +403,16 @@ def _confirm_pending_loan_adjustment(
         session.pending_action = None
         return "Không tìm thấy hồ sơ gốc của phương án này. Mình đã hủy phương án cũ; bạn hãy yêu cầu mô phỏng lại."
 
-    proposal = action.get("proposal") or {}
+    proposal_values = _extract_pending_proposal_values(action)
+    if proposal_values is None:
+        session.pending_action = None
+        return "Phương án nộp lại đang chờ xác nhận không còn hợp lệ. Mình đã hủy phương án cũ; bạn hãy yêu cầu mô phỏng lại."
+
+    loan_amount, term = proposal_values
     payload = loan_adjustment_tool.application_to_confirm_payload(
         source_app,
-        loan_amount=Decimal(str(proposal["loan_amount"])),
-        term=int(proposal["term"]),
+        loan_amount=loan_amount,
+        term=term,
     )
 
     try:
@@ -426,6 +431,20 @@ def _confirm_pending_loan_adjustment(
         f"Xác suất vỡ nợ dự kiến: {float(result['default_probability']):.4f}. "
         "Hồ sơ bị từ chối trước đó không bị chỉnh sửa."
     )
+
+
+def _extract_pending_proposal_values(action: dict[str, Any]) -> tuple[Decimal, int] | None:
+    proposal = action.get("proposal")
+    if not isinstance(proposal, dict):
+        return None
+    try:
+        loan_amount = Decimal(str(proposal["loan_amount"]))
+        term = int(proposal["term"])
+    except (KeyError, TypeError, ValueError, InvalidOperation):
+        return None
+    if not loan_amount.is_finite() or loan_amount <= 0 or term <= 0:
+        return None
+    return loan_amount, term
 
 
 def _is_affirmative_response(message: str) -> bool:
