@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getApplicationById, getApplicationCreditScore } from '../../../services/applications'
+import { getMyCIC } from '../../../services/cic'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
@@ -97,9 +98,9 @@ const AwaitingInfoBanner = ({ app, onSubmitInfo }) => (
         <p className="text-sm text-success-700 mb-1">
           Hạn mức đề xuất: <strong>{formatCurrency(app.recommended_amount)}</strong> — Kỳ hạn: <strong>{app.recommended_term} tháng</strong>
         </p>
-        <p className="text-sm text-success-600">Vui lòng nộp thông tin cá nhân để hoàn tất thủ tục.</p>
+        <p className="text-sm text-success-600">Vui lòng nộp thông tin ngân hàng để hoàn tất thủ tục.</p>
         <button onClick={onSubmitInfo} className="mt-3 btn-primary text-sm">
-          Nộp thông tin cá nhân
+          Nộp thông tin nhận tiền
         </button>
       </div>
     </div>
@@ -115,12 +116,98 @@ const InfoSubmittedBanner = () => (
         </svg>
       </div>
       <div>
-        <p className="font-semibold text-primary-800">Thông tin cá nhân đã được tiếp nhận</p>
-        <p className="text-sm text-primary-600">Chúng tôi đang xử lý và sẽ liên hệ với bạn sớm.</p>
+        <p className="font-semibold text-primary-800">Thông tin ngân hàng đã được tiếp nhận</p>
+        <p className="text-sm text-primary-600">Chúng tôi đang xử lý giải ngân và sẽ thông báo sớm.</p>
       </div>
     </div>
   </div>
 )
+
+const DisbursedBanner = ({ app, onViewContract }) => (
+  <div className="rounded-xl bg-success-50 border border-success-200 p-5">
+    <div className="flex items-start gap-3">
+      <div className="w-10 h-10 rounded-full bg-success-100 flex items-center justify-center flex-shrink-0">
+        <svg className="w-5 h-5 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <div className="flex-1">
+        <p className="font-semibold text-success-800 mb-1">💰 Khoản vay đã được giải ngân!</p>
+        <p className="text-sm text-success-700">
+          Số tiền {formatCurrency(app.loan_amount)} đã được chuyển vào tài khoản của bạn.
+          {app.disbursed_at && ` Thời gian: ${formatDateTime(app.disbursed_at)}`}
+        </p>
+        {app.contract_text && (
+          <button onClick={onViewContract} className="mt-3 btn-primary text-sm flex items-center gap-2">
+            📋 Xem hợp đồng vay
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+)
+
+/* ── Contract Modal ─────────────────────────────── */
+const ContractModal = ({ open, contractHtml, onClose }) => {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">📋 Hợp đồng vay vốn</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const printWindow = window.open('', '_blank')
+                printWindow.document.write(`<html><head><title>Hợp đồng vay vốn</title></head><body>${contractHtml}</body></html>`)
+                printWindow.document.close()
+                printWindow.print()
+              }}
+              className="btn-outline text-sm px-3 py-1.5 flex items-center gap-1.5"
+            >
+              🖨️ In
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6">
+          <div dangerouslySetInnerHTML={{ __html: contractHtml }} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── DTI Progress Bar ─────────────────────────────── */
+const DTIBar = ({ dti }) => {
+  if (dti == null) return null
+  const pct = (dti * 100).toFixed(1)
+  const color = dti > 0.4 ? 'danger' : dti > 0.25 ? 'warning' : 'success'
+  return (
+    <div className="bg-gray-50 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-xs text-gray-500">Tỷ lệ nợ/thu nhập (DTI)</p>
+        <p className={`text-sm font-bold text-${color}-600`}>{pct}%</p>
+      </div>
+      <div className="w-full bg-gray-200 rounded-full h-1.5">
+        <div
+          className={`h-1.5 rounded-full bg-${color}-500`}
+          style={{ width: `${Math.min(dti * 100, 100)}%` }}
+        />
+      </div>
+      <p className="text-[10px] text-gray-400 mt-1">
+        = (trả góp hàng tháng + nợ CIC hiện tại) ÷ thu nhập
+      </p>
+    </div>
+  )
+}
 
 /* ──────────────── Main Component ──────────────── */
 
@@ -131,9 +218,12 @@ const ApplicationDetailPage = () => {
   const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
+  const [contractOpen, setContractOpen] = useState(false)
+  const [cicData, setCicData] = useState(null)
+  const [cicLoading, setCicLoading] = useState(true)
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
       try {
         const res = await getApplicationById(id)
         setApp(res.data)
@@ -149,8 +239,23 @@ const ApplicationDetailPage = () => {
         setLoading(false)
       }
     }
-    fetch()
+    fetchData()
   }, [id])
+
+  // Fetch CIC data
+  useEffect(() => {
+    const fetchCIC = async () => {
+      try {
+        const res = await getMyCIC()
+        setCicData(res.data)
+      } catch {
+        setCicData({ found: false })
+      } finally {
+        setCicLoading(false)
+      }
+    }
+    fetchCIC()
+  }, [])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -167,17 +272,19 @@ const ApplicationDetailPage = () => {
     </div>
   )
 
+  const isCicApplied = app.feature_snapshot?.cic_applied
+
   const loanInfo = [
     { label: 'Số tiền vay',          value: formatCurrency(app.loan_amount)    },
     { label: 'Kỳ hạn',              value: `${app.term} tháng`                 },
     { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income)  },
-    { label: 'DTI',                 value: `${app.dti}%`                        },
     { label: 'Tình trạng nhà',      value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
     { label: 'Việc làm',            value: app.employment_status               },
     { label: 'Mục đích vay',        value: app.listing_category                },
   ]
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-3xl mx-auto">
         {/* Back */}
@@ -210,6 +317,7 @@ const ApplicationDetailPage = () => {
           {app.status === 'ADMIN_REJECTED' && <AdminRejectedBanner app={app} onApply={() => navigate('/apply')} />}
           {app.status === 'AWAITING_INFO'  && <AwaitingInfoBanner  app={app} onSubmitInfo={() => navigate(`/submit-info/${app.id}`)} />}
           {app.status === 'INFO_SUBMITTED' && <InfoSubmittedBanner />}
+          {app.status === 'DISBURSED'       && <DisbursedBanner app={app} onViewContract={() => setContractOpen(true)} />}
         </div>
 
         <div className="grid gap-5">
@@ -232,6 +340,12 @@ const ApplicationDetailPage = () => {
                   <MLStat label="Đề xuất kỳ hạn" value={`${app.recommended_term} tháng`} accent="primary" />
                 )}
               </div>
+              {/* DTI bar */}
+              {app.dti != null && (
+                <div className="mt-4">
+                  <DTIBar dti={Number(app.dti)} />
+                </div>
+              )}
             </SectionCard>
           )}
 
@@ -246,6 +360,78 @@ const ApplicationDetailPage = () => {
             <InfoGrid items={loanInfo} />
           </SectionCard>
 
+          {/* CIC Section */}
+          <SectionCard title="Hồ sơ tín dụng (CIC)">
+            {cicLoading ? (
+              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl">
+                <LoadingSpinner size="sm" />
+                <span className="text-sm text-gray-500">Đang tra cứu CIC...</span>
+              </div>
+            ) : cicData?.found ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 rounded-lg">
+                  <svg className="w-4 h-4 text-success-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-success-700">
+                    <strong>Dữ liệu lấy tự động từ Trung tâm Thông tin Tín dụng (CIC)</strong> dựa trên CCCD đã đăng ký.
+                    {isCicApplied && ' Dữ liệu này đã được sử dụng để đánh giá đơn vay.'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Điểm CIC</p>
+                    <p className={`text-lg font-bold ${(cicData.record?.cic_score || 0) >= 650 ? 'text-success-600' : (cicData.record?.cic_score || 0) >= 400 ? 'text-warning-600' : 'text-danger-600'}`}>
+                      {cicData.record?.cic_score ?? 'N/A'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Khoản vay đang mở</p>
+                    <p className="text-sm font-semibold text-gray-800">{cicData.record?.total_active_loans ?? 0}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tổng dư nợ</p>
+                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_outstanding_debt || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Nghĩa vụ nợ hàng tháng</p>
+                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_monthly_installment || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tiền quá hạn</p>
+                    <p className={`text-sm font-semibold ${Number(cicData.record?.total_overdue_amount || 0) > 0 ? 'text-danger-600' : 'text-gray-800'}`}>
+                      ${Number(cicData.record?.total_overdue_amount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Ngày quá hạn cao nhất</p>
+                    <p className={`text-sm font-semibold ${(cicData.record?.max_dpd_12m || 0) > 30 ? 'text-danger-600' : 'text-gray-800'}`}>
+                      {cicData.record?.max_dpd_12m ?? 0} ngày
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Nợ xấu</p>
+                    <p className={`text-sm font-semibold ${cicData.record?.bad_debt_flag ? 'text-danger-600' : 'text-success-600'}`}>
+                      {cicData.record?.bad_debt_flag ? 'Có' : 'Không'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800 mb-1">Chưa có hồ sơ CIC</p>
+                    <p className="text-xs text-amber-700">Không tìm thấy dữ liệu tín dụng liên kết với CCCD của bạn tại Trung tâm CIC.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+
           {/* Timeline */}
           <SectionCard title="Trạng thái tiến trình">
             <ApplicationTimeline app={app} />
@@ -253,6 +439,14 @@ const ApplicationDetailPage = () => {
         </div>
       </div>
     </div>
+
+    {/* Contract Modal */}
+    <ContractModal
+      open={contractOpen}
+      contractHtml={app?.contract_text || ''}
+      onClose={() => setContractOpen(false)}
+    />
+    </>
   )
 }
 

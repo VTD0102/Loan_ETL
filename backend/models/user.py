@@ -20,6 +20,9 @@ class User(Base):
     username: Mapped[str] = mapped_column(String)
     password_hash: Mapped[str] = mapped_column(String)
     cccd: Mapped[Optional[str]] = mapped_column(String(12), unique=True, nullable=True, index=True)
+    full_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(15), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, default="customer")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     chat_sessions: Mapped[List["ChatSession"]] = relationship(

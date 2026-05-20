@@ -132,3 +132,4 @@ def _predict(payload, artifact, loan_amount: float, term: int, prev: list) -> fl
     feature_cols = artifact["feature_cols"]
     row      = pd.DataFrame([built.features], columns=feature_cols)
     return float(pipeline.predict_proba(row)[0, 1])
+

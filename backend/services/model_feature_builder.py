@@ -64,7 +64,6 @@ def build_model_input(
     if not isinstance(defaults, dict):
         defaults = {}
 
-    dti            = _ratio(payload.dti)
     monthly_income = _number(payload.monthly_income)
     loan_amount    = _number(payload.loan_amount)
     term           = int(payload.term)
@@ -73,6 +72,8 @@ def build_model_input(
         if monthly_income > 0 and term > 0
         else 0.0
     )
+    # Use computed DTI from payload if available, else fallback to payment_to_income
+    dti = _ratio(payload.dti) if payload.dti is not None else payment_to_income
     total_overdue = _number(payload.total_overdue_amount)
     emp_group     = _employment_group(payload.employment_status)
     occupation    = _income_type(payload.occupation_type, emp_group)

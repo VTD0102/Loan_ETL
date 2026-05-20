@@ -77,53 +77,93 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
 
-    # ── CIC enrichment: replace self-reported bureau fields with verified data ──
-    cic_comparison = {}
+    # ── Compute DTI for display (but do NOT set on payload yet — ML needs original dti=None) ──
+    monthly_income = float(payload.monthly_income)
+    loan_amount = float(payload.loan_amount)
+    term = int(payload.term)
+    monthly_payment = loan_amount / term if term > 0 else 0
+
+    # Try to get existing debt from CIC
+    existing_monthly_debt = 0.0
+    cic_record = None
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
-            # Blacklist check — reject immediately without ML
-            if cic_record.blacklist_flag:
-                logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
-                new_app = LoanApplication(
-                    user_id=user.id,
-                    status="AUTO_REJECTED",
-                    **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
-                    default_probability=1.0,
-                    risk_level="High",
-                    risk_score=0,
-                    model_version="CIC_BLACKLIST",
-                    feature_snapshot={"cic_blacklisted": True, "reason": cic_record.blacklist_reason},
-                )
-                db.add(new_app)
-                try:
-                    db.commit()
-                except IntegrityError:
-                    db.rollback()
-                    raise HTTPException(400, "Bạn đã có đơn đang xử lý")
-                db.refresh(new_app)
-                return {
-                    "status": "AUTO_REJECTED",
-                    "application_id": str(new_app.id),
-                    "default_probability": 1.0,
-                    "risk_level": "High",
-                    "risk_score": 0,
-                    "credit_score_computed": cic_record.cic_score or 0,
-                    "is_perfect_fit": False,
-                    "suggested_amount": 0,
-                    "suggested_term": 0,
-                    "model_version": "CIC_BLACKLIST",
-                    "cic_blacklisted": True,
-                }
+            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
-            # Enrich payload with CIC data (overwrites self-reported values)
-            cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
-            logger.info("CIC enrichment applied for %s", user.email)
+    computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
+    # NOTE: Do NOT set payload.dti here — it would break the binary search in ML suggestion.
+    # The model was trained/tuned with dti=None; setting it changes predictions.
+
+    # ── CIC enrichment: replace self-reported bureau fields with verified data ──
+    cic_comparison = {}
+    if user.cccd and cic_record:
+        # Blacklist check — reject immediately without ML
+        if cic_record.blacklist_flag:
+            logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
+            new_app = LoanApplication(
+                user_id=user.id,
+                status="AUTO_REJECTED",
+                **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
+                default_probability=1.0,
+                risk_level="High",
+                risk_score=0,
+                model_version="CIC_BLACKLIST",
+                feature_snapshot={"cic_blacklisted": True, "reason": cic_record.blacklist_reason},
+            )
+            db.add(new_app)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(400, "Bạn đã có đơn đang xử lý")
+            db.refresh(new_app)
+            return {
+                "status": "AUTO_REJECTED",
+                "application_id": str(new_app.id),
+                "default_probability": 1.0,
+                "risk_level": "High",
+                "risk_score": 0,
+                "credit_score_computed": cic_record.cic_score or 0,
+                "is_perfect_fit": False,
+                "suggested_amount": 0,
+                "suggested_term": 0,
+                "model_version": "CIC_BLACKLIST",
+                "cic_blacklisted": True,
+            }
+
+        # Enrich payload with CIC data (overwrites self-reported values)
+        cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+        # Store outstanding debt for admin visibility
+        cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
+        cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+        logger.info("CIC enrichment applied for %s", user.email)
+
+    # ── Build CIC summary for frontend display ──
+    cic_summary = None
+    if cic_record:
+        cic_summary = {
+            "found": True,
+            "cic_score": cic_record.cic_score,
+            "total_active_loans": cic_record.total_active_loans,
+            "total_outstanding_debt": float(cic_record.total_outstanding_debt or 0),
+            "total_monthly_installment": float(cic_record.total_monthly_installment or 0),
+            "total_overdue_amount": float(cic_record.total_overdue_amount or 0),
+            "max_dpd_12m": cic_record.max_dpd_12m,
+            "num_credit_inquiries": cic_record.num_credit_inquiries,
+            "bad_debt_flag": cic_record.bad_debt_flag,
+            "blacklist_flag": cic_record.blacklist_flag,
+        }
+    else:
+        cic_summary = {"found": False}
 
     try:
         prediction = ml_service.predict(payload, db=db, user_id=user.id)
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
+
+    # ── NOW set DTI on payload for DB storage ──
+    payload.dti = Decimal(str(round(computed_dti, 4)))
 
     prob = prediction["default_probability"]
 
@@ -160,6 +200,9 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
             "suggested_amount":    prediction["suggested_amount"],
             "suggested_term":      prediction["suggested_term"],
             "model_version":       prediction["model_version"],
+            "computed_dti":        computed_dti,
+            "cic_summary":         cic_summary,
+            "existing_monthly_debt": existing_monthly_debt,
         }
 
     return {
@@ -173,6 +216,9 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         "suggested_amount":    prediction["suggested_amount"],
         "suggested_term":      prediction["suggested_term"],
         "model_version":       prediction["model_version"],
+        "computed_dti":        computed_dti,
+        "cic_summary":         cic_summary,
+        "existing_monthly_debt": existing_monthly_debt,
     }
 
 
@@ -186,12 +232,17 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
 
     # ── CIC enrichment (same as evaluate) ──
     cic_comparison = {}
+    existing_monthly_debt = 0.0
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
             if cic_record.blacklist_flag:
                 raise HTTPException(400, "Tài khoản bị cấm vay do nằm trong danh sách đen CIC")
             cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+            # Store outstanding debt for admin visibility
+            cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
+            cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
     try:
         artifact = ml_service._load()
@@ -202,6 +253,14 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    # ── NOW compute & set DTI for DB storage (after ML is done) ──
+    monthly_income = float(payload.monthly_income)
+    loan_amount = float(payload.loan_amount)
+    term_val = int(payload.term)
+    monthly_payment = loan_amount / term_val if term_val > 0 else 0
+    computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
+    payload.dti = Decimal(str(round(computed_dti, 4)))
 
     prob       = prediction["default_probability"]
     app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"

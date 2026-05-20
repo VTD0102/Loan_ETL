@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
 import { evaluateApplication, confirmApplication } from '../../../services/applications'
+import { getMyCIC } from '../../../services/cic'
 import Modal from '../../../components/common/Modal'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
@@ -165,6 +166,15 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
   const maxAmt   = evalResult.suggested_amount
   const sugTerm  = evalResult.suggested_term
 
+  // Reactive DTI: recalculate when amount/term changes
+  const monthlyIncome = originalData?.monthly_income || 1
+  const existingDebt  = evalResult.existing_monthly_debt || 0
+  const liveAmount    = parseFloat(confirmAmount) || 0
+  const liveTerm      = parseInt(confirmTerm) || 36
+  const liveMonthlyPayment = liveTerm > 0 ? liveAmount / liveTerm : 0
+  const liveDti       = monthlyIncome > 0 ? (liveMonthlyPayment + existingDebt) / monthlyIncome : 0
+  const dtiColor      = liveDti > 0.4 ? 'danger' : liveDti > 0.25 ? 'warning' : 'success'
+
   const handleConfirm = async () => {
     const amt = parseFloat(confirmAmount)
     if (!amt || amt <= 0) { setError('Vui lòng nhập khoản vay hợp lệ'); return }
@@ -201,13 +211,13 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
           </p>
 
           {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-4 mb-5 text-sm">
+          <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-4 mb-3 text-sm">
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Xác suất vỡ nợ</p>
               <p className={`font-bold text-base ${isLow ? 'text-success-600' : 'text-warning-600'}`}>{prob}%</p>
             </div>
             <div>
-              <p className="text-gray-500 text-xs mb-0.5">Khoản vay bạn chọn</p>
+              <p className="text-gray-500 text-xs mb-0.5">Khoản vay ban đầu</p>
               <p className="font-semibold text-gray-800">${Number(originalData?.loan_amount).toLocaleString()} / {originalData?.term}th</p>
             </div>
             <div>
@@ -218,6 +228,29 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
               <p className="text-gray-500 text-xs mb-0.5">Kỳ hạn phù hợp nhất</p>
               <p className="font-bold text-primary-600">{sugTerm} tháng</p>
             </div>
+          </div>
+
+          {/* Live DTI display — updates when amount/term changes */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600">
+                DTI — {liveAmount !== Number(originalData?.loan_amount) || liveTerm !== Number(originalData?.term)
+                  ? 'cập nhật theo khoản vay mới' : 'tính tự động'}
+              </p>
+              <p className={`text-sm font-bold text-${dtiColor}-600`}>
+                {(liveDti * 100).toFixed(1)}%
+              </p>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all bg-${dtiColor}-500`}
+                style={{ width: `${Math.min(liveDti * 100, 100)}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">
+              = (${liveMonthlyPayment.toFixed(0)}/th trả góp {existingDebt > 0 ? `+ $${existingDebt.toFixed(0)}/th nợ CIC cũ ` : ''}÷ ${Number(monthlyIncome).toLocaleString()} thu nhập). 
+              Dưới 25% tốt · 25-40% chấp nhận · &gt;40% rủi ro cao.
+            </p>
           </div>
 
           {/* Confirm inputs */}
@@ -284,6 +317,23 @@ const ApplyPage = () => {
   const [modal, setModal]             = useState(null)  // { type: 'rejected'|'suggestion'|'success', data }
   const [originalFormData, setOriginalFormData] = useState(null)
   const [chatOpen, setChatOpen]       = useState(false)
+  const [cicData, setCicData]         = useState(null)     // { found, record }
+  const [cicLoading, setCicLoading]   = useState(true)
+
+  // Fetch CIC on mount
+  useEffect(() => {
+    const fetchCIC = async () => {
+      try {
+        const res = await getMyCIC()
+        setCicData(res.data)
+      } catch {
+        setCicData({ found: false })
+      } finally {
+        setCicLoading(false)
+      }
+    }
+    fetchCIC()
+  }, [])
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
@@ -293,14 +343,8 @@ const ApplyPage = () => {
       occupation_type: 'EMPLOYED',
       years_employed: 0,
       is_homeowner: 'false',
-      has_bad_debt: 'false',
-      income_verifiable_flag: 'false',
       is_married_flag: 'false',
       education_ordinal: 4,
-      num_bureau_records: 0,
-      num_active_credit: 0,
-      total_overdue_amount: 0,
-      max_credit_overdue_days: 0,
     },
   })
 
@@ -309,17 +353,10 @@ const ApplyPage = () => {
     loan_amount:             parseFloat(data.loan_amount),
     term:                    parseInt(data.term),
     employment_status:       data.employment_status,
-    dti:                     parseFloat(data.dti),
     is_homeowner:            data.is_homeowner === 'true' || data.is_homeowner === true,
     listing_category:        data.listing_category,
     occupation_type:         data.occupation_type,
     years_employed:          parseFloat(data.years_employed) || 0,
-    num_bureau_records:      parseInt(data.num_bureau_records) || 0,
-    num_active_credit:       parseInt(data.num_active_credit) || 0,
-    total_overdue_amount:    parseFloat(data.total_overdue_amount) || 0,
-    max_credit_overdue_days: parseInt(data.max_credit_overdue_days) || 0,
-    has_bad_debt:            data.has_bad_debt === 'true' || data.has_bad_debt === true,
-    income_verifiable_flag:  data.income_verifiable_flag === 'true' || data.income_verifiable_flag === true,
     age_years:               parseInt(data.age_years),
     education_ordinal:       parseInt(data.education_ordinal),
     is_married_flag:         data.is_married_flag === 'true' || data.is_married_flag === true,
@@ -408,19 +445,14 @@ const ApplyPage = () => {
                   {TERM_OPTIONS.map(t => <option key={t} value={t}>{t} tháng</option>)}
                 </select>
               </FieldRow>
-              <FieldRow label="Tỷ lệ nợ/Thu nhập (DTI %)" hint="Tổng nghĩa vụ nợ tháng ÷ thu nhập tháng × 100" error={errors.dti?.message}>
-                <input type="number" step="0.01" min="0" max="100" placeholder="20"
-                  className={`input ${errors.dti ? 'input-error' : ''}`}
-                  {...register('dti', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0%' }, max: { value: 100, message: 'Tối đa 100%' } })} />
-              </FieldRow>
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Mục đích vay" error={errors.listing_category?.message}>
                 <select className={`input ${errors.listing_category ? 'input-error' : ''}`} {...register('listing_category', { required: 'Bắt buộc' })}>
                   {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </FieldRow>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Có nhà riêng không?" error={errors.is_homeowner?.message}>
                 <select className={`input ${errors.is_homeowner ? 'input-error' : ''}`} {...register('is_homeowner', { required: 'Bắt buộc' })}>
                   <option value="false">Không</option>
@@ -471,52 +503,79 @@ const ApplyPage = () => {
               </FieldRow>
             </div>
 
-            {/* ── Section 3: Lịch sử tín dụng ─────────────────── */}
-            <SectionTitle title="Lịch sử tín dụng (Tự khai)" />
-            <p className="text-sm text-gray-500 mb-4 px-1">
-              <span className="font-semibold text-primary-600">Lưu ý:</span> Hệ thống sẽ tự động tra cứu CCCD của bạn qua <strong>Trung tâm Thông tin Tín dụng (CIC)</strong>. 
-              Nếu có dữ liệu CIC, thông tin CIC sẽ được dùng để thay thế phần tự khai này nhằm đảm bảo tính chính xác.
-            </p>
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Số hồ sơ tín dụng" hint="Số lần bạn đã đăng ký tín dụng (vay, thẻ...)" error={errors.num_bureau_records?.message}>
-                <input type="number" step="1" min="0" placeholder="2"
-                  className={`input ${errors.num_bureau_records ? 'input-error' : ''}`}
-                  {...register('num_bureau_records', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' } })} />
-              </FieldRow>
-              <FieldRow label="Khoản tín dụng đang hoạt động" error={errors.num_active_credit?.message}>
-                <input type="number" step="1" min="0" placeholder="1"
-                  className={`input ${errors.num_active_credit ? 'input-error' : ''}`}
-                  {...register('num_active_credit', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' } })} />
-              </FieldRow>
-            </div>
+            {/* ── Section 3: Hồ sơ tín dụng (CIC) — Read-only ───────── */}
+            <SectionTitle title="Hồ sơ tín dụng (CIC)" />
 
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Tổng tiền quá hạn (USD)" error={errors.total_overdue_amount?.message}>
-                <input type="number" step="0.01" min="0" placeholder="0"
-                  className={`input ${errors.total_overdue_amount ? 'input-error' : ''}`}
-                  {...register('total_overdue_amount', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' } })} />
-              </FieldRow>
-              <FieldRow label="Số ngày quá hạn cao nhất" error={errors.max_credit_overdue_days?.message}>
-                <input type="number" step="1" min="0" placeholder="0"
-                  className={`input ${errors.max_credit_overdue_days ? 'input-error' : ''}`}
-                  {...register('max_credit_overdue_days', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' } })} />
-              </FieldRow>
-            </div>
+            {cicLoading ? (
+              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl">
+                <LoadingSpinner size="sm" />
+                <span className="text-sm text-gray-500">Đang tra cứu CIC...</span>
+              </div>
+            ) : cicData?.found ? (
+              <div className="space-y-3">
+                {/* CIC Source banner */}
+                <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 rounded-lg">
+                  <svg className="w-4 h-4 text-success-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-success-700">
+                    <strong>Dữ liệu được lấy tự động từ Trung tâm Thông tin Tín dụng (CIC)</strong> dựa trên CCCD của bạn. Thông tin này sẽ được sử dụng để đánh giá đơn vay.
+                  </p>
+                </div>
 
-            <div className="grid sm:grid-cols-2 gap-5">
-              <FieldRow label="Có nợ xấu?" error={errors.has_bad_debt?.message}>
-                <select className={`input ${errors.has_bad_debt ? 'input-error' : ''}`} {...register('has_bad_debt', { required: 'Bắt buộc' })}>
-                  <option value="false">Không</option>
-                  <option value="true">Có</option>
-                </select>
-              </FieldRow>
-              <FieldRow label="Thu nhập có thể xác minh?" error={errors.income_verifiable_flag?.message}>
-                <select className={`input ${errors.income_verifiable_flag ? 'input-error' : ''}`} {...register('income_verifiable_flag', { required: 'Bắt buộc' })}>
-                  <option value="true">Có (hợp đồng lao động, payslip...)</option>
-                  <option value="false">Không</option>
-                </select>
-              </FieldRow>
-            </div>
+                {/* CIC data grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Điểm CIC</p>
+                    <p className={`text-lg font-bold ${(cicData.record?.cic_score || 0) >= 650 ? 'text-success-600' : (cicData.record?.cic_score || 0) >= 400 ? 'text-warning-600' : 'text-danger-600'}`}>
+                      {cicData.record?.cic_score ?? 'N/A'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Khoản vay đang mở</p>
+                    <p className="text-sm font-semibold text-gray-800">{cicData.record?.total_active_loans ?? 0}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tổng dư nợ</p>
+                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_outstanding_debt || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tiền quá hạn</p>
+                    <p className={`text-sm font-semibold ${Number(cicData.record?.total_overdue_amount || 0) > 0 ? 'text-danger-600' : 'text-gray-800'}`}>
+                      ${Number(cicData.record?.total_overdue_amount || 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Ngày quá hạn cao nhất (12th)</p>
+                    <p className={`text-sm font-semibold ${(cicData.record?.max_dpd_12m || 0) > 30 ? 'text-danger-600' : 'text-gray-800'}`}>
+                      {cicData.record?.max_dpd_12m ?? 0} ngày
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Nợ xấu</p>
+                    <p className={`text-sm font-semibold ${cicData.record?.bad_debt_flag ? 'text-danger-600' : 'text-success-600'}`}>
+                      {cicData.record?.bad_debt_flag ? 'Có' : 'Không'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800 mb-1">Chưa có hồ sơ CIC</p>
+                    <p className="text-xs text-amber-700">
+                      Hệ thống không tìm thấy dữ liệu tín dụng liên kết với CCCD của bạn tại Trung tâm CIC. 
+                      Bạn vẫn có thể nộp đơn — hệ thống sẽ đánh giá dựa trên các thông tin khác.
+                      Tỷ lệ DTI sẽ được tính chỉ từ khoản vay mới (không có nợ cũ).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
@@ -544,6 +603,22 @@ const ApplyPage = () => {
             <p className="text-sm font-medium text-danger-700 mb-1">Lý do từ chối:</p>
             <p className="text-xs text-danger-600">Mức rủi ro CAO — xác suất vỡ nợ vượt ngưỡng cho phép (40%)</p>
           </div>
+          {modal?.data?.computed_dti != null && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-left">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-medium text-gray-600">Tỷ lệ nợ/thu nhập (DTI)</p>
+                <p className={`text-sm font-bold ${modal.data.computed_dti > 0.4 ? 'text-danger-600' : modal.data.computed_dti > 0.25 ? 'text-warning-600' : 'text-success-600'}`}>
+                  {(modal.data.computed_dti * 100).toFixed(1)}%
+                </p>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                <div
+                  className={`h-1.5 rounded-full ${modal.data.computed_dti > 0.4 ? 'bg-danger-500' : modal.data.computed_dti > 0.25 ? 'bg-warning-500' : 'bg-success-500'}`}
+                  style={{ width: `${Math.min(modal.data.computed_dti * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           {modal?.data?.suggested_amount > 0 && (
             <div className="bg-primary-50 border border-primary-100 rounded-lg p-3 mb-4 text-left">
               <p className="text-sm font-medium text-primary-700 mb-1">Gợi ý khoản vay phù hợp:</p>

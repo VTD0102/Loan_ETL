@@ -91,3 +91,13 @@ def get_dashboard_risk_distribution(
     _: dict = Depends(require_admin),
 ):
     return admin_service.dashboard_risk_distribution(db)
+
+
+@router.post("/applications/{app_id}/disburse")
+def disburse_application(
+    app_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_admin),
+):
+    """Giải ngân khoản vay — chuyển trạng thái sang DISBURSED và sinh hợp đồng."""
+    return admin_service.disburse_application(db, app_id, current_user["sub"])
