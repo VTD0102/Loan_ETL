@@ -1,15 +1,20 @@
 """
 loan_suggestion_service.py
 
-Binary-search approach: finds the maximum loan_amount where default_prob stays
-below LOW_THRESHOLD (0.2), testing each valid term (12 / 24 / 36 / 48 / 60 months).
+Minimize-burden suggestion strategy:
 
-Returns suggested_amount, suggested_term, and whether the user's original
-request is already a "perfect fit" (no improvement to suggest).
+  Step 1 — Honour the requested amount when feasible.
+    Build (term → max_safe_amount) for every approvable term.
+    If one or more terms support requested_amount, pick the SHORTEST such term
+    (minimises total interest paid while delivering exactly what the borrower asked).
+
+  Step 2 — Fallback when the requested amount is out of reach at every term.
+    Among all (term, max_safe) candidates, pick the one with the lowest
+    monthly_payment = max_safe / term (minimises DTI and payment burden).
+    Tiebreak: prefer higher max_safe, then shorter term.
 """
 from __future__ import annotations
 
-from copy import copy
 from decimal import Decimal
 from typing import Any
 
@@ -29,14 +34,13 @@ def compute_suggestion(
 ) -> dict[str, Any]:
     """
     Returns:
-        base_prob       — probability for original (loan_amount, term)
-        suggested_amount — max safe loan at best term (rounded to $100)
-        suggested_term   — term that maximises safe borrowing amount
-        is_perfect_fit   — True if no better option exists
+        base_prob        — default probability for (requested_amount, requested_term)
+        suggested_amount — recommended loan amount (rounded to nearest 100)
+        suggested_term   — recommended term in months
+        is_perfect_fit   — True when the original request is already optimal
         risk_level       — 'Low' | 'Medium'
     """
     LOW  = float(artifact["thresholds"]["low"])
-    HIGH = float(artifact["thresholds"]["high"])
     prev = list(previous_applications or [])
 
     requested_amount = float(payload.loan_amount)
@@ -44,29 +48,50 @@ def compute_suggestion(
 
     base_prob = _predict(payload, artifact, requested_amount, requested_term, prev)
 
-    # Find (term, max_amount) with best outcome under LOW threshold
-    best_term    = requested_term
-    best_amount  = _MIN_LOAN
-
+    # Build: {term: max_safe_amount} for every approvable term
+    candidates: list[tuple[int, float]] = []
     for term in _TERMS:
-        p_min = _predict(payload, artifact, _MIN_LOAN, term, prev)
-        if p_min >= LOW:
-            continue  # even minimum loan exceeds threshold on this term
-        max_amount = _binary_search(payload, artifact, term, LOW, prev)
-        if max_amount > best_amount:
-            best_amount = max_amount
-            best_term   = term
+        if _predict(payload, artifact, _MIN_LOAN, term, prev) >= LOW:
+            continue  # even minimum loan is too risky on this term
+        max_safe = _binary_search(payload, artifact, term, LOW, prev)
+        candidates.append((term, max_safe))
 
-    # Round to nearest $100 for clean UX
-    suggested_amount = max(_MIN_LOAN, round(best_amount / 100) * 100)
-    suggested_term   = best_term
+    if not candidates:
+        return {
+            "base_prob":        round(base_prob, 4),
+            "suggested_amount": _MIN_LOAN,
+            "suggested_term":   requested_term,
+            "is_perfect_fit":   False,
+            "risk_level":       "Medium",
+        }
 
-    # Perfect fit: prob already LOW AND user's term optimal AND amount near max
-    is_perfect_fit = (
-        base_prob < LOW
-        and requested_term == suggested_term
-        and requested_amount >= suggested_amount * (1 - _PERFECT_FIT_TOLERANCE)
-    )
+    # Step 1: can we honour the requested amount?
+    # Among all terms where max_safe >= requested_amount, pick the SHORTEST.
+    feasible = [(t, ms) for t, ms in candidates if ms >= requested_amount]
+
+    if feasible:
+        best_term, best_max = min(feasible, key=lambda x: x[0])
+        suggested_amount = max(_MIN_LOAN, round(requested_amount / 100) * 100)
+        suggested_term   = best_term
+
+        # Perfect fit: risk already Low AND user's term is already the shortest
+        # feasible AND amount is within tolerance of max capacity at that term.
+        is_perfect_fit = (
+            base_prob < LOW
+            and requested_term == best_term
+            and requested_amount >= best_max * (1 - _PERFECT_FIT_TOLERANCE)
+        )
+    else:
+        # Step 2: requested amount is out of reach everywhere.
+        # Minimise monthly_payment = max_safe / term (proxy for DTI).
+        # Tiebreak: higher amount, then shorter term.
+        best_term, best_max = min(
+            candidates,
+            key=lambda x: (x[1] / x[0], -x[1], x[0]),
+        )
+        suggested_amount = max(_MIN_LOAN, round(best_max / 100) * 100)
+        suggested_term   = best_term
+        is_perfect_fit   = False
 
     return {
         "base_prob":        round(base_prob, 4),
