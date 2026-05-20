@@ -183,11 +183,13 @@ flowchart TD
     IntentRoute -->|Loan adjustment| AdjCheck
 
     subgraph PROMPT["📝 Prompt Assembly"]
-        SysPrompt["System Prompt + Rules\n([prompts.py](backend/rag/prompts.py))"]
-        UserCtx["4-Block User Context\n· DB: Info, ML, Rec\n([context_builder.py](backend/rag/context_builder.py))"]
-        RetContext["Retrieved Docs\n· Knowledge Base\n([ingest.py](backend/rag/ingest.py))"]
-        ToneCtx["Personalization Tone\n· Status-based\n([personalizer.py](backend/rag/personalizer.py))"]
-        ConvMem["Conversation Summary\n+ Window History\n([memory.py](backend/rag/memory.py))"]
+        SysPrompt["System Prompt + Rules"]
+        UserCtx["4-Block User Context\n· DB: Info, ML, Rec"]
+        RetContext["Retrieved Docs\n· Knowledge Base"]
+        ToneCtx["Personalization Tone\n· Status-based"]
+        ConvMem["Conversation Summary\n+ Window History"]
+
+        SysPrompt --> UserCtx --> RetContext --> ToneCtx --> ConvMem
     end
 
     ParentExpand --> PROMPT
@@ -220,6 +222,13 @@ flowchart TD
     class LLMGen llm
     class AdjCheck,RunAdj,SetPending,ProcessConfirm adj
     class Sanitize,Disclaimer,SaveMsg,UserResponse store
+
+    %% ===== Clickable links =====
+    click SysPrompt href "backend/rag/prompts.py" "System prompt template"
+    click UserCtx href "backend/rag/context_builder.py" "4-block user context builder"
+    click RetContext href "backend/rag/ingest.py" "Knowledge base ingest"
+    click ToneCtx href "backend/rag/personalizer.py" "Status-based personalizer"
+    click ConvMem href "backend/rag/memory.py" "Conversation memory"
 
     %% ===== Subgraph: viền rõ, nền trong suốt =====
     style RETRIEVAL fill:transparent,stroke:#7c3aed,stroke-width:3px
