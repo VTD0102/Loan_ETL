@@ -28,25 +28,40 @@ graph TB
     end
 
     %% Kết nối Frontend -> API Gateway
-    C_MAIN -->|"REST API"| API
-    C_CHAT -->|"REST API"| API
-    A_PANEL -->|"REST API"| API
+    C_MAIN -->|"REST API"| ROUTERS
+    C_CHAT -->|"REST API"| ROUTERS
+    A_PANEL -->|"REST API"| ROUTERS
 
     subgraph BACKEND["⚙️ Backend & API Layer (FastAPI)"]
-        API["🌐 API Gateway & JWT Middleware"]
+        direction TB
+        subgraph API_GW["🌐 API Gateway & Security"]
+            ROUTERS["🌐 API Routers\n/auth · /applications · /admin · /chat · /credit-score"]
+            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification & Verification)"]
+            ROUTERS --> JWT_MW
+        end
 
         subgraph SERVICES["📦 Business Services"]
-            direction LR
-            SVC_APP["application_service\n(Quản lý hồ sơ vay)"]
-            SVC_ML["ml_service\n(Dự đoán rủi ro vỡ nợ)"]
-            SVC_CHAT["chat_service & Adjustment Tool\n(Điều phối RAG)"]
+            direction TB
+            SVC_AUTH["🔑 auth_service\n(Đăng nhập / Đăng ký / JWT)"]
+            SVC_APP["📄 application_service\n(Nghiệp vụ hồ sơ vay)"]
+            SVC_ADMIN["🛡️ admin_service\n(Phê duyệt & Thống kê)"]
+            SVC_ML["🧠 ml_service\n(LightGBM risk inference)"]
+            SVC_CS["📈 credit_score_service\n(FICO score & SHAP)"]
+            SVC_CHAT["💬 chat_service\n(Orchestrate RAG session)"]
+            SVC_ADJ["🛠️ loan_adjustment_tool\n(Mô phỏng khoản vay)"]
+            
+            SVC_CHAT --> SVC_ADJ
+            SVC_CHAT --> SVC_APP
+            SVC_APP --> SVC_ML
+            SVC_ADJ --> SVC_ML
         end
-        API --> SERVICES
+        JWT_MW --> SERVICES
     end
 
     %% Kết nối Services -> Chuyên sâu RAG / ML
     SVC_CHAT -->|"Gọi RAG Pipeline"| RAG_MOD
     SVC_ML -->|"Chạy mô hình"| ML_MOD
+    SVC_CS -->|"Tính FICO / SHAP"| ML_MOD
 
     subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
         direction TB
@@ -64,7 +79,7 @@ graph TB
     %% Kết nối xuống Cơ sở dữ liệu và API ngoài
     RAG_MOD -->|"Search vector"| QD[("🔷 Qdrant\nVector DB")]
     RAG_MOD -->|"LLM & Embed"| OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
-    BACKEND -->|"Lưu đơn/Chat"| PG[("🐘 PostgreSQL")]
+    SERVICES -->|"Lưu đơn/Chat/Users"| PG[("🐘 PostgreSQL")]
 
     %% ===== STYLING =====
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
@@ -73,6 +88,7 @@ graph TB
     classDef cust fill:#0ea5e9,stroke:#0284c7,color:#fff
     classDef adm fill:#f97316,stroke:#c2410c,color:#fff
     classDef be fill:#f59e0b,stroke:#d97706,color:#fff
+    classDef jwt_mw fill:#ef4444,stroke:#dc2626,color:#fff
     classDef svc fill:#fbbf24,stroke:#d97706,color:#000
     classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
     classDef ml fill:#10b981,stroke:#059669,color:#fff
@@ -84,8 +100,9 @@ graph TB
     class JWT jwt
     class C_MAIN,C_CHAT cust
     class A_PANEL adm
-    class API be
-    class SVC_APP,SVC_ML,SVC_CHAT svc
+    class ROUTERS be
+    class JWT_MW jwt_mw
+    class SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,SVC_ADJ svc
     class CHAIN,RETRIEVER rag
     class RISK_M,SCORE_M ml
     class PG,QD db
@@ -94,7 +111,8 @@ graph TB
     style FE_C fill:transparent,stroke:#0ea5e9,stroke-width:2px
     style FE_A fill:transparent,stroke:#f97316,stroke-width:2px
     style BACKEND fill:transparent,stroke:#f59e0b,stroke-width:2px
-    style SERVICES fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
+    style API_GW fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
+    style SERVICES fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
     style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:3px
     style ML_MOD fill:transparent,stroke:#10b981,stroke-width:3px
 ```
