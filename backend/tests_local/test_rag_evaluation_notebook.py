@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-NOTEBOOK_PATH = ROOT / "notebooks" / "rag_evaluation.ipynb"
+NOTEBOOK_PATH = ROOT / "RAG_eval" / "rag_evaluation.ipynb"
 
 
 def test_notebook_exists_and_is_valid_json():
@@ -19,7 +19,7 @@ def test_notebook_exists_and_is_valid_json():
 
     assert notebook["nbformat"] == 4
     assert notebook["metadata"]["kernelspec"]["language"] == "python"
-    assert len(notebook["cells"]) == 7
+    assert len(notebook["cells"]) == 9
 
 
 def test_notebook_uses_existing_benchmark_artifacts():
@@ -29,8 +29,8 @@ def test_notebook_uses_existing_benchmark_artifacts():
         for cell in notebook["cells"]
     )
 
-    assert "docs/rag_benchmark_dataset.json" in source
-    assert "docs/rag_benchmark_results.json" in source
+    assert "RAG_eval/rag_benchmark_dataset.json" in source
+    assert "RAG_eval/rag_benchmark_results.json" in source
     assert "RUN_BENCHMARK" in source
     assert "tests_local/test_rag_benchmark.py" in source
     assert "source_ok" in source

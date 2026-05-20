@@ -13,20 +13,30 @@ Bảng dưới đây phân định rõ mô hình nào sử dụng đặc trưng 
 | DB nội bộ | Truy vấn từ bảng lịch sử đơn vay trong hệ thống |
 | CIC / Bureau | Dữ liệu từ trung tâm thông tin tín dụng (bên ngoài) |
 
+> ⚠️ **Đơn vị tiền tệ — KHÔNG phải VND.**
+> Model `customer_risk_model` (LightGBM v4) được huấn luyện trên dataset *Home Credit Credit Risk Model Stability* (Đông Âu). Toàn bộ trường tiền (`monthly_income`, `loan_amount`, `total_overdue_amount`, `max_overdue_amount`) ở **đơn vị tiền gốc của tập train (HC unit, magnitude ≈ USD/EUR)**, không phải VND.
+> Bằng chứng từ `customer_risk_model.pkl` — median train (`feature_defaults`):
+> - `monthly_income` ≈ **40,000**
+> - `loan_amount` ≈ **35,199**
+> - `log_monthly_income` ≈ **10.60** (= ln(40,001))
+> - `dti_p75` ≈ **0.149** (ratio, không phải tiền)
+>
+> Nếu form FE nhập VND raw (ví dụ 15,000,000) và gửi thẳng vào model, `log_monthly_income` sẽ ≈ 16.5 — lệch ~6σ so với phân phối train → prediction không đáng tin. Khi triển khai cho UX VND, **phải convert VND → HC unit trước khi gọi `build_model_input`** (xem `backend/services/model_feature_builder.py`).
+
 ---
 
 ## 1. Thu nhập, Khoản vay & Gánh nặng Nợ (Income, Loan & Debt)
 
 | Tên Đặc trưng (Gốc) | Ý nghĩa | Nguồn thu thập | LightGBM Model | LR Scorecard Model | Định dạng / Đơn vị Đầu vào Tối ưu |
 | :--- | :--- | :--- | :---: | :---: | :--- |
-| `stated_monthly_income` | Thu nhập hàng tháng | **Form** | `monthly_income` | ❌ | **Số nguyên (VND)** - VD: `15000000`. Không chia tỷ lệ (triệu/nghìn). |
-| `loan_original_amount` | Số tiền gốc khoản vay | **Form** | `loan_amount` | ❌ | **Số nguyên (VND)** - VD: `50000000`. Không chia tỷ lệ. |
+| `stated_monthly_income` | Thu nhập hàng tháng | **Form** | `monthly_income` | ❌ | **Số thực (HC unit, magnitude ≈ USD)** - VD: `40000` (median train). Không chia tỷ lệ. ⚠️ Không phải VND. |
+| `loan_original_amount` | Số tiền gốc khoản vay | **Form** | `loan_amount` | ❌ | **Số thực (HC unit, magnitude ≈ USD)** - VD: `35199` (median train). Không chia tỷ lệ. ⚠️ Không phải VND. |
 | `term` | Kỳ hạn vay | **Form** | `term` | ❌ | **Số nguyên (Tháng)** - VD: `12`, `24`. |
 | `debt_to_income_ratio` | Tỷ lệ nợ trên thu nhập (DTI) | **Tự tính** `(loan_amount/term)/income` | `dti` | `debt_to_income_ratio` | **Số thực (Float 0-1)** - VD: `0.35` thay vì `35%`. Giữ độ chính xác thập phân. |
 | `loan_amount_to_income` | Quy mô khoản vay / Thu nhập | **Tự tính** `loan_amount/(income×12)` | `loan_amount_to_income` | `loan_amount_to_income` | **Số thực (Float)** - VD: `12.5`. |
-| `log_monthly_income` | Logarit tự nhiên của thu nhập | **Tự tính** `ln(1 + income)` | `log_monthly_income` | `log_monthly_income` | **Số thực (Float)** - Tính bằng `ln(income)`, giữ nguyên phần thập phân. VD: `16.523`. |
+| `log_monthly_income` | Logarit tự nhiên của thu nhập | **Tự tính** `ln(1 + income)` | `log_monthly_income` | `log_monthly_income` | **Số thực (Float)** - Tính bằng `ln(1+income)` với income ở HC unit. VD: `10.60` (income=40000, median train). |
 | `payment_to_income` | DTI khoản vay hiện tại | **Tự tính** (trùng DTI, đã loại v4) | `payment_to_income` | `payment_to_income` | **Số thực (Float 0-1)** - VD: `0.15`. |
-| `high_dti_flag` | Cờ DTI rủi ro cao | **Tự tính** `1` nếu DTI > p75 (~2,683) | `high_dti_flag` | `high_dti_flag` | **Số nguyên (0 hoặc 1)** |
+| `high_dti_flag` | Cờ DTI rủi ro cao | **Tự tính** `1` nếu DTI > `dti_p75` (~0.149 theo artifact v4) | `high_dti_flag` | `high_dti_flag` | **Số nguyên (0 hoặc 1)** |
 | `current_debt_ratio` | Dư nợ / Tổng hạn mức | **CIC / Bureau** | `current_debt_ratio` | `current_debt_ratio` | **Số thực (Float 0-1)** - VD: `0.85`. |
 | `total_debt_to_income` | Tổng dư nợ / Thu nhập | **CIC / Bureau** + Tự tính | `total_debt_to_income` | `total_debt_to_income` | **Số thực (Float)** - VD: `5.2`. |
 
@@ -39,11 +49,11 @@ Bảng dưới đây phân định rõ mô hình nào sử dụng đặc trưng 
 | `num_installs_dpd10` | Số lần thanh toán trễ > 10 ngày | **CIC / Bureau** | `num_installs_dpd10` | `num_installs_dpd10` | **Số nguyên (Lần)** - VD: `3`. |
 | `num_bureau_records` | Tổng số hồ sơ tín dụng | **Form** (người dùng tự khai) | `num_bureau_records` | `num_bureau_records` | **Số nguyên (Hồ sơ)** - VD: `5`. |
 | `num_active_credit` | Số khoản vay đang hoạt động | **Form** (người dùng tự khai) | `num_active_credit` & `num_active_credit_bureau` | `num_active_credit` | **Số nguyên (Khoản)** - VD: `2`. *(Lưu ý: LightGBM nhân đôi cột này với alias thứ hai)*. |
-| `total_overdue_amount` | Tổng số tiền đang quá hạn | **Form** (người dùng tự khai) | `total_overdue_amount` | `total_overdue_amount` | **Số nguyên (VND)** - VD: `1500000`. |
+| `total_overdue_amount` | Tổng số tiền đang quá hạn | **Form** (người dùng tự khai) | `total_overdue_amount` | `total_overdue_amount` | **Số thực (HC unit, magnitude ≈ USD)** - VD: `1500`. ⚠️ Không phải VND. |
 | `max_credit_overdue_days` | Số ngày trễ lớn nhất tại CIC | **Form** (người dùng tự khai) | `max_credit_overdue_days` | `max_credit_overdue_days` | **Số nguyên (Ngày)** - VD: `90`. |
 | `has_bad_debt` | Đã từng có nợ xấu (nhóm 3+) | **Form** (người dùng tự khai, đã loại v4) | `has_bad_debt` | `has_bad_debt` | **Số nguyên (0 hoặc 1)** |
 | `total_prolongations` | Tổng số lần xin gia hạn nợ | **CIC / Bureau** | `total_prolongations` | `total_prolongations` | **Số nguyên (Lần)** - VD: `1`. |
-| `max_overdue_amount` | Số tiền quá hạn cao nhất lịch sử | **CIC / Bureau** | `max_overdue_amount` | ❌ | **Số nguyên (VND)** - VD: `5000000`. |
+| `max_overdue_amount` | Số tiền quá hạn cao nhất lịch sử | **CIC / Bureau** | `max_overdue_amount` | ❌ | **Số thực (HC unit, magnitude ≈ USD)** - VD: `5000`. ⚠️ Không phải VND. |
 
 ## 3. Hành vi Nội bộ & Truy vấn CIC (Previous Apps & CB Queries)
 

@@ -136,7 +136,7 @@ def run_eval_file(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run lightweight RAG eval.")
-    parser.add_argument("--dataset", required=True, help="Path to docs/rag_eval_dataset.json")
+    parser.add_argument("--dataset", required=True, help="Path to RAG_eval/rag_eval_dataset.json")
     parser.add_argument("--output", required=True, help="Path to write eval results JSON")
     parser.add_argument("--baseline", help="Optional baseline results JSON")
     parser.add_argument("--diff", help="Optional path to write baseline diff JSON")

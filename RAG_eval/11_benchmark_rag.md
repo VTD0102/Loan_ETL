@@ -74,7 +74,7 @@ curl -X POST http://localhost:8000/applications/submit \
 
 ## Bước 2: Xây Dựng Bộ Câu Hỏi Benchmark (Golden Dataset)
 
-Tạo file `docs/rag_benchmark_dataset.json`:
+Tạo file `RAG_eval/rag_benchmark_dataset.json`:
 
 ```json
 [
@@ -242,8 +242,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).parents[2]
-DATASET_PATH = ROOT / "docs" / "rag_benchmark_dataset.json"
-RESULT_PATH  = ROOT / "docs" / "rag_benchmark_results.json"
+DATASET_PATH = ROOT / "RAG_eval" / "rag_benchmark_dataset.json"
+RESULT_PATH  = ROOT / "RAG_eval" / "rag_benchmark_results.json"
 
 from main import app
 client = TestClient(app)
@@ -314,7 +314,7 @@ python tests_local/test_rag_benchmark.py
 
 ### 4.1 Metric thủ công (Human Evaluation)
 
-Sau khi chạy script, mở `docs/rag_benchmark_results.json` và đánh giá mỗi câu theo thang điểm:
+Sau khi chạy script, mở `RAG_eval/rag_benchmark_results.json` và đánh giá mỗi câu theo thang điểm:
 
 | Metric | Thang | Mô tả |
 |---|---|---|
@@ -346,7 +346,7 @@ Overall Score       = 0.35×Faithfulness + 0.25×Relevance + 0.20×SourceRecall 
 
 ---
 
-Đã lưu 31 kết quả → /Users/cuongvuthanh/Documents/HQTCSDL/Loan_ETL/docs/rag_benchmark_results.json
+Đã lưu 31 kết quả → /Users/cuongvuthanh/Documents/HQTCSDL/Loan_ETL/RAG_eval/rag_benchmark_results.json
 ============================================================
 📊 BÁO CÁO BENCHMARK TỰ ĐỘNG (LLM-AS-A-JUDGE)
   - Faithfulness Score : 0.95

@@ -14,8 +14,8 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 ROOT = BACKEND_DIR.parent
-DATASET_PATH = ROOT / "docs" / "rag_benchmark_dataset.json"
-RESULT_PATH  = ROOT / "docs" / "rag_benchmark_results.json"
+DATASET_PATH = ROOT / "RAG_eval" / "rag_benchmark_dataset.json"
+RESULT_PATH  = ROOT / "RAG_eval" / "rag_benchmark_results.json"
 
 from main import app
 from fastapi.testclient import TestClient

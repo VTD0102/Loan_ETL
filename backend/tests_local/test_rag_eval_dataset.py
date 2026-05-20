@@ -15,7 +15,7 @@ from rag.eval_dataset import DEFAULT_EVAL_USER_CONTEXT, load_eval_dataset, valid
 from rag.eval_metrics import score_case
 
 
-DATASET_PATH = ROOT / "docs" / "rag_eval_dataset.json"
+DATASET_PATH = ROOT / "RAG_eval" / "rag_eval_dataset.json"
 
 
 def test_default_eval_user_context_contains_benchmark_facts():
