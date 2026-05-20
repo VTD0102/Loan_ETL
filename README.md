@@ -45,7 +45,12 @@ flowchart LR
             SVC_ADJ --> SVC_ML
         end
         
-        JWT_MW --> SVCS
+        JWT_MW --> SVC_AUTH
+        JWT_MW --> SVC_APP
+        JWT_MW --> SVC_ADMIN
+        JWT_MW --> SVC_ML
+        JWT_MW --> SVC_CS
+        JWT_MW --> SVC_CHAT
     end
 
     CustPortal -->|"REST API"| ROUTERS
@@ -86,7 +91,10 @@ flowchart LR
     %% Kết nối từ Engines và Services đến Infra
     CHAIN -->|"LLM Queries"| OR
     RETRIEVER -->|"Vector query"| QD
-    SVCS -->|"CRUD DB"| PG
+    SVC_AUTH -->|"CRUD Users"| PG
+    SVC_APP -->|"CRUD Đơn vay"| PG
+    SVC_ADMIN -->|"Cập nhật & Thống kê"| PG
+    SVC_CS -->|"Đọc đơn vay"| PG
     CHAIN -->|"Save session"| PG
 
     %% ===== STYLING =====
