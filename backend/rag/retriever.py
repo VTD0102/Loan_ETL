@@ -1,4 +1,5 @@
 import logging
+from threading import Lock
 
 from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
@@ -14,6 +15,26 @@ from rag.reranker import get_reranker
 from core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Observability counters for rerank fallback. Read via get_rerank_fallback_count().
+_rerank_fallback_count = 0
+_rerank_call_count = 0
+
+
+def get_rerank_stats() -> dict:
+    """Return cumulative rerank stats since process start.
+
+    Useful for /admin or a simple liveness endpoint to surface silent
+    reranker degradation. Reset on process restart.
+    """
+    return {
+        "rerank_calls": _rerank_call_count,
+        "rerank_fallbacks": _rerank_fallback_count,
+        "fallback_rate": (
+            _rerank_fallback_count / _rerank_call_count
+            if _rerank_call_count else 0.0
+        ),
+    }
 
 
 class ParentDocumentRetriever:
@@ -59,17 +80,21 @@ class RerankedRetriever:
         if self.reranker is None:
             return candidates[: self.top_k]
 
+        global _rerank_call_count, _rerank_fallback_count
+        _rerank_call_count += 1
         try:
             return self.reranker.rerank(query, candidates, self.top_k)
         except Exception:
-            logger.exception("Reranker failed, falling back to candidates")
+            _rerank_fallback_count += 1
+            logger.exception(
+                "Reranker failed (fallback %d/%d), returning raw candidates",
+                _rerank_fallback_count, _rerank_call_count,
+            )
             return candidates[: self.top_k]
 
     def get_relevant_documents(self, query):
         return self.invoke(query)
 
-
-from threading import Lock
 
 _retriever_lock = Lock()
 _retriever = None
