@@ -1,112 +1,100 @@
 # CreditIntel - Hệ Thống Quản Lý & Đánh Giá Rủi Ro Khoản Vay
 
 > Dự án môn Hệ Quản Trị CSDL - Nhóm KH086  
-> FastAPI Backend + React Frontend + Home Credit Stability ETL + Machine Learning + RAG Chatbot
+> FastAPI Backend + React Frontend + Home Credit Stability ETL + Machine Learn## Kiến Trúc Tổng Quan Hệ Thống
 
----
-
-## Kiến Trúc Tổng Quan Hệ Thống
+Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
 graph TB
-    %% ====== NGƯỜI DÙNG ======
-    User(("👤 Người dùng"))
-
-    User -->|"1. Đăng nhập / Đăng ký"| FE_AUTH
-    FE_AUTH -->|"POST /auth/login · /auth/register"| AUTH_SVC
-    AUTH_SVC -->|"Trả JWT Token"| FE_AUTH
-    FE_AUTH -->|"2. Lưu token vào Zustand store"| TOKEN["🔑 JWT Token<br/>(authStore)"]
-
-    %% ====== GIAO DIỆN - FRONTEND ======
-    subgraph FRONTEND["🖥️ Giao diện (Frontend — React 18 + Vite + Tailwind)"]
+    %% ====== USER & FRONTEND ======
+    User(("👤 Người dùng")) -->|"Tương tác"| FE
+    
+    subgraph FE["🖥️ Giao diện (React 18 + Vite + Tailwind)"]
         direction TB
-        FE_AUTH["🔐 Login / Register<br/>(Public — ai cũng truy cập được)"]
-        TOKEN
-        FE_APP["📋 Dashboard / Apply / History<br/>(Protected — cần JWT)"]
-        FE_CHAT["💬 Giao diện Chat AI<br/>(Protected — cần JWT)"]
-        FE_ADMIN["🛡️ Admin Panel<br/>(Protected — cần JWT + role=admin)"]
+        PortalC["📋 Customer Portal<br/>(Apply, Dashboard, Chat AI)"]
+        PortalA["🛡️ Admin Portal<br/>(Review, Stats Dashboard)"]
+        Zustand["🔑 Zustand authStore<br/>(JWT Token)"]
     end
-
-    TOKEN -.->|"3. Đính kèm Bearer token<br/>vào mọi request"| FE_APP
-    TOKEN -.->|"Bearer token"| FE_CHAT
-    TOKEN -.->|"Bearer token"| FE_ADMIN
-
-    FE_APP   -->|"REST + JWT Header"| API
-    FE_CHAT  -->|"POST /chat + JWT Header"| API
-    FE_ADMIN -->|"REST /admin/* + JWT Header"| API
-
-    %% ====== XỬ LÝ - BACKEND ======
-    subgraph BACKEND["⚙️ Xử lý (FastAPI Backend)"]
+    
+    FE -->|"REST API + Bearer JWT"| API
+    
+    %% ====== BACKEND FASTAPI ======
+    subgraph BE["⚙️ Xử lý (FastAPI Backend)"]
         direction TB
-        API["🌐 API Endpoints<br/>/auth · /applications · /admin<br/>/chat · /credit-score"]
-        GUARD["🛂 Middleware xác thực<br/>require_customer / require_admin<br/>Verify JWT → extract user"]
-
-        API --> GUARD
-
-        subgraph SERVICES["📦 Business Logic (services/)"]
-            AUTH_SVC["auth_service<br/>JWT + bcrypt"]
-            APP_SVC["application_service<br/>CRUD đơn vay"]
-            ADMIN_SVC["admin_service<br/>Duyệt / Từ chối"]
-            ML_SVC["ml_service<br/>Dự đoán rủi ro"]
-            CREDIT_SVC["credit_score_service<br/>Chấm điểm tín dụng"]
-            CHAT_SVC["chat_service<br/>Điều phối RAG"]
+        API["🌐 API Routers<br/>/auth · /applications · /admin<br/>/chat · /credit-score"]
+        Guard["🛂 JWT Auth Middleware<br/>(require_customer / require_admin)"]
+        
+        API --> Guard
+        
+        subgraph SVC["📦 Business Logic Services (backend/services/)"]
+            AUTH_SVC["auth_service<br/>(JWT + Bcrypt)"]
+            APP_SVC["application_service<br/>(CRUD đơn vay)"]
+            ADMIN_SVC["admin_service<br/>(Admin duyệt/từ chối)"]
+            ML_SVC["ml_service<br/>(Dự đoán rủi ro LightGBM)"]
+            CS_SVC["credit_score_service<br/>(Scorecard LR + SHAP)"]
+            CHAT_SVC["chat_service<br/>(Điều phối Chat + State Machine)"]
+            ADJ_TOOL["loan_adjustment_tool<br/>(Mô phỏng đổi kỳ hạn/tiền)"]
         end
-
-        GUARD -->|"customer"| APP_SVC
-        GUARD -->|"customer"| CHAT_SVC
-        GUARD -->|"customer"| CREDIT_SVC
-        GUARD -->|"admin"| ADMIN_SVC
+        
+        Guard -->|"Xác thực & phân quyền"| SVC
+        CHAT_SVC --> ADJ_TOOL
+        CHAT_SVC --> APP_SVC
         APP_SVC --> ML_SVC
     end
-
-    %% ====== HỆ THỐNG RAG ======
-    subgraph RAG["🤖 Hệ thống RAG (backend/rag/)"]
+    
+    %% ====== RAG MODULE ======
+    subgraph RAG["🤖 Hệ thống RAG Nâng Cao (backend/rag/)"]
         direction TB
-        CHAIN["chain.py<br/>LangChain Pipeline"]
-        CTX["context_builder.py<br/>Xây dựng context 4 blocks"]
-        RETRIEVER["retriever.py<br/>Vector Search (top-k)"]
-        MEMORY["memory.py<br/>Lịch sử hội thoại"]
-        PROMPTS["prompts.py<br/>System Prompt tiếng Việt"]
-        INGEST["ingest.py<br/>Nạp tài liệu → chunks"]
+        RAG_CHAIN["chain.py<br/>(LCEL Pipeline)"]
+        RAG_GUARD["guardrails.py<br/>(Input & Output Safety)"]
+        RAG_ROUTER["router.py<br/>(Intent Classification)"]
+        RAG_REWRITE["query_rewriter.py<br/>(LLM Query Rewriter)"]
+        RAG_RET["retriever.py<br/>(Hybrid Search + Reranker)"]
+        RAG_PERS["personalizer.py<br/>(Status-based Personalization)"]
+        RAG_MEM["memory.py<br/>(Window + Summarization)"]
+        RAG_CHUNK["chunking.py / ingest.py<br/>(Parent-Child Chunking)"]
     end
-
-    CHAT_SVC --> CTX
-    CHAT_SVC --> CHAIN
-    CHAT_SVC --> MEMORY
-    CHAIN --> PROMPTS
-    CHAIN --> RETRIEVER
-    INGEST -->|"Chunk + Embed"| QDRANT
-
-    %% ====== ML MODELS ======
+    
+    CHAT_SVC --> RAG_CHAIN
+    RAG_CHAIN --> RAG_GUARD
+    RAG_CHAIN --> RAG_ROUTER
+    RAG_CHAIN --> RAG_REWRITE
+    RAG_CHAIN --> RAG_RET
+    RAG_CHAIN --> RAG_PERS
+    RAG_CHAIN --> RAG_MEM
+    RAG_RET --> RAG_CHUNK
+    
+    %% ====== ML TRAINING ======
     subgraph ML_MODELS["🧠 ML Models (machinelearning/ml/)"]
-        RISK_MODEL["customer_risk_model.pkl<br/>LightGBM — Dự đoán vỡ nợ"]
-        SCORECARD["scorecard_model.pkl<br/>LR Scorecard — Chấm điểm"]
+        LGBM["customer_risk_model.pkl<br/>(LightGBM v4 - Default risk)"]
+        SCORECARD["scorecard_model.pkl<br/>(Logistic Regression Scorecard)"]
     end
+    
+    ML_SVC --> LGBM
+    CS_SVC --> SCORECARD
 
-    ML_SVC -->|"Load artifact"| RISK_MODEL
-    CREDIT_SVC -->|"Load artifact"| SCORECARD
-
-    %% ====== LƯU TRỮ ======
-    subgraph STORAGE["💾 Lưu trữ (Database)"]
-        POSTGRES[("🐘 PostgreSQL / Supabase<br/>users · loan_applications<br/>chat_sessions · chat_messages<br/>personal_info")]
-        QDRANT[("🔷 Qdrant Vector DB<br/>Collection: creditintel-kb<br/>Embedding tài liệu RAG")]
-        DUCKDB[("🦆 DuckDB Local<br/>Bronze → Silver → Gold<br/>ETL Stability data")]
+    %% ====== STORAGE ======
+    subgraph STORAGE["💾 Cơ Sở Dữ Liệu"]
+        DB_PG[("🐘 PostgreSQL / Supabase<br/>(users, applications, chat_messages, ...)")]
+        DB_QD[("🔷 Qdrant Vector DB<br/>(Collection: creditintel-kb<br/>Dense + Sparse indices)")]
+        DB_DK[("🦆 DuckDB Local<br/>(Bronze → Silver → Gold ETL)")]
     end
-
-    AUTH_SVC --> POSTGRES
-    APP_SVC --> POSTGRES
-    ADMIN_SVC --> POSTGRES
-    MEMORY --> POSTGRES
-    RETRIEVER -->|"Similarity search"| QDRANT
-
-    %% ====== DỊCH VỤ BÊN NGOÀI ======
-    subgraph EXTERNAL["☁️ Dịch vụ bên ngoài"]
-        OPENROUTER["OpenRouter API<br/>LLM: gemini-2.5-flash<br/>Embedding: text-embedding-3-small"]
+    
+    SVC --> DB_PG
+    RAG_MEM --> DB_PG
+    RAG_CHUNK --> DB_QD
+    RAG_RET --> DB_QD
+    
+    %% ====== EXTERNAL ======
+    subgraph EXT["☁️ Dịch Vụ Bên Ngoài"]
+        OR["OpenRouter API<br/>(LLM: gemini-2.5-flash<br/>Embed: text-embedding-3-small)"]
     end
-
-    CHAIN -->|"Generate answer"| OPENROUTER
-    RETRIEVER -->|"Tạo embedding query"| OPENROUTER
-    INGEST -->|"Tạo embedding chunks"| OPENROUTER
+    
+    RAG_CHAIN --> OR
+    RAG_REWRITE --> OR
+    RAG_MEM --> OR
+    RAG_RET --> OR
 
     %% ====== STYLING ======
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
@@ -120,79 +108,114 @@ graph TB
     classDef guard fill:#ef4444,stroke:#dc2626,color:#fff
 
     class User user
-    class FE_AUTH,FE_APP,FE_CHAT,FE_ADMIN frontend
-    class TOKEN token
-    class API,AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CREDIT_SVC,CHAT_SVC backend
-    class GUARD guard
-    class CHAIN,CTX,RETRIEVER,MEMORY,PROMPTS,INGEST rag
-    class RISK_MODEL,SCORECARD ml
-    class POSTGRES,QDRANT,DUCKDB storage
-    class OPENROUTER external
+    class PortalC,PortalA frontend
+    class Zustand token
+    class API,AUTH_SVC,APP_SVC,ADMIN_SVC,ML_SVC,CS_SVC,CHAT_SVC,ADJ_TOOL backend
+    class Guard guard
+    class RAG_CHAIN,RAG_GUARD,RAG_ROUTER,RAG_REWRITE,RAG_RET,RAG_PERS,RAG_MEM,RAG_CHUNK rag
+    class LGBM,SCORECARD ml
+    class DB_PG,DB_QD,DB_DK storage
+    class OR external
 ```
 
-> **Chú thích tổng quan:**
-> 1. **Phải đăng nhập trước**: Người dùng truy cập Login/Register (public) → Backend xác thực → trả **JWT Token**.
-> 2. **Token lưu ở Frontend**: Zustand `authStore` giữ token; `ProtectedRoute` chặn truy cập nếu chưa login.
-> 3. **Mọi request protected đều gửi kèm JWT**: Axios interceptor tự đính `Authorization: Bearer <token>` vào header.
-> 4. **Backend verify JWT**: Middleware `require_customer` / `require_admin` giải mã token, kiểm tra role trước khi cho phép truy cập service.
-> 5. **Admin cần role đặc biệt**: Ngoài JWT còn phải có `role = admin` mới vào được Admin Panel.
-> - **RAG** kết hợp context từ hồ sơ khách hàng + tài liệu vector search để trả lời câu hỏi.
-> - **ML Models** được train offline từ ETL pipeline, load runtime trong backend services.
-> - **PostgreSQL** lưu dữ liệu nghiệp vụ; **Qdrant** lưu vector embeddings; **DuckDB** dùng cho ETL offline.
+> **Chú thích kiến trúc tổng quan:**
+> 1. **Giao thức & Phân Quyền**: Người dùng đăng nhập qua JWT Bearer. Token được lưu trữ tại Zustand store ở Frontend và được tự động đính kèm vào header của mọi API request. Backend verify JWT thông qua Middleware kiểm tra vai trò khách hàng (`require_customer`) hoặc quản trị viên (`require_admin`).
+> 2. **Xử Lý Nghiệp Vụ (Services)**: Lớp dịch vụ FastAPI quản lý toàn bộ business logic. `ml_service` thực hiện dự đoán rủi ro vỡ nợ tức thời (LightGBM) khi người dùng nộp đơn; `credit_score_service` tính toán FICO score và giải thích SHAP; `chat_service` điều phối hội thoại RAG và gọi `loan_adjustment_tool`.
+> 3. **Huấn Luyện ML Offline**: Các mô hình ML được huấn luyện offline bằng DuckDB local từ nguồn dữ liệu Kaggle Home Credit Stability, xuất ra các file `.pkl` để Backend sử dụng trực tiếp tại runtime.
+> 4. **Hệ Thống RAG**: RAG được cô lập khỏi DB nghiệp vụ và liên kết trực tiếp với Qdrant Vector DB, sử dụng OpenRouter làm cổng kết nối LLM (Gemini) và dense embeddings.
 
 ---
 
-## Luồng RAG Chatbot Chi Tiết
+## Luồng RAG Chatbot Nâng Cao & State Machine
+
+Hệ thống RAG của CreditIntel triển khai một pipeline đa giai đoạn cực kỳ bảo mật, chính xác cao và tích hợp sẵn máy trạng thái (state machine) giúp người dùng thực hiện nộp lại hồ sơ thay đổi kỳ hạn trực tiếp từ giao diện chat.
 
 ```mermaid
-graph LR
-    U(("👤 Khách hàng")) -->|"Gửi câu hỏi"| CHAT_UI["💬 Chat UI<br/>(React)"]
-    CHAT_UI -->|"POST /chat"| CHAT_EP["API /chat<br/>(FastAPI)"]
-    CHAT_EP --> CHAT_SVC2["chat_service.send()"]
-
-    CHAT_SVC2 -->|"1. Rate limit check"| RL{{"≤ 20 msg/phút?"}}
-    RL -->|"Vượt"| ERR429["❌ 429 Too Many"]
-    RL -->|"OK"| ENSURE["2. Ensure ML prediction"]
-
-    ENSURE -->|"Chưa có prediction"| ML2["ml_service.predict()"]
-    ML2 -->|"Cập nhật đơn vay"| DB2[("PostgreSQL")]
-    ENSURE -->|"Đã có"| CTX2
-
-    CTX2["3. context_builder<br/>Build 4 blocks JSON"] --> RAG_CHAIN
-
-    subgraph RAG_CHAIN["🤖 RAG Chain"]
+flowchart TD
+    UserMsg(["👤 Câu hỏi của User"]) --> InputGuard{"🛂 Input Guardrail<br/>(guardrails.py)"}
+    
+    %% Input Guardrail branch
+    InputGuard -->|Không an toàn| BlockedMsg["❌ Trả lời từ chối<br/>(Lý do bảo mật/độ dài)"]
+    InputGuard -->|An toàn| IntentRoute{"🔀 Intent Router<br/>(router.py)"}
+    
+    %% Intent Router branch
+    IntentRoute -->|Greeting / Off-topic| SkipRetrieval["Bỏ qua tìm kiếm (Skip Retrieval)"]
+    IntentRoute -->|Inquiry / Policy / Risk / Advice| QueryRewrite["🔄 Query Rewriter<br/>(query_rewriter.py)"]
+    
+    %% Retrieval flow
+    QueryRewrite -->|"Tạo câu hỏi độc lập"| HybridSearch[("🔷 Qdrant Hybrid Search<br/>(Dense + Sparse BM25)")]
+    HybridSearch -->|"Top-20 Chunks"| Rerank["⚡ Cross-Encoder Reranker<br/>(reranker.py)"]
+    Rerank -->|"Top-12 Chunks"| ParentExpand["📂 Parent Document Expansion<br/>(chunking.py)"]
+    ParentExpand -->|"Top-4 Parent Sections"| PromptAssemble
+    SkipRetrieval --> PromptAssemble
+    
+    %% Loan Adjustment logic
+    IntentRoute -->|Loan adjustment trigger| AdjCheck{"Kiểm tra máy trạng thái<br/>(pending_action)"}
+    AdjCheck -->|Chưa có proposal + Bị từ chối| RunAdj["🛠️ Loan Adjustment Tool"]
+    RunAdj -->|Tìm thấy phương án| SetPending["Lưu pending_action JSON<br/>Đề xuất điều chỉnh hạn mức/kỳ hạn"]
+    AdjCheck -->|Nhận phản hồi xác nhận| ProcessConfirm["📝 Tự động nộp lại đơn vay mới"]
+    
+    SetPending --> PromptAssemble
+    ProcessConfirm --> UserResponse
+    
+    %% Prompt Assembly and Generation
+    subgraph PromptAssemble["📝 Prompt Assembly"]
         direction TB
-        HIST["memory.py<br/>Load 10 turns gần nhất"]
-        RET2["retriever.py<br/>Vector search Qdrant<br/>top-k=4 documents"]
-        PROMPT2["prompts.py<br/>System prompt + context"]
-        LLM2["LangChain → OpenRouter<br/>gemini-2.5-flash"]
+        SysPrompt["System Prompt + Rules (Vietnamese)"]
+        UserCtx["4-Block User Context (DB: Info, ML, Rec)"]
+        RetContext["Retrieved Docs Context (Knowledge Base)"]
+        ToneCtx["Status-based Tone & Intent instructions"]
+        ConvMem["Conversation Summary + Window History"]
     end
-
-    RAG_CHAIN -->|"4. Trả answer + sources"| SAVE["5. Lưu transcript"]
-    SAVE --> DB2
-    SAVE -->|"Response JSON"| CHAT_UI
-
-    classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
-    classDef ui fill:#0ea5e9,stroke:#0284c7,color:#fff
-    classDef svc fill:#f59e0b,stroke:#d97706,color:#fff
-    classDef rag fill:#8b5cf6,stroke:#7c3aed,color:#fff
-    classDef db fill:#64748b,stroke:#475569,color:#fff
-    classDef err fill:#ef4444,stroke:#dc2626,color:#fff
-
-    class U user
-    class CHAT_UI ui
-    class CHAT_EP,CHAT_SVC2,ENSURE,CTX2,SAVE svc
-    class HIST,RET2,PROMPT2,LLM2 rag
-    class DB2 db
-    class ERR429 err
+    
+    PromptAssemble --> LLMGen["🤖 LLM (Gemini 2.5 Flash)<br/>temperature = 0.3"]
+    LLMGen --> OutputGuard{"🛂 Output Guardrail<br/>(guardrails.py)"}
+    
+    %% Output Guardrail branch
+    OutputGuard -->|Rò rỉ DB/Key| SanitizeLeak["Thay bằng nội dung lỗi an toàn"]
+    OutputGuard -->|Hứa phê duyệt| AppendDisclaimer["Chèn disclaimer cảnh báo Admin"]
+    OutputGuard -->|Đạt chuẩn| SaveMsg["💾 Lưu Q&A & Cập nhật Memory"]
+    
+    SanitizeLeak --> SaveMsg
+    AppendDisclaimer --> SaveMsg
+    
+    SaveMsg --> UserResponse(["👤 Trả lời + Trích dẫn nguồn (Sources)"])
 ```
 
-> **Chú thích luồng RAG:**
-> 1. **Rate Limit**: Giới hạn 20 câu hỏi/phút/user để tránh lạm dụng API.
-> 2. **Ensure Prediction**: Nếu đơn vay chưa có kết quả ML → tự động chạy `ml_service.predict()` và cập nhật DB.
-> 3. **Context Builder**: Xây dựng 4 blocks — Form context, ML context, Advisory context, Data quality.
-> 4. **RAG Chain**: Load lịch sử chat → vector search tài liệu → ghép prompt → gọi LLM sinh câu trả lời.
-> 5. **Lưu transcript**: Cả câu hỏi lẫn câu trả lời được lưu vào `chat_messages` để dùng cho lượt hỏi tiếp theo.
+### Các Giai Đoạn Trong RAG Pipeline:
+
+1. **Input Guardrail (`guardrails.py`)**: 
+   - Kiểm soát độ dài đầu vào (`MAX_INPUT_LENGTH = 2000`).
+   - Sử dụng các mẫu Regex cứng để phát hiện các cuộc tấn công prompt-injection (như jailbreak, yêu cầu in system prompt) hoặc thăm dò thông tin cá nhân (PII probing - cố tình hỏi thông tin của khách hàng khác). Nếu kích hoạt, tin nhắn bị chặn ngay lập tức.
+2. **Intent Router (`router.py`)**: 
+   - Phân loại tin nhắn của người dùng vào 1 trong 6 ý định: `loan_inquiry`, `risk_explanation`, `policy_question`, `personal_advice`, `greeting`, `off_topic`.
+   - Kết hợp khớp nhanh từ khóa (keyword fast-path) để giảm độ trễ và gọi LLM phân loại JSON nếu không khớp từ khóa.
+   - Các ý định `greeting` và `off_topic` sẽ bỏ qua bước tìm kiếm tài liệu để tiết kiệm chi phí.
+3. **Query Rewriter (`query_rewriter.py`)**:
+   - Sử dụng mô hình `google/gemini-2.5-flash` để chuyển câu hỏi hiện tại của người dùng thành câu truy vấn độc lập (standalone query) dựa trên tóm tắt hội thoại và lịch sử chat (tối đa 6 tin nhắn gần nhất) nhằm tối ưu hóa kết quả tìm kiếm ngữ nghĩa.
+4. **Hybrid Search & Reranking (`retriever.py`, `reranker.py`, `chunking.py`)**:
+   - **Tìm kiếm hỗn hợp (Hybrid Search)**: Qdrant kết hợp tìm kiếm vector dense (OpenAI `text-embedding-3-small` qua OpenRouter) và tìm kiếm vector sparse (BM25 thông qua thư viện `FastEmbedSparse` local).
+   - **Reranker**: Sử dụng Cross-Encoder Reranker (`fastembed.rerank.cross_encoder.TextCrossEncoder`) để chấm điểm độ liên quan trực tiếp giữa câu hỏi và top 20 chunks kết quả, lấy ra top 12.
+   - **Parent-Child Expansion (Bản đồ phân mảnh)**: Chunks được lưu trữ ở dạng child chunks nhỏ (tối đa 700 ký tự) để tăng độ chính xác khi đối sánh vector, nhưng khi trả về cho prompt sẽ được ánh xạ ngược lên parent document/section hoàn chỉnh chứa heading tương ứng (tối đa 3500 ký tự) để tránh đứt gãy ngữ cảnh.
+5. **Personalization (`personalizer.py`)**:
+   - Tự động điều chỉnh giọng điệu và chỉ dẫn (tone/instructions) cho LLM theo trạng thái hồ sơ thực tế của người dùng:
+     - `auto_rejected` / `admin_rejected` -> Đồng cảm, khích lệ, gợi ý hướng cải thiện (giảm DTI, tăng FICO).
+     - `pending_review` -> Hướng dẫn quy trình, thông tin thời gian xử lý.
+     - `approved` / `awaiting_info` -> Chúc mừng, hướng dẫn các tài liệu cần tải lên (CCCD, SĐT).
+     - `info_submitted` -> Yên tâm, giải thích bước xử lý tiếp theo.
+     - Không có hồ sơ -> Thân thiện, giới thiệu dịch vụ.
+6. **Memory & Persistence (`memory.py`)**:
+   - Áp dụng chiến lược bộ nhớ đệm trượt (sliding window) kết hợp tóm tắt lười (lazy summarization). 
+   - Duy trì các tin nhắn gần nhất trong giới hạn token budget. Các tin nhắn cũ hơn sẽ được LLM tự động tóm tắt gộp vào `ChatSession.summary` và lưu vào PostgreSQL để giữ bộ nhớ dài hạn mà không làm tràn ngữ cảnh LLM.
+7. **Máy trạng thái điều chỉnh khoản vay (Loan Adjustment State Machine)**:
+   - Nếu người dùng có đơn bị `AUTO_REJECTED` hỏi về các phương án điều chỉnh (thay đổi kỳ hạn/số tiền vay), `chat_service` sẽ chuyển luồng xử lý tới `loan_adjustment_tool`.
+   - Tool tự động giả định (simulate) qua mô hình ML các tổ hợp kỳ hạn (12, 24, 36, 48, 60 tháng) và số tiền vay tối ưu để tìm ra phương án có xác suất vỡ nợ dưới ngưỡng an toàn `0.4`.
+   - Nếu tìm thấy, phương án điều chỉnh sẽ được lưu dưới dạng `pending_confirmation` trong cột `pending_action` của session chat, và chatbot hiển thị câu hỏi đề xuất đồng ý/từ chối.
+   - Nếu người dùng nhập các từ khóa xác nhận ("đồng ý", "xác nhận", "ok"), hệ thống tự động gọi service nộp lại hồ sơ mới (`application_service.confirm`) và thông báo kết quả tức thời.
+8. **Output Guardrail (`guardrails.py`)**:
+   - Kiểm tra kết quả đầu ra của LLM trước khi hiển thị cho người dùng.
+   - Phát hiện và che giấu các rò rỉ dữ liệu hệ thống (như tên bảng DB, chuỗi API key, password hash).
+   - Phát hiện các câu hứa hẹn phê duyệt 100% của LLM để tự động chèn cảnh báo từ chối trách nhiệm (disclaimer) - khẳng định quyết định cuối cùng thuộc về Admin.
 
 ---
 
@@ -285,25 +308,35 @@ Loan_ETL/
 │   │   ├── admin_service.py          # Admin approve/reject đơn
 │   │   ├── ml_service.py             # Load LightGBM model, predict risk
 │   │   ├── credit_score_service.py   # Load scorecard, compute FICO score
-│   │   ├── chat_service.py           # Điều phối RAG chatbot
+│   │   ├── chat_service.py           # Điều phối RAG chatbot & flow nộp lại
+│   │   ├── loan_adjustment_tool.py   # Tìm phương án điều chỉnh hạn mức/kỳ hạn tối ưu
 │   │   ├── model_feature_builder.py  # Map form data → ML features
 │   │   ├── loan_suggestion_service.py # Binary search optimal loan
 │   │   └── document_service.py       # Upload/manage documents
 │   ├── rag/                  # RAG chatbot engine
-│   │   ├── chain.py          # LangChain chain: prompt → LLM → parse
-│   │   ├── retriever.py      # Qdrant vector similarity search
-│   │   ├── context_builder.py # Build 4-block context from DB
-│   │   ├── memory.py         # Load chat history from PostgreSQL
+│   │   ├── chain.py          # RAG pipeline execution (Guardrail -> Route -> Rewrite -> Hybrid Retrieve -> Rerank -> LLM -> Guardrail)
+│   │   ├── router.py         # Phân loại ý định (Intent Classification) bằng từ khóa + LLM JSON
+│   │   ├── query_rewriter.py # Viết lại câu truy vấn độc lập dựa trên lịch sử
+│   │   ├── retriever.py      # Qdrant Hybrid Search & Reranking retriever
+│   │   ├── reranker.py       # Cross-Encoder Reranker sử dụng fastembed
+│   │   ├── chunking.py       # Phân mảnh tài liệu hierarchical (Parent-Child)
+│   │   ├── context_builder.py # Build 4-block user context từ Database
+│   │   ├── personalizer.py   # Tự động điều chỉnh giọng điệu & chỉ dẫn dựa trên trạng thái đơn
+│   │   ├── guardrails.py     # Kiểm soát an toàn đầu vào (Prompt Injection) & đầu ra (Data leak, hứa duyệt)
+│   │   ├── memory.py         # Quản lý lịch sử hội thoại (Sliding Window + Conversation Summarization)
 │   │   ├── prompts.py        # System prompt template (Vietnamese)
-│   │   ├── ingest.py         # One-shot: load docs → chunk → embed → Qdrant
-│   │   ├── config.py         # RAG settings (model, collection, top-k)
+│   │   ├── ingest.py         # One-shot: nạp docs → chunk → embed → Qdrant
+│   │   ├── config.py         # Cấu hình RAG parameters (model, collections, top-k)
+│   │   ├── eval_runner.py    # Chạy kiểm thử tự động offline cho hệ thống RAG
+│   │   ├── eval_metrics.py   # Bộ chỉ số đánh giá RAG (Groundness, Faithfulness, Relevance)
 │   │   └── knowledge/        # Markdown knowledge base (faq.md, policy.md)
 │   ├── models/               # SQLAlchemy ORM models
 │   ├── schemas/              # Pydantic request/response schemas
 │   ├── core/                 # Config (env), security (JWT), scoring utils
 │   ├── db/                   # DB session, init SQL
 │   └── tests_local/          # Local integration tests
-│
+```
+
 ├── frontend/                 # React 18 + Vite + TailwindCSS
 │   └── src/
 │       ├── App.jsx           # Router: public, customer, admin routes
