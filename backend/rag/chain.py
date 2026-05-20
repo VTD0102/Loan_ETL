@@ -28,6 +28,7 @@ from rag.config import LLM_MODEL, OPENROUTER_BASE_URL
 from rag.guardrails import check_input, check_output
 from rag.personalizer import PersonalizationContext, get_intent_instructions
 from rag.prompts import chat_prompt
+from rag.query_rewriter import rewrite_for_retrieval
 from rag.retriever import get_retriever
 from rag.router import classify_intent, needs_retrieval
 
@@ -64,26 +65,9 @@ def invoke(
     personalization: "PersonalizationContext | None" = None,
     conversation_summary: str | None = None,
 ) -> dict:
-    """Full RAG pipeline: guardrail → route → retrieve → personalise → LLM → guardrail.
+    """Full RAG pipeline: guardrail -> route -> rewrite -> retrieve -> LLM -> guardrail."""
+    retrieval_query = question
 
-    Parameters
-    ----------
-    question : str
-        The user's message.
-    user_context : str
-        Pre-built textual context from ``context_builder.build_user_context``.
-    chat_history : list
-        LangChain message objects for the recent conversation window.
-    personalization : PersonalizationContext, optional
-        Pre-built personalization context. If ``None``, defaults are used.
-    conversation_summary : str, optional
-        Running summary of older turns. If ``None``, renders as ``(không có)``.
-
-    Returns
-    -------
-    dict
-        ``answer``, ``source_documents``, ``intent``, and optionally ``blocked``.
-    """
     # ── Step 1: Input guardrail ───────────────────────────────────────────
     input_check = check_input(question)
     if not input_check.passed:
@@ -93,17 +77,28 @@ def invoke(
             "source_documents": [],
             "intent": "blocked",
             "blocked": True,
+            "retrieval_query": retrieval_query,
         }
 
     # ── Step 2: Intent routing ────────────────────────────────────────────
     intent = classify_intent(question, chat_history)
     logger.info("Classified intent: %s", intent)
 
-    # ── Step 3: Retrieval (intent-aware) ──────────────────────────────────
+    # ── Step 3: Retrieval (intent-aware, conversation-query-aware) ─────────
     documents: list[Any] = []
     if needs_retrieval(intent):
         try:
-            documents = _retrieve_documents(question)
+            retrieval_query = rewrite_for_retrieval(
+                question,
+                chat_history,
+                conversation_summary=conversation_summary,
+            )
+        except Exception:
+            logger.exception("Query rewrite failed unexpectedly, using original question")
+            retrieval_query = question
+
+        try:
+            documents = _retrieve_documents(retrieval_query)
         except RetrievalError:
             logger.exception("Retrieval failed, continuing without docs")
             documents = []
@@ -143,6 +138,7 @@ def invoke(
         "answer": answer,
         "source_documents": documents,
         "intent": intent,
+        "retrieval_query": retrieval_query,
     }
 
 
