@@ -8,78 +8,86 @@
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
-graph TB
-    User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
-    Login --> JWT["🔑 Zustand Store\n(Bearer JWT Auth)"]
-
-    %% Phân nhánh theo vai trò
-    JWT -->|Role: Customer| FE_C
-    JWT -->|Role: Admin| FE_A
-
-    subgraph FE_C["📋 Giao diện Khách hàng (React)"]
+flowchart LR
+    %% ===== CỘT 1: CLIENT-SIDE (REACT APP) =====
+    subgraph CLIENT["🖥️ Client-Side (React 18 + Zustand)"]
         direction TB
-        C_MAIN["📊 Portal (Dashboard / Apply / History)"]
-        C_CHAT["💬 Chat AI (RAG Chatbot)"]
+        User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
+        Login --> JWT["🔑 Zustand Store\n(JWT Bearer)"]
+        
+        JWT -->|Customer| CustPortal["📋 Customer Portal\n· Dashboard / Apply\n· RAG Chat AI"]
+        JWT -->|Admin| AdminPanel["🛡️ Admin Panel\n· Review & Stats"]
     end
 
-    subgraph FE_A["🛡️ Giao diện Admin (React)"]
+    %% ===== CỘT 2: API & BACKEND (FASTAPI) =====
+    subgraph BE["⚙️ Backend Layer (FastAPI)"]
         direction TB
-        A_PANEL["🖥️ Admin Panel (Review & Stats)"]
-    end
-
-    %% Kết nối Frontend -> API Gateway
-    C_MAIN -->|"REST API"| ROUTERS
-    C_CHAT -->|"REST API"| ROUTERS
-    A_PANEL -->|"REST API"| ROUTERS
-
-    subgraph BACKEND["⚙️ Backend & API Layer (FastAPI)"]
-        direction TB
-        subgraph API_GW["🌐 API Gateway & Security"]
-            ROUTERS["🌐 API Routers\n/auth · /applications · /admin · /chat · /credit-score"]
-            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification & Verification)"]
+        subgraph API_GW["🌐 API Gateway & Auth"]
+            ROUTERS["🌐 API Routers\n/auth · /applications · /admin\n/chat · /credit-score"]
+            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification)"]
             ROUTERS --> JWT_MW
         end
-
-        subgraph SERVICES["📦 Business Services"]
+        
+        subgraph SVCS["📦 Business Services"]
             direction TB
-            SVC_AUTH["🔑 auth_service\n(Đăng nhập / Đăng ký / JWT)"]
-            SVC_APP["📄 application_service\n(Nghiệp vụ hồ sơ vay)"]
-            SVC_ADMIN["🛡️ admin_service\n(Phê duyệt & Thống kê)"]
-            SVC_ML["🧠 ml_service\n(LightGBM risk inference)"]
-            SVC_CS["📈 credit_score_service\n(FICO score & SHAP)"]
-            SVC_CHAT["💬 chat_service\n(Orchestrate RAG session)"]
-            SVC_ADJ["🛠️ loan_adjustment_tool\n(Mô phỏng khoản vay)"]
+            SVC_AUTH["auth_service\n(Xử lý Auth/JWT)"]
+            SVC_APP["application_service\n(Quản lý hồ sơ vay)"]
+            SVC_ADMIN["admin_service\n(Duyệt đơn & Thống kê)"]
+            SVC_ML["ml_service\n(LightGBM risk scoring)"]
+            SVC_CS["credit_score_service\n(FICO score & SHAP)"]
+            SVC_CHAT["chat_service\n(Điều phối RAG chat)"]
+            SVC_ADJ["loan_adjustment_tool\n(Giả lập tái cấu trúc)"]
             
+            %% Service-to-service internal connections
             SVC_CHAT --> SVC_ADJ
             SVC_CHAT --> SVC_APP
             SVC_APP --> SVC_ML
             SVC_ADJ --> SVC_ML
         end
-        JWT_MW --> SERVICES
+        
+        JWT_MW --> SVCS
     end
 
-    %% Kết nối Services -> Chuyên sâu RAG / ML
-    SVC_CHAT -->|"Gọi RAG Pipeline"| RAG_MOD
-    SVC_ML -->|"Chạy mô hình"| ML_MOD
-    SVC_CS -->|"Tính FICO / SHAP"| ML_MOD
+    CustPortal -->|"REST API"| ROUTERS
+    AdminPanel -->|"REST API"| ROUTERS
 
-    subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
+    %% ===== CỘT 3: ENGINE MODULES (RAG & ML) =====
+    subgraph ENGINES["⚙️ Core Engine Modules"]
         direction TB
-        CHAIN["chain.py (RAG Pipeline)"]
-        RETRIEVER["retriever.py (Hybrid Search)"]
-        CHAIN --> RETRIEVER
+        subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
+            direction TB
+            CHAIN["chain.py\n(LCEL RAG Pipeline)"]
+            RETRIEVER["retriever.py\n(Hybrid Search)"]
+            CHAIN --> RETRIEVER
+        end
+
+        subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
+            direction TB
+            RISK_M["customer_risk_model.pkl\n(LightGBM model)"]
+            SCORE_M["scorecard_model.pkl\n(FICO Scorecard)"]
+        end
     end
 
-    subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
+    SVC_CHAT -->|"Orchestrate RAG"| CHAIN
+    SVC_ML -->|"Predict Risk"| RISK_M
+    SVC_CS -->|"Score FICO"| SCORE_M
+    SVC_ADJ -->|"Simulate ML"| RISK_M
+
+    %% ===== CỘT 4: DATA & EXTERNAL INFRA =====
+    subgraph INFRA["💾 Hạ Tầng & Dịch Vụ"]
         direction TB
-        RISK_M["customer_risk_model.pkl\n(LightGBM v4)"]
-        SCORE_M["scorecard_model.pkl\n(FICO score)"]
+        subgraph STORAGE["💾 Databases"]
+            PG[("🐘 PostgreSQL\n(Users, Loans, Chat)")]
+            QD[("🔷 Qdrant\n(Vector KB)")]
+        end
+        OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
     end
 
-    %% Kết nối xuống Cơ sở dữ liệu và API ngoài
-    RAG_MOD -->|"Search vector"| QD[("🔷 Qdrant\nVector DB")]
-    RAG_MOD -->|"LLM & Embed"| OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
-    SERVICES -->|"Lưu đơn/Chat/Users"| PG[("🐘 PostgreSQL")]
+    %% Kết nối từ Engines và Services đến Infra
+    CHAIN -->|"LLM Queries"| OR
+    RETRIEVER -->|"Vector query"| QD
+    SVCS -->|"CRUD DB"| PG
+    CHAIN -->|"Save session"| PG
 
     %% ===== STYLING =====
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
@@ -98,8 +106,8 @@ graph TB
     class User user
     class Login auth
     class JWT jwt
-    class C_MAIN,C_CHAT cust
-    class A_PANEL adm
+    class CustPortal cust
+    class AdminPanel adm
     class ROUTERS be
     class JWT_MW jwt_mw
     class SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,SVC_ADJ svc
@@ -108,13 +116,17 @@ graph TB
     class PG,QD db
     class OR ext
 
-    style FE_C fill:transparent,stroke:#0ea5e9,stroke-width:2px
-    style FE_A fill:transparent,stroke:#f97316,stroke-width:2px
-    style BACKEND fill:transparent,stroke:#f59e0b,stroke-width:2px
+    style CLIENT fill:transparent,stroke:#0ea5e9,stroke-width:2px
+    style CustPortal fill:transparent,stroke:#0ea5e9,stroke-width:1px
+    style AdminPanel fill:transparent,stroke:#f97316,stroke-width:1px
+    style BE fill:transparent,stroke:#f59e0b,stroke-width:2px
     style API_GW fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
-    style SERVICES fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
-    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:3px
-    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:3px
+    style SVCS fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
+    style ENGINES fill:transparent,stroke:#8b5cf6,stroke-width:2px
+    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:1.5px
+    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:1.5px
+    style INFRA fill:transparent,stroke:#64748b,stroke-width:2px
+    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:1.5px
 ```
 
 
