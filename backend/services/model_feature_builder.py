@@ -67,13 +67,19 @@ def build_model_input(
     monthly_income = _number(payload.monthly_income)
     loan_amount    = _number(payload.loan_amount)
     term           = int(payload.term)
+    cic_monthly    = _number(getattr(payload, "cic_monthly_installment", None))
     payment_to_income = (
         (loan_amount / term) / monthly_income
         if monthly_income > 0 and term > 0
         else 0.0
     )
-    # Use computed DTI from payload if available, else fallback to payment_to_income
-    dti = _ratio(payload.dti) if payload.dti is not None else payment_to_income
+    # DTI includes existing CIC debt so the model sees total repayment burden.
+    # cic_monthly is constant across binary-search probes; only loan_amount changes.
+    dti = (
+        (loan_amount / term + cic_monthly) / monthly_income
+        if monthly_income > 0 and term > 0
+        else 0.0
+    )
     total_overdue = _number(payload.total_overdue_amount)
     emp_group     = _employment_group(payload.employment_status)
     occupation    = _income_type(payload.occupation_type, emp_group)

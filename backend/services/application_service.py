@@ -92,8 +92,9 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
             existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
     computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
-    # NOTE: Do NOT set payload.dti here — it would break the binary search in ML suggestion.
-    # The model was trained/tuned with dti=None; setting it changes predictions.
+    # CIC monthly debt is passed to model_feature_builder so it can recompute
+    # DTI correctly for each binary-search probe in loan_suggestion_service.
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
 
     # ── CIC enrichment: replace self-reported bureau fields with verified data ──
     cic_comparison = {}
@@ -243,6 +244,8 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
             cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
             cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
             existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
 
     try:
         artifact = ml_service._load()

@@ -18,7 +18,8 @@ class ApplicationBase(BaseModel):
     loan_amount: Decimal
     term: int
     employment_status: str
-    dti: Optional[Decimal] = None       # Auto-computed by backend from CIC + loan
+    dti: Optional[Decimal] = None              # Auto-computed, stored after ML predict
+    cic_monthly_installment: Decimal = Decimal("0")  # Backend-set from CIC; never user-supplied
     is_homeowner: bool
     listing_category: Union[str, int]
     credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
