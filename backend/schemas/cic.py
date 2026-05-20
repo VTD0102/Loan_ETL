@@ -14,6 +14,7 @@ class CICRecordRead(BaseModel):
     cic_score: Optional[int] = None
     total_active_loans: int = 0
     total_outstanding_debt: Decimal = Decimal("0")
+    total_monthly_installment: Decimal = Decimal("0")
     total_overdue_amount: Decimal = Decimal("0")
     max_dpd_12m: int = 0
     num_credit_inquiries: int = 0

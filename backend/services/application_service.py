@@ -89,9 +89,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
-            # Estimate existing monthly debt from outstanding debt (assume 36-month avg)
-            outstanding = float(cic_record.total_outstanding_debt or 0)
-            existing_monthly_debt = outstanding / 36 if outstanding > 0 else 0
+            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
     computed_dti = (monthly_payment + existing_monthly_debt) / monthly_income if monthly_income > 0 else 0
     # NOTE: Do NOT set payload.dti here — it would break the binary search in ML suggestion.
@@ -138,6 +136,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
         # Store outstanding debt for admin visibility
         cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
+        cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
         logger.info("CIC enrichment applied for %s", user.email)
 
     # ── Build CIC summary for frontend display ──
@@ -148,6 +147,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
             "cic_score": cic_record.cic_score,
             "total_active_loans": cic_record.total_active_loans,
             "total_outstanding_debt": float(cic_record.total_outstanding_debt or 0),
+            "total_monthly_installment": float(cic_record.total_monthly_installment or 0),
             "total_overdue_amount": float(cic_record.total_overdue_amount or 0),
             "max_dpd_12m": cic_record.max_dpd_12m,
             "num_credit_inquiries": cic_record.num_credit_inquiries,
@@ -241,8 +241,8 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
             cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
             # Store outstanding debt for admin visibility
             cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
-            outstanding = float(cic_record.total_outstanding_debt or 0)
-            existing_monthly_debt = outstanding / 36 if outstanding > 0 else 0
+            cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
 
     try:
         artifact = ml_service._load()

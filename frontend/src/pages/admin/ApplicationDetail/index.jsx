@@ -163,6 +163,7 @@ const AdminApplicationDetailPage = () => {
     { label: 'Số hồ sơ tín dụng',  value: app.num_bureau_records ?? '—' },
     { label: 'Tín dụng đang hoạt động', value: app.num_active_credit ?? '—' },
     { label: 'Tổng dư nợ CIC',     value: app.feature_snapshot?.cic_outstanding_debt != null ? formatCurrency(app.feature_snapshot.cic_outstanding_debt) : '—' },
+    { label: 'Nghĩa vụ nợ hàng tháng', value: app.feature_snapshot?.cic_monthly_installment != null ? formatCurrency(app.feature_snapshot.cic_monthly_installment) : '—' },
     { label: 'Tổng nợ quá hạn',    value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
     { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
     { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },

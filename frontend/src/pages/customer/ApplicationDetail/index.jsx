@@ -394,6 +394,10 @@ const ApplicationDetailPage = () => {
                     <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_outstanding_debt || 0).toLocaleString()}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Nghĩa vụ nợ hàng tháng</p>
+                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_monthly_installment || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tiền quá hạn</p>
                     <p className={`text-sm font-semibold ${Number(cicData.record?.total_overdue_amount || 0) > 0 ? 'text-danger-600' : 'text-gray-800'}`}>
                       ${Number(cicData.record?.total_overdue_amount || 0).toLocaleString()}

@@ -95,6 +95,10 @@ def _generate_good_profile() -> dict[str, Any]:
     term = random.choice(_TERM_OPTIONS)
     emp = random.choices(["Employed", "Self-employed"], weights=[80, 20])[0]
 
+    cic_outstanding = round(random.uniform(0, income * 6), 2)
+    cic_term = random.randint(12, 60)
+    cic_installment = round(cic_outstanding / cic_term, 2) if cic_outstanding > 0 else 0.0
+
     return {
         "monthly_income": round(income, 2),
         "loan_amount": round(loan, 2),
@@ -119,7 +123,8 @@ def _generate_good_profile() -> dict[str, Any]:
         "_cic": {
             "cic_score": random.randint(680, 850),
             "total_active_loans": random.randint(0, 2),
-            "total_outstanding_debt": round(random.uniform(0, income * 6), 2),
+            "total_outstanding_debt": cic_outstanding,
+            "total_monthly_installment": cic_installment,
             "total_overdue_amount": 0,
             "max_dpd_12m": 0,
             "num_credit_inquiries": random.randint(0, 3),
@@ -148,6 +153,10 @@ def _generate_risky_profile() -> dict[str, Any]:
     overdue = round(random.uniform(0, 500), 2)
     dpd = random.randint(5, 60)
 
+    cic_outstanding = round(random.uniform(income * 2, income * 12), 2)
+    cic_term = random.randint(12, 60)
+    cic_installment = round(cic_outstanding / cic_term, 2) if cic_outstanding > 0 else 0.0
+
     return {
         "monthly_income": round(income, 2),
         "loan_amount": round(loan, 2),
@@ -170,7 +179,8 @@ def _generate_risky_profile() -> dict[str, Any]:
         "_cic": {
             "cic_score": random.randint(500, 680),
             "total_active_loans": random.randint(1, 4),
-            "total_outstanding_debt": round(random.uniform(income * 2, income * 12), 2),
+            "total_outstanding_debt": cic_outstanding,
+            "total_monthly_installment": cic_installment,
             "total_overdue_amount": overdue,
             "max_dpd_12m": dpd,
             "num_credit_inquiries": random.randint(2, 8),
@@ -200,6 +210,10 @@ def _generate_defaulter_profile() -> dict[str, Any]:
     )[0]
     overdue = round(random.uniform(500, 5000), 2)
     dpd = random.randint(30, 180)
+    
+    cic_outstanding = round(random.uniform(income * 6, income * 24), 2)
+    cic_term = random.randint(12, 60)
+    cic_installment = round(cic_outstanding / cic_term, 2) if cic_outstanding > 0 else 0.0
 
     return {
         "monthly_income": round(income, 2),
@@ -223,7 +237,8 @@ def _generate_defaulter_profile() -> dict[str, Any]:
         "_cic": {
             "cic_score": random.randint(300, 500),
             "total_active_loans": random.randint(2, 6),
-            "total_outstanding_debt": round(random.uniform(income * 6, income * 24), 2),
+            "total_outstanding_debt": cic_outstanding,
+            "total_monthly_installment": cic_installment,
             "total_overdue_amount": overdue,
             "max_dpd_12m": dpd,
             "num_credit_inquiries": random.randint(5, 15),
@@ -313,6 +328,7 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
                 cic_score=cic_data.get("cic_score"),
                 total_active_loans=cic_data.get("total_active_loans", 0),
                 total_outstanding_debt=cic_data.get("total_outstanding_debt", 0),
+                total_monthly_installment=cic_data.get("total_monthly_installment", 0),
                 total_overdue_amount=cic_data.get("total_overdue_amount", 0),
                 max_dpd_12m=cic_data.get("max_dpd_12m", 0),
                 num_credit_inquiries=cic_data.get("num_credit_inquiries", 0),
