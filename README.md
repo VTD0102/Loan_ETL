@@ -192,11 +192,11 @@ flowchart TD
         SysPrompt --> UserCtx --> RetContext --> ToneCtx --> ConvMem
     end
 
-    ParentExpand --> PROMPT
-    SkipRetrieval --> PROMPT
-    SetPending --> PROMPT
+    ParentExpand --> RetContext
+    SkipRetrieval --> SysPrompt
+    SetPending --> SysPrompt
 
-    PROMPT --> LLMGen["🤖 LLM Gemini 2.5 Flash\ntemperature = 0.3"]
+    ConvMem --> LLMGen["🤖 LLM Gemini 2.5 Flash\ntemperature = 0.3"]
     LLMGen --> OutputGuard{"🛂 Output Guardrail"}
 
     OutputGuard -->|Rò rỉ DB/Key| Sanitize["Thay nội dung an toàn"]
