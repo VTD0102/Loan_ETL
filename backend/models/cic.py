@@ -13,10 +13,10 @@ from typing import Optional
 from sqlalchemy import String, DateTime, Numeric, Integer, Boolean, Text, func, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .base import Base
+from db.session import BureauBase
 
 
-class CICRecord(Base):
+class CICRecord(BureauBase):
     __tablename__ = "cic_credit_records"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

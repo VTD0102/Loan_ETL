@@ -84,7 +84,7 @@ def _build_app_fields(payload, prediction: dict) -> dict:
     }
 
 
-def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
+def evaluate(db: Session, bureau_db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     """
     Phase 1 — chạy ML + binary-search suggestion, KHÔNG lưu DB (trừ AUTO_REJECTED).
 
@@ -104,7 +104,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     existing_monthly_debt = 0.0
     cic_record = None
     if user.cccd:
-        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        cic_record = cic_service.lookup_by_cccd(bureau_db, user.cccd)
         if cic_record:
             existing_monthly_debt = _safe_monthly_installment(cic_record)
 
@@ -248,7 +248,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     }
 
 
-def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
+def confirm(db: Session, bureau_db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     """
     Phase 2 — user xác nhận (có thể đã điều chỉnh loan/term); lưu vào DB.
     Validate loan_amount ≤ max safe amount trước khi lưu.
@@ -260,7 +260,7 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     cic_comparison = {}
     existing_monthly_debt = 0.0
     if user.cccd:
-        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        cic_record = cic_service.lookup_by_cccd(bureau_db, user.cccd)
         if cic_record:
             if cic_record.blacklist_flag:
                 raise HTTPException(400, "Tài khoản bị cấm vay do nằm trong danh sách đen CIC")

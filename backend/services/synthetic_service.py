@@ -388,7 +388,7 @@ def _pick_profile() -> tuple[str, dict]:
 
 # ── Main generator ────────────────────────────────────────────────────────────
 
-def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
+def generate_batch(db: Session, bureau_db: Session, count: int = 10) -> dict[str, Any]:
     """
     Generate a batch of synthetic users + CIC records + loan applications.
 
@@ -449,14 +449,17 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
                 blacklist_reason=cic_data.get("blacklist_reason"),
                 loan_history=cic_data.get("loan_history", []),
             )
-            db.add(cic)
-            db.commit()  # Commit user + CIC so evaluate() can find them
+            bureau_db.add(cic)
+            
+            # Commit both databases so evaluate() can find them
+            db.commit()
+            bureau_db.commit()
 
             # 3) Build ApplicationCreate payload
             payload = ApplicationCreate(**profile)
 
             # 4) Run through real ML pipeline (CIC enrichment happens automatically)
-            result = application_service.evaluate(db, email, payload)
+            result = application_service.evaluate(db, bureau_db, email, payload)
 
             from schemas.application import ApplicationConfirm
             status = result.get("status", "UNKNOWN")
@@ -499,7 +502,7 @@ def generate_batch(db: Session, count: int = 10) -> dict[str, Any]:
                     profile["loan_amount"] = confirm_amt
                     profile["term"] = confirm_term
                     confirm_payload = ApplicationConfirm(**profile)
-                    application_service.confirm(db, email, confirm_payload)
+                    application_service.confirm(db, bureau_db, email, confirm_payload)
                     stats["pending_review"] += 1
                 except HTTPException as e:
                     if e.status_code == 422:
