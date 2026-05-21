@@ -75,6 +75,7 @@ const ChatWidget = ({ context, onClose }) => {
   ])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const messagesEndRef = useRef(null)
 
   const sendMessage = async () => {
@@ -87,11 +88,15 @@ const ChatWidget = ({ context, onClose }) => {
       const { default: api } = await import('../../../services/api')
       const res = await api.post('/chat', {
         message: userMsg,
-        session_id: null,
+        session_id: sessionId,
       })
+      if (!sessionId && res.data.session_id) {
+        setSessionId(res.data.session_id)
+      }
       setMessages(prev => [...prev, { role: 'assistant', text: res.data.response }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Xin lỗi, có lỗi khi kết nối AI. Vui lòng thử lại.' }])
+    } catch (err) {
+      const detail = err?.response?.data?.detail
+      setMessages(prev => [...prev, { role: 'assistant', text: detail || 'Xin lỗi, có lỗi khi kết nối AI. Vui lòng thử lại.' }])
     } finally {
       setSending(false)
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
