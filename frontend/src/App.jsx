@@ -21,6 +21,7 @@ import PendingApplicationsPage     from './pages/admin/PendingList'
 import AllApplicationsPage         from './pages/admin/ApplicationList'
 import AdminApplicationDetailPage  from './pages/admin/ApplicationDetail'
 import PersonalInfoViewPage        from './pages/admin/PersonalInfoView'
+import AdminProfilePage             from './pages/admin/Profile'
 
 // ── Admin Components ──────────────────────────────
 import AdminLayout from './components/admin/AdminLayout'
@@ -122,6 +123,7 @@ const App = () => (
       <Route path="applications"        element={<AllApplicationsPage />} />
       <Route path="application/:id"     element={<AdminApplicationDetailPage />} />
       <Route path="personal-info/:id"   element={<PersonalInfoViewPage />} />
+      <Route path="profile"             element={<AdminProfilePage />} />
     </Route>
 
     {/* Fallback */}

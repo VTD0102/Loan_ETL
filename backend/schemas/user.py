@@ -47,6 +47,12 @@ class UserRead(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    address: Optional[str] = None
+    password: Optional[str] = None
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"

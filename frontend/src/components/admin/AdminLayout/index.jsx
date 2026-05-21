@@ -40,6 +40,7 @@ const AdminLayout = () => {
   const user          = useAuthStore((s) => s.user)
   const logout        = useAuthStore((s) => s.logout)
   const [open, setOpen] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
@@ -54,7 +55,7 @@ const AdminLayout = () => {
           fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 shadow-sm
           flex flex-col transition-transform duration-300
           ${open ? 'translate-x-0' : '-translate-x-full'}
-          md:translate-x-0 md:static md:flex
+          md:translate-x-0 md:flex
         `}
       >
         {/* Logo */}
@@ -88,31 +89,6 @@ const AdminLayout = () => {
             </NavLink>
           ))}
         </nav>
-
-        {/* User + Logout */}
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-2 py-2 mb-2">
-            <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-primary-700">
-                {user?.username?.[0]?.toUpperCase() || 'A'}
-              </span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{user?.username}</p>
-              <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-danger-600 hover:bg-danger-50 transition-colors duration-150"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Đăng xuất
-          </button>
-        </div>
       </aside>
 
       {/* Backdrop mobile */}
@@ -124,7 +100,7 @@ const AdminLayout = () => {
       )}
 
       {/* ── Main content ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 md:pl-64">
         {/* Top header */}
         <header className="h-16 sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm flex items-center justify-between px-4 sm:px-6">
           {/* Hamburger */}
@@ -144,16 +120,82 @@ const AdminLayout = () => {
             <span className="text-sm font-bold text-gray-900">Admin</span>
           </div>
 
-          {/* Right: user info */}
-          <div className="flex items-center gap-3 ml-auto">
-            <div className="hidden sm:flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-primary-100 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary-700">
+          {/* Right: user info with Dropdown */}
+          <div className="relative ml-auto">
+            <button
+              onClick={() => setDropdownOpen((o) => !o)}
+              className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 transition-colors duration-150 focus:outline-none"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shadow-sm flex-shrink-0">
+                <span className="text-sm font-bold text-primary-700">
                   {user?.username?.[0]?.toUpperCase() || 'A'}
                 </span>
               </div>
-              <span className="text-sm font-medium text-gray-700">{user?.username}</span>
-            </div>
+              <span className="hidden sm:inline text-sm font-semibold text-gray-700 truncate max-w-[120px]">
+                {user?.username}
+              </span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform duration-150 ${dropdownOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* Dropdown Menu */}
+            {dropdownOpen && (
+              <>
+                {/* Backdrop to close when clicked outside */}
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setDropdownOpen(false)}
+                />
+                
+                <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-gray-200 shadow-xl z-40 py-2 animate-fade-in origin-top-right">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-xs text-gray-400">Tài khoản Admin</p>
+                    <p className="text-sm font-bold text-gray-800 truncate">{user?.username}</p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
+                  </div>
+                  
+                  <div className="p-1">
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        navigate('/admin/profile')
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-150"
+                    >
+                      <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                      Thông tin cá nhân
+                    </button>
+                  </div>
+                  
+                  <div className="border-t border-gray-100 my-1" />
+                  
+                  <div className="p-1">
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        handleLogout()
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-danger-600 hover:bg-danger-50 transition-all duration-150"
+                    >
+                      <svg className="w-4 h-4 text-danger-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Đăng xuất
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 
