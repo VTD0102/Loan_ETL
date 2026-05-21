@@ -38,7 +38,7 @@ const AdminProfilePage = () => {
         setAddress(data.address || '')
         
         // Read-only fields
-        setFullName(data.full_name || 'Quản trị viên')
+        setFullName(data.full_name || (user?.role === 'admin' ? 'Quản trị viên' : 'Người dùng'))
         setPhone(data.phone || 'Chưa cung cấp')
         setCccd(data.cccd || 'Chưa cung cấp')
         setCreatedAt(data.created_at || '')
@@ -49,7 +49,7 @@ const AdminProfilePage = () => {
           setUsername(user.username || '')
           setEmail(user.email || '')
           setAddress(user.address || '')
-          setFullName(user.full_name || 'Quản trị viên')
+          setFullName(user.full_name || (user?.role === 'admin' ? 'Quản trị viên' : 'Người dùng'))
           setPhone(user.phone || 'Chưa cung cấp')
           setCccd(user.cccd || 'Chưa cung cấp')
           setCreatedAt(user.created_at || '')
@@ -137,7 +137,7 @@ const AdminProfilePage = () => {
             <p className="text-xs font-medium text-gray-400 mt-0.5">@{username}</p>
             
             <div className="mt-3 px-3 py-1 bg-primary-50 text-primary-700 text-xs font-semibold rounded-full border border-primary-100">
-              Quản trị viên
+              {user?.role === 'admin' ? 'Quản trị viên' : 'Khách hàng'}
             </div>
 
             <div className="w-full border-t border-gray-100 my-5 pt-4 text-left space-y-3.5">
@@ -147,7 +147,9 @@ const AdminProfilePage = () => {
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400">Quyền hạn</span>
-                <span className="font-semibold text-gray-700">Tất cả quyền (Root)</span>
+                <span className="font-semibold text-gray-700">
+                  {user?.role === 'admin' ? 'Tất cả quyền (Root)' : 'Tài khoản thường'}
+                </span>
               </div>
               {createdAt && (
                 <div className="flex items-center justify-between text-xs">
@@ -193,7 +195,7 @@ const AdminProfilePage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className={`input ${errors.email ? 'input-error' : ''}`}
-                  placeholder="admin@creditintel.dev"
+                  placeholder="user@example.com"
                 />
                 {errors.email && <p className="error-msg">{errors.email}</p>}
               </div>

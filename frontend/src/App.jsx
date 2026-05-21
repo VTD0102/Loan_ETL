@@ -25,6 +25,7 @@ import AdminProfilePage             from './pages/admin/Profile'
 
 // ── Admin Components ──────────────────────────────
 import AdminLayout from './components/admin/AdminLayout'
+import CustomerLayout from './components/customer/CustomerLayout'
 
 const NotFound = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-center px-4">
@@ -75,37 +76,20 @@ const App = () => (
     <Route path="/register"  element={<WithNav><RegisterPage /></WithNav>} />
     <Route path="/login"     element={<WithNav><LoginPage /></WithNav>} />
 
-    {/* ── Protected — customer ─────────────────── */}
-    <Route path="/dashboard" element={
+    {/* ── Protected — customer (CustomerLayout wraps all) */}
+    <Route path="/" element={
       <ProtectedRoute>
-        <WithNav><DashboardPage /></WithNav>
+        <CustomerLayout />
       </ProtectedRoute>
-    } />
-    <Route path="/apply" element={
-      <ProtectedRoute>
-        <WithNav><ApplyPage /></WithNav>
-      </ProtectedRoute>
-    } />
-    <Route path="/application/:id" element={
-      <ProtectedRoute>
-        <WithNav><ApplicationDetailPage /></WithNav>
-      </ProtectedRoute>
-    } />
-    <Route path="/submit-info/:id" element={
-      <ProtectedRoute>
-        <WithNav><SubmitPersonalInfoPage /></WithNav>
-      </ProtectedRoute>
-    } />
-    <Route path="/chat" element={
-      <ProtectedRoute>
-        <div className="flex flex-col h-screen overflow-hidden">
-          <Navbar />
-          <div className="flex-1 overflow-hidden">
-            <ChatbotPage />
-          </div>
-        </div>
-      </ProtectedRoute>
-    } />
+    }>
+      <Route path="dashboard"        element={<DashboardPage />} />
+      <Route path="apply"            element={<ApplyPage />} />
+      <Route path="application/:id"  element={<ApplicationDetailPage />} />
+      <Route path="submit-info/:id"  element={<SubmitPersonalInfoPage />} />
+      <Route path="chat"             element={<ChatbotPage />} />
+      <Route path="history"          element={<HistoryPage />} />
+      <Route path="profile"          element={<AdminProfilePage />} />
+    </Route>
 
     {/* ── Admin — public ───────────────────────── */}
     <Route path="/admin/login" element={<Navigate to="/login" replace />} />
@@ -128,11 +112,7 @@ const App = () => (
 
     {/* Fallback */}
     <Route path="*" element={<NotFound />} />
-    <Route path="/history" element={
-      <ProtectedRoute>
-        <WithNav><HistoryPage /></WithNav>
-      </ProtectedRoute>
-    } />
+    {/* History is now nested under CustomerLayout */}
   </Routes>
 
   {isMock && <MockBanner />}
