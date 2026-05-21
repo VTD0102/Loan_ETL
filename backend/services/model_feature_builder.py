@@ -159,16 +159,41 @@ def apply_dti_risk_floor(
     low_threshold: float,
     high_threshold: float,
 ) -> float:
+    """
+    Apply a DTI-based probability floor aligned with banking standards.
+
+    Real-world DTI guidelines (personal/consumer loans):
+      - ≤ 40%: acceptable, no adjustment needed
+      - 40–55%: caution zone, gradual floor from low to high threshold
+      - 55–70%: high strain, floor at/above high threshold
+      - > 70%: extremely risky, hard floor near ceiling
+
+    This replaces the previous aggressive cutoff at 43% which was too strict
+    and caused counterintuitive rejections (e.g. 36-month term rejected but
+    24-month accepted because the model's raw prediction for longer terms
+    was already borderline, and the tight floor pushed it over).
+    """
     dti_value = _ratio(dti)
-    if dti_value <= 0.35:
+
+    # ── No adjustment below 40% DTI ──
+    if dti_value <= 0.40:
         return probability
 
-    if dti_value <= 0.43:
-        progress = (dti_value - 0.35) / 0.08
+    # ── Caution zone: 40% – 55% DTI ──
+    # Gradually raise floor from low_threshold to high_threshold
+    if dti_value <= 0.55:
+        progress = (dti_value - 0.40) / 0.15
         floor = low_threshold + (high_threshold - low_threshold) * progress
+    # ── High strain: 55% – 70% DTI ──
+    # Floor continues rising above high_threshold
+    elif dti_value <= 0.70:
+        progress = (dti_value - 0.55) / 0.15
+        floor = high_threshold + 0.05 * progress
+    # ── Extreme: > 70% DTI ──
+    # Hard floor well above auto-reject
     else:
-        progress = min((dti_value - 0.43) / 0.37, 1.0)
-        floor = high_threshold + 0.01 + 0.24 * progress
+        progress = min((dti_value - 0.70) / 0.30, 1.0)
+        floor = high_threshold + 0.05 + 0.20 * progress
 
     return min(max(probability, floor), 0.95)
 
