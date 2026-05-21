@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from api.dependencies import require_customer
-from db.session import get_db
+from db.session import get_db, get_bureau_db
 from schemas.application import (
     ApplicationCreate,
     ApplicationConfirm,
@@ -21,24 +21,26 @@ router = APIRouter()
 def evaluate_application(
     payload: ApplicationCreate,
     db: Session = Depends(get_db),
+    bureau_db: Session = Depends(get_bureau_db),
     current_user: dict = Depends(require_customer),
 ):
     """
     Phase 1 — Đánh giá đơn vay (ML + binary-search suggestion). Không lưu DB trừ AUTO_REJECTED.
     """
-    return application_service.evaluate(db, current_user["sub"], payload)
+    return application_service.evaluate(db, bureau_db, current_user["sub"], payload)
 
 
 @router.post("/confirm", status_code=201)
 def confirm_application(
     payload: ApplicationConfirm,
     db: Session = Depends(get_db),
+    bureau_db: Session = Depends(get_bureau_db),
     current_user: dict = Depends(require_customer),
 ):
     """
     Phase 2 — Lưu đơn sau khi user xác nhận. Validate loan ≤ max safe, trả 422 nếu vượt.
     """
-    return application_service.confirm(db, current_user["sub"], payload)
+    return application_service.confirm(db, bureau_db, current_user["sub"], payload)
 
 
 @router.get("/me", response_model=list[ApplicationSummary])
