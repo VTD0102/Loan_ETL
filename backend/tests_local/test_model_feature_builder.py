@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from machinelearning.ml.retrain_customer_model import ALL_FEATURES
 from schemas.application import ApplicationCreate
-from services.model_feature_builder import build_model_input
+from services.model_feature_builder import apply_dti_risk_floor, build_model_input
 
 
 def _artifact():
@@ -53,7 +53,8 @@ def test_full_payload_uses_supplied_optional_values_and_derives_history():
         loan_amount=Decimal("10000"),
         term=36,
         employment_status="Employed",
-        dti=Decimal("0.45"),
+        dti=None,
+        cic_monthly_installment=Decimal("2000"),
         is_homeowner=True,
         listing_category="Debt Consolidation",
         occupation_type="EMPLOYED",
@@ -93,8 +94,10 @@ def test_full_payload_uses_supplied_optional_values_and_derives_history():
     assert result.features["total_overdue_amount"] == 125.50
     assert result.features["has_bad_debt"] == 0
     assert result.features["log_monthly_income"] == math.log1p(5000)
+    expected_dti = ((10000 / 36) + 2000) / 5000
     assert result.features["loan_amount_to_income"] == 10000 / (5000 * 12)
-    assert result.features["payment_to_income"] == (10000 / 36) / 5000
+    assert result.features["dti"] == expected_dti
+    assert result.features["payment_to_income"] == expected_dti
     assert result.features["current_debt_ratio"] == 125.50 / 10000
     assert result.features["total_debt_to_income"] == 125.50 / (5000 * 12)
     assert result.features["max_dpd_24m"] == 15
@@ -140,7 +143,18 @@ def test_v4_payload_without_deprecated_fields_derives_features_with_defaults():
     assert result.features["high_dti_flag"] == 0
 
 
+def test_high_dti_risk_floor_never_lowers_model_probability():
+    low = apply_dti_risk_floor(0.18, 0.30, low_threshold=0.2, high_threshold=0.4)
+    medium = apply_dti_risk_floor(0.18, 0.40, low_threshold=0.2, high_threshold=0.4)
+    high = apply_dti_risk_floor(0.18, 0.60, low_threshold=0.2, high_threshold=0.4)
+
+    assert low == 0.18
+    assert medium > low
+    assert high > 0.4
+
+
 if __name__ == "__main__":
     test_full_payload_uses_supplied_optional_values_and_derives_history()
     test_v4_payload_without_deprecated_fields_derives_features_with_defaults()
+    test_high_dti_risk_floor_never_lowers_model_probability()
     print("model_feature_builder tests passed")
