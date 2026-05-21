@@ -7,7 +7,8 @@ from .personal_info import PersonalInfoRead
 
 ApplicationStatus = Literal[
     "AUTO_REJECTED", "PENDING_REVIEW", "ADMIN_REJECTED",
-    "AWAITING_INFO", "INFO_SUBMITTED", "APPROVED", "REJECTED", "PENDING"
+    "AWAITING_INFO", "INFO_SUBMITTED", "APPROVED", "REJECTED", "PENDING",
+    "DISBURSED"
 ]
 
 
@@ -17,7 +18,8 @@ class ApplicationBase(BaseModel):
     loan_amount: Decimal
     term: int
     employment_status: str
-    dti: Decimal
+    dti: Optional[Decimal] = None              # Auto-computed, stored after ML predict
+    cic_monthly_installment: Decimal = Decimal("0")  # Backend-set from CIC; never user-supplied
     is_homeowner: bool
     listing_category: Union[str, int]
     credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
@@ -26,13 +28,13 @@ class ApplicationBase(BaseModel):
     occupation_type: str     # 18 HC categories + 'Unknown'
     years_employed: Decimal  # 0–50
 
-    # ── Credit bureau features — now required ──────────────────────────────
-    num_bureau_records: int
-    num_active_credit: int
-    total_overdue_amount: Decimal
-    max_credit_overdue_days: int
-    has_bad_debt: bool
-    income_verifiable_flag: bool
+    # ── Credit bureau features — auto-filled from CIC, optional for user ──
+    num_bureau_records: Optional[int] = 0
+    num_active_credit: Optional[int] = 0
+    total_overdue_amount: Optional[Decimal] = Decimal("0")
+    max_credit_overdue_days: Optional[int] = 0
+    has_bad_debt: Optional[bool] = False
+    income_verifiable_flag: Optional[bool] = True
 
     # ── Demographics used by v4 ────────────────────────────────────────────
     age_years: int
@@ -72,7 +74,7 @@ class ApplicationCreate(ApplicationBase):
 
 class ApplicationConfirm(ApplicationBase):
     """Dùng khi user xác nhận sau modal gợi ý — có thể điều chỉnh loan_amount và term."""
-    pass
+    application_id: Optional[str] = None  # ID đơn tạm từ evaluate — để reuse prediction
 
 
 class AdminReject(BaseModel):
@@ -129,6 +131,8 @@ class ApplicationRead(BaseModel):
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[UUID] = None
     admin_note: Optional[str] = None
+    disbursed_at: Optional[datetime] = None
+    contract_text: Optional[str] = None
 
     personal_info: Optional[PersonalInfoRead] = None
 
@@ -142,9 +146,9 @@ class AdminApplicationRead(ApplicationRead):
 
 
 class ApplicationEvaluateResponse(BaseModel):
-    """Kết quả evaluate — chưa lưu vào DB (trừ AUTO_REJECTED)."""
+    """Kết quả evaluate — luôn lưu vào DB với status PENDING_REVIEW hoặc AUTO_REJECTED."""
     status: str                           # AUTO_REJECTED | PENDING_REVIEW
-    application_id: Optional[str] = None  # chỉ có khi AUTO_REJECTED (đã lưu DB)
+    application_id: str                   # Luôn có — đã lưu DB để RAG đọc đúng số liệu
     default_probability: float
     risk_level: str                       # Low | Medium | High
     risk_score: int
@@ -152,6 +156,9 @@ class ApplicationEvaluateResponse(BaseModel):
     suggested_amount: float
     suggested_term: int
     model_version: Optional[str] = None
+    computed_dti: Optional[float] = None  # Auto-computed DTI ratio
+    cic_summary: Optional[dict] = None    # CIC info summary for display
+    existing_monthly_debt: Optional[float] = None  # For frontend reactive DTI recalc
 
 
 class ApplicationSummary(BaseModel):
@@ -163,6 +170,8 @@ class ApplicationSummary(BaseModel):
     risk_level: Optional[str] = None
     recommended_amount: Optional[Decimal] = None
     recommended_term: Optional[int] = None
+    disbursed_at: Optional[datetime] = None
+    contract_text: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

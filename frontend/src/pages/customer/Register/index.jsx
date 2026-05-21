@@ -15,7 +15,15 @@ const RegisterPage = () => {
   const onSubmit = async (data) => {
     setLoading(true)
     try {
-      await apiRegister({ email: data.email, username: data.username, password: data.password, cccd: data.cccd })
+      await apiRegister({
+        email: data.email,
+        username: data.username,
+        password: data.password,
+        cccd: data.cccd,
+        full_name: data.full_name,
+        phone: data.phone,
+        address: data.address,
+      })
       toast.success('Đăng ký thành công! Vui lòng đăng nhập.')
       navigate('/login')
     } catch (err) {
@@ -41,6 +49,21 @@ const RegisterPage = () => {
 
         <div className="card p-8">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+            {/* Full Name */}
+            <div>
+              <label className="label">Họ và tên</label>
+              <input
+                type="text"
+                placeholder="Nguyễn Văn A"
+                className={`input ${errors.full_name ? 'input-error' : ''}`}
+                {...register('full_name', {
+                  required: 'Họ tên là bắt buộc',
+                  minLength: { value: 2, message: 'Tối thiểu 2 ký tự' },
+                })}
+              />
+              {errors.full_name && <p className="error-msg">{errors.full_name.message}</p>}
+            </div>
+
             {/* Email */}
             <div>
               <label className="label">Email</label>
@@ -85,6 +108,36 @@ const RegisterPage = () => {
                 })}
               />
               {errors.cccd && <p className="error-msg">{errors.cccd.message}</p>}
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="label">Số điện thoại</label>
+              <input
+                type="tel"
+                placeholder="0912 345 678"
+                className={`input ${errors.phone ? 'input-error' : ''}`}
+                {...register('phone', {
+                  required: 'Số điện thoại là bắt buộc',
+                  pattern: { value: /^[0-9+\-\s]{9,15}$/, message: 'Số điện thoại không hợp lệ' },
+                })}
+              />
+              {errors.phone && <p className="error-msg">{errors.phone.message}</p>}
+            </div>
+
+            {/* Address */}
+            <div>
+              <label className="label">Địa chỉ</label>
+              <input
+                type="text"
+                placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
+                className={`input ${errors.address ? 'input-error' : ''}`}
+                {...register('address', {
+                  required: 'Địa chỉ là bắt buộc',
+                  minLength: { value: 5, message: 'Tối thiểu 5 ký tự' },
+                })}
+              />
+              {errors.address && <p className="error-msg">{errors.address.message}</p>}
             </div>
 
             {/* Password */}

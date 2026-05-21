@@ -10,12 +10,30 @@ from schemas.application import ApplicationCreate, ApplicationConfirm
 from schemas.personal_info import PersonalInfoCreate
 from services import ml_service, cic_service
 from services.loan_suggestion_service import validate_confirmed_values
-from services.model_feature_builder import fetch_previous_applications
+from services.model_feature_builder import compute_combined_dti, fetch_previous_applications
 from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_TERM = 36  # months — used to estimate installment from outstanding debt
+
+
+def _safe_monthly_installment(cic_record) -> float:
+    """
+    Return the CIC monthly installment, with a safety fallback.
+
+    If total_monthly_installment is 0/null but total_outstanding_debt > 0,
+    this is a stale CIC record from before the installment column migration.
+    Estimate: outstanding_debt / 36 months as a conservative fallback.
+    """
+    installment = float(cic_record.total_monthly_installment or 0)
+    if installment > 0:
+        return installment
+    outstanding = float(cic_record.total_outstanding_debt or 0)
+    if outstanding > 0:
+        return round(outstanding / _FALLBACK_TERM, 2)
+    return 0.0
 
 def _get_user(db: Session, email: str) -> User:
     user = db.query(User).filter(User.email == email).first()
@@ -68,130 +86,229 @@ def _build_app_fields(payload, prediction: dict) -> dict:
 
 def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     """
-    Phase 1 — chạy ML + binary-search suggestion, KHÔNG lưu DB (trừ AUTO_REJECTED).
+    Phase 1 — chạy ML + binary-search suggestion, luôn lưu DB.
 
     Trả về ApplicationEvaluateResponse:
       - AUTO_REJECTED : đã lưu DB, trả lý do + suggestion
-      - PENDING_REVIEW: chưa lưu DB, trả is_perfect_fit + suggestion
+      - PENDING_REVIEW: đã lưu DB ngay, trả is_perfect_fit + suggestion + application_id
+        (RAG và Chat AI sẽ đọc đúng số liệu đã hiển thị trên UI)
     """
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
 
-    # ── CIC enrichment: replace self-reported bureau fields with verified data ──
-    cic_comparison = {}
+    # ── Compute DTI once and use the same value for display, storage, and ML input ──
+    monthly_income = float(payload.monthly_income)
+    loan_amount = float(payload.loan_amount)
+    term = int(payload.term)
+
+    # Try to get existing debt from CIC
+    existing_monthly_debt = 0.0
+    cic_record = None
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
-            # Blacklist check — reject immediately without ML
-            if cic_record.blacklist_flag:
-                logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
-                new_app = LoanApplication(
-                    user_id=user.id,
-                    status="AUTO_REJECTED",
-                    **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
-                    default_probability=1.0,
-                    risk_level="High",
-                    risk_score=0,
-                    model_version="CIC_BLACKLIST",
-                    feature_snapshot={"cic_blacklisted": True, "reason": cic_record.blacklist_reason},
-                )
-                db.add(new_app)
-                try:
-                    db.commit()
-                except IntegrityError:
-                    db.rollback()
-                    raise HTTPException(400, "Bạn đã có đơn đang xử lý")
-                db.refresh(new_app)
-                return {
-                    "status": "AUTO_REJECTED",
-                    "application_id": str(new_app.id),
-                    "default_probability": 1.0,
-                    "risk_level": "High",
-                    "risk_score": 0,
-                    "credit_score_computed": cic_record.cic_score or 0,
-                    "is_perfect_fit": False,
-                    "suggested_amount": 0,
-                    "suggested_term": 0,
-                    "model_version": "CIC_BLACKLIST",
-                    "cic_blacklisted": True,
-                }
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
 
-            # Enrich payload with CIC data (overwrites self-reported values)
-            cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
-            logger.info("CIC enrichment applied for %s", user.email)
+    computed_dti = compute_combined_dti(
+        monthly_income,
+        loan_amount,
+        term,
+        existing_monthly_debt,
+    )
+    computed_dti_decimal = Decimal(str(round(computed_dti, 4)))
+    # CIC monthly debt is passed to model_feature_builder so it can recompute
+    # DTI correctly for each binary-search probe in loan_suggestion_service.
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
+    payload.dti = None
+
+    # ── CIC enrichment: replace self-reported bureau fields with verified data ──
+    cic_comparison = {}
+    if user.cccd and cic_record:
+        # Blacklist check — reject immediately without ML
+        if cic_record.blacklist_flag:
+            logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
+            payload.dti = computed_dti_decimal
+            new_app = LoanApplication(
+                user_id=user.id,
+                status="AUTO_REJECTED",
+                **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
+                default_probability=1.0,
+                risk_level="High",
+                risk_score=0,
+                model_version="CIC_BLACKLIST",
+                feature_snapshot={"cic_blacklisted": True, "reason": cic_record.blacklist_reason},
+            )
+            db.add(new_app)
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+                raise HTTPException(400, "Bạn đã có đơn đang xử lý")
+            db.refresh(new_app)
+            return {
+                "status": "AUTO_REJECTED",
+                "application_id": str(new_app.id),
+                "default_probability": 1.0,
+                "risk_level": "High",
+                "risk_score": 0,
+                "credit_score_computed": cic_record.cic_score or 0,
+                "is_perfect_fit": False,
+                "suggested_amount": 0,
+                "suggested_term": 0,
+                "model_version": "CIC_BLACKLIST",
+                "cic_blacklisted": True,
+            }
+
+        # Enrich payload with CIC data (overwrites self-reported values)
+        cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+        # Store outstanding debt for admin visibility
+        cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
+        cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
+        logger.info("CIC enrichment applied for %s", user.email)
+
+    # ── Build CIC summary for frontend display ──
+    cic_summary = None
+    if cic_record:
+        cic_summary = {
+            "found": True,
+            "cic_score": cic_record.cic_score,
+            "total_active_loans": cic_record.total_active_loans,
+            "total_outstanding_debt": float(cic_record.total_outstanding_debt or 0),
+            "total_monthly_installment": float(cic_record.total_monthly_installment or 0),
+            "total_overdue_amount": float(cic_record.total_overdue_amount or 0),
+            "max_dpd_12m": cic_record.max_dpd_12m,
+            "num_credit_inquiries": cic_record.num_credit_inquiries,
+            "bad_debt_flag": cic_record.bad_debt_flag,
+            "blacklist_flag": cic_record.blacklist_flag,
+        }
+    else:
+        cic_summary = {"found": False}
 
     try:
         prediction = ml_service.predict(payload, db=db, user_id=user.id)
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
 
+    # ── Set the exact DTI used by ML on payload for DB storage ──
+    payload.dti = computed_dti_decimal
+
     prob = prediction["default_probability"]
+    app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"
 
-    if prob > 0.4:
-        new_app = LoanApplication(
-            user_id=user.id,
-            status="AUTO_REJECTED",
-            **_build_app_fields(payload, prediction),
-            default_probability=prob,
-            risk_level="High",
-            risk_score=prediction["risk_score"],
-            recommended_amount=prediction["suggested_amount"],
-            recommended_term=prediction["suggested_term"],
-            model_version=prediction["model_version"],
-            feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
-            imputed_features=prediction["imputed_features"],
-        )
-        db.add(new_app)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            raise HTTPException(400, "Bạn đã có đơn đang xử lý")
-        db.refresh(new_app)
-
-        return {
-            "status":              "AUTO_REJECTED",
-            "application_id":      str(new_app.id),
-            "default_probability": prob,
-            "risk_level":          "High",
-            "risk_score":          prediction["risk_score"],
-            "credit_score_computed": prediction.get("credit_score_computed", 0),
-            "is_perfect_fit":      False,
-            "suggested_amount":    prediction["suggested_amount"],
-            "suggested_term":      prediction["suggested_term"],
-            "model_version":       prediction["model_version"],
-        }
+    # ── Always save to DB so RAG reads the exact same prediction the UI shows ──
+    new_app = LoanApplication(
+        user_id=user.id,
+        status=app_status,
+        **_build_app_fields(payload, prediction),
+        default_probability=prob,
+        risk_level=prediction["risk_level"] if prob <= 0.4 else "High",
+        risk_score=prediction["risk_score"],
+        recommended_amount=prediction["suggested_amount"],
+        recommended_term=prediction["suggested_term"],
+        model_version=prediction["model_version"],
+        feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
+        imputed_features=prediction["imputed_features"],
+    )
+    db.add(new_app)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Bạn đã có đơn đang xử lý")
+    db.refresh(new_app)
 
     return {
-        "status":              "PENDING_REVIEW",
-        "application_id":      None,
+        "status":              app_status,
+        "application_id":      str(new_app.id),
         "default_probability": prob,
-        "risk_level":          prediction["risk_level"],
+        "risk_level":          new_app.risk_level,
         "risk_score":          prediction["risk_score"],
         "credit_score_computed": prediction.get("credit_score_computed", 0),
         "is_perfect_fit":      prediction["is_perfect_fit"],
         "suggested_amount":    prediction["suggested_amount"],
         "suggested_term":      prediction["suggested_term"],
         "model_version":       prediction["model_version"],
+        "computed_dti":        computed_dti,
+        "cic_summary":         cic_summary,
+        "existing_monthly_debt": existing_monthly_debt,
     }
 
 
 def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     """
-    Phase 2 — user xác nhận (có thể đã điều chỉnh loan/term); lưu vào DB.
-    Validate loan_amount ≤ max safe amount trước khi lưu.
+    Phase 2 — user xác nhận (có thể đã điều chỉnh loan/term).
+
+    Nếu application_id được gửi kèm và loan_amount/term không thay đổi so với
+    bản ghi evaluate đã lưu → reuse ngay, không chạy lại ML.
+    (Đây là fix chính cho bug không đồng bộ: RAG đọc đúng số liệu đã hiển thị trên UI.)
+
+    Nếu loan_amount/term khác → xóa bản ghi tạm, chạy lại ML với giá trị mới.
     """
     user = _get_user(db, user_email)
-    _check_active_application(db, user.id)
+
+    # ── If evaluate saved an application_id, try to reuse it ──
+    existing_app = None
+    if payload.application_id:
+        existing_app = (
+            db.query(LoanApplication)
+            .filter(
+                LoanApplication.id == payload.application_id,
+                LoanApplication.user_id == user.id,
+                LoanApplication.status == "PENDING_REVIEW",
+            )
+            .first()
+        )
+
+    # ── Reuse prediction if loan/term unchanged ──
+    if existing_app:
+        amount_unchanged = abs(float(existing_app.loan_amount) - float(payload.loan_amount)) < 0.01
+        term_unchanged   = existing_app.term == int(payload.term)
+
+        if amount_unchanged and term_unchanged:
+            # Perfect reuse: UI showed this exact prediction, no ML re-run needed
+            logger.info(
+                "confirm: reusing evaluate prediction for app %s (loan/term unchanged)",
+                existing_app.id,
+            )
+            return {
+                "application_id":      str(existing_app.id),
+                "status":              existing_app.status,
+                "default_probability": float(existing_app.default_probability or 0),
+                "risk_level":          existing_app.risk_level,
+                "risk_score":          existing_app.risk_score,
+                "suggested_amount":    float(existing_app.recommended_amount or 0),
+                "suggested_term":      existing_app.recommended_term,
+            }
+
+        # User adjusted loan/term: delete temp record and create fresh one
+        logger.info(
+            "confirm: loan/term changed (%.0f→%.0f, %s→%s), re-running ML for app %s",
+            float(existing_app.loan_amount), float(payload.loan_amount),
+            existing_app.term, payload.term,
+            existing_app.id,
+        )
+        db.delete(existing_app)
+        db.flush()  # release the unique index before inserting new
+    else:
+        # Fallback: no matching temp record (e.g. auto-confirm path or direct call)
+        _check_active_application(db, user.id)
 
     # ── CIC enrichment (same as evaluate) ──
     cic_comparison = {}
+    existing_monthly_debt = 0.0
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
             if cic_record.blacklist_flag:
                 raise HTTPException(400, "Tài khoản bị cấm vay do nằm trong danh sách đen CIC")
             cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
+            # Store outstanding debt for admin visibility
+            cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
+            cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
+
+    payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
+    payload.dti = None
 
     try:
         artifact = ml_service._load()
@@ -202,6 +319,15 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    # ── Set the exact DTI used by ML on payload for DB storage ──
+    computed_dti = compute_combined_dti(
+        payload.monthly_income,
+        payload.loan_amount,
+        payload.term,
+        existing_monthly_debt,
+    )
+    payload.dti = Decimal(str(round(computed_dti, 4)))
 
     prob       = prediction["default_probability"]
     app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"

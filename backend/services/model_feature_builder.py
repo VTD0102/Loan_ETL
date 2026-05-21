@@ -64,14 +64,19 @@ def build_model_input(
     if not isinstance(defaults, dict):
         defaults = {}
 
-    dti            = _ratio(payload.dti)
     monthly_income = _number(payload.monthly_income)
     loan_amount    = _number(payload.loan_amount)
-    term           = int(payload.term)
-    payment_to_income = (
-        (loan_amount / term) / monthly_income
-        if monthly_income > 0 and term > 0
-        else 0.0
+    term           = payload.term
+    cic_monthly    = _number(getattr(payload, "cic_monthly_installment", None))
+
+    # DTI includes existing CIC debt so the model sees total repayment burden.
+    # The training contract has both dti and payment_to_income, and in training
+    # they were the same value; keep them synchronized at inference time.
+    dti = compute_combined_dti(
+        monthly_income,
+        loan_amount,
+        term,
+        cic_monthly,
     )
     total_overdue = _number(payload.total_overdue_amount)
     emp_group     = _employment_group(payload.employment_status)
@@ -92,28 +97,28 @@ def build_model_input(
         "loan_amount_to_income":  loan_amount / (monthly_income * 12) if monthly_income else 0.0,
         "log_monthly_income":     math.log1p(max(monthly_income, 0)),
         "high_dti_flag":          int(dti > float(artifact.get("dti_p75", 0.4))),
-        "payment_to_income":      payment_to_income,
+        "payment_to_income":      dti,
         # Debt burden
         "current_debt_ratio":     total_overdue / loan_amount if loan_amount > 0 else 0.0,
         "total_debt_to_income":   total_overdue / (monthly_income * 12) if monthly_income > 0 else 0.0,
         # DPD and bureau proxies available from application data
-        "max_dpd_24m":            int(payload.max_credit_overdue_days),
-        "num_active_credit":      int(payload.num_active_credit),
-        "num_bureau_records":     int(payload.num_bureau_records),
-        "num_active_credit_bureau": int(payload.num_active_credit),
+        "max_dpd_24m":            (payload.max_credit_overdue_days or 0),
+        "num_active_credit":      (payload.num_active_credit or 0),
+        "num_bureau_records":     (payload.num_bureau_records or 0),
+        "num_active_credit_bureau": (payload.num_active_credit or 0),
         "total_overdue_amount":   total_overdue,
-        "max_credit_overdue_days": int(payload.max_credit_overdue_days),
-        "has_bad_debt":           int(bool(payload.has_bad_debt)),
+        "max_credit_overdue_days": (payload.max_credit_overdue_days or 0),
+        "has_bad_debt":           int(payload.has_bad_debt or False),
         "max_overdue_amount":     total_overdue,
         # Previous applications from local DB
         **history,
         # Demographics and categoricals
-        "age_years":              int(payload.age_years),
-        "years_employed":         float(_number(payload.years_employed)),
-        "education_ordinal":      int(payload.education_ordinal),
-        "is_homeowner":           int(bool(payload.is_homeowner)),
-        "income_verifiable_flag": int(bool(payload.income_verifiable_flag)),
-        "is_married_flag":        int(bool(payload.is_married_flag)),
+        "age_years":              payload.age_years,
+        "years_employed":         _number(payload.years_employed),
+        "education_ordinal":      payload.education_ordinal,
+        "is_homeowner":           int(payload.is_homeowner),
+        "income_verifiable_flag": int(payload.income_verifiable_flag or False),
+        "is_married_flag":        int(payload.is_married_flag),
         "income_missing_flag":    0,
         "dti_missing_flag":       0,
         "employment_status":      emp_group,
@@ -133,16 +138,101 @@ def build_model_input(
     return FeatureBuildResult(features=ordered, imputed_features=imputed)
 
 
+def compute_combined_dti(
+    monthly_income: Any,
+    loan_amount: Any,
+    term: Any,
+    existing_monthly_debt: Any = 0.0,
+) -> float:
+    income = _number(monthly_income)
+    amount = _number(loan_amount)
+    term_value = int(term) if term else 0
+    existing_debt = max(_number(existing_monthly_debt), 0.0)
+    requested_installment = amount / term_value if term_value > 0 else 0.0
+    return (requested_installment + existing_debt) / income if income > 0 else 0.0
+
+
+def apply_dti_risk_floor(
+    probability: float,
+    dti: Any,
+    *,
+    low_threshold: float,
+    high_threshold: float,
+) -> float:
+    """
+    Apply a DTI-based probability floor aligned with banking standards.
+
+    Real-world DTI guidelines (personal/consumer loans):
+      - ≤ 40%: acceptable, no adjustment needed
+      - 40–55%: caution zone, gradual floor from low to high threshold
+      - 55–70%: high strain, floor at/above high threshold
+      - > 70%: extremely risky, hard floor near ceiling
+
+    This replaces the previous aggressive cutoff at 43% which was too strict
+    and caused counterintuitive rejections (e.g. 36-month term rejected but
+    24-month accepted because the model's raw prediction for longer terms
+    was already borderline, and the tight floor pushed it over).
+    """
+    dti_value = _ratio(dti)
+
+    # ── No adjustment below 40% DTI ──
+    if dti_value <= 0.40:
+        return probability
+
+    # ── Caution zone: 40% – 55% DTI ──
+    # Gradually raise floor from low_threshold to high_threshold
+    if dti_value <= 0.55:
+        progress = (dti_value - 0.40) / 0.15
+        floor = low_threshold + (high_threshold - low_threshold) * progress
+    # ── High strain: 55% – 70% DTI ──
+    # Floor continues rising above high_threshold
+    elif dti_value <= 0.70:
+        progress = (dti_value - 0.55) / 0.15
+        floor = high_threshold + 0.05 * progress
+    # ── Extreme: > 70% DTI ──
+    # Hard floor well above auto-reject
+    else:
+        progress = min((dti_value - 0.70) / 0.30, 1.0)
+        floor = high_threshold + 0.05 + 0.20 * progress
+
+    return min(max(probability, floor), 0.95)
+
+
+def infer_existing_monthly_debt(
+    monthly_income: Any,
+    loan_amount: Any,
+    term: Any,
+    combined_dti: Any,
+) -> float:
+    income = _number(monthly_income)
+    amount = _number(loan_amount)
+    term_value = int(term) if term else 0
+    dti_value = _ratio(combined_dti)
+    requested_installment = amount / term_value if term_value > 0 else 0.0
+    return max(dti_value * income - requested_installment, 0.0)
+
+
 def fetch_previous_applications(db: Any, user_id: Any) -> list[Any]:
     if db is None or user_id is None:
         return []
     from models.application import LoanApplication
-    return (
+    import datetime
+    all_apps = (
         db.query(LoanApplication)
         .filter(LoanApplication.user_id == user_id)
         .order_by(LoanApplication.submitted_at.desc())
         .all()
     )
+    if not all_apps:
+        return []
+    # Exclude applications submitted in the last 30 minutes to prevent counting
+    # the current session's rejection as a historical default.
+    if all_apps[0].submitted_at.tzinfo:
+        now = datetime.datetime.now(all_apps[0].submitted_at.tzinfo)
+    else:
+        now = datetime.datetime.now()
+    cutoff = now - datetime.timedelta(minutes=30)
+    return [app for app in all_apps if app.submitted_at < cutoff]
 
 
 def _history_features(previous_applications: list[Any], high_threshold: float) -> dict[str, Any]:
@@ -188,7 +278,7 @@ def _fallback_default(feature: str) -> Any:
 
 def _ratio(value: Any) -> float:
     number = _number(value)
-    return number / 100 if number > 1 else number
+    return number / 100 if number > 5 else number
 
 
 def _number(value: Any) -> float:

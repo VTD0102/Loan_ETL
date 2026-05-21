@@ -64,6 +64,8 @@ class LoanApplication(Base):
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), nullable=True)
     admin_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    disbursed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    contract_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="applications")
     personal_info: Mapped[Optional["PersonalInfo"]] = relationship(

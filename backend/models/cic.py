@@ -31,6 +31,7 @@ class CICRecord(Base):
     # ── Active credit summary ──────────────────────────────────────────────
     total_active_loans: Mapped[int] = mapped_column(Integer, default=0)
     total_outstanding_debt: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
+    total_monthly_installment: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
     total_overdue_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), default=0)
 
     # ── Delinquency ────────────────────────────────────────────────────────

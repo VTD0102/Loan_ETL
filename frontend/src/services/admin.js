@@ -15,6 +15,7 @@ export const getAdminApplicationById = (id)     => api.get(`/admin/applications/
 export const getAdminApplicationCreditScore = (id) => api.get(`/credit-score/admin/applications/${id}`)
 export const approveApplication      = (id, data) => api.post(`/admin/applications/${id}/approve`, data)
 export const rejectApplication       = (id, data) => api.post(`/admin/applications/${id}/reject`, data)
+export const disburseApplication     = (id)     => api.post(`/admin/applications/${id}/disburse`)
 
 /* ── Personal Info ──────────────────────────────── */
 export const getPersonalInfo         = (id)     => api.get(`/admin/applications/${id}/personal-info`)
