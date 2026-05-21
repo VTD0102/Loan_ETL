@@ -150,6 +150,29 @@ export const mockHandlers = async (config) => {
     return [200, { access_token: MOCK_TOKEN, token_type: 'bearer', user: MOCK_USER }]
   }
 
+  if (m === 'get' && url.endsWith('/auth/me')) {
+    const authHeader = config.headers?.Authorization || ''
+    if (authHeader.includes(MOCK_ADMIN_TOKEN)) {
+      return [200, MOCK_ADMIN_USER]
+    }
+    return [200, MOCK_USER]
+  }
+
+  if (m === 'put' && url.endsWith('/auth/profile')) {
+    const authHeader = config.headers?.Authorization || ''
+    if (authHeader.includes(MOCK_ADMIN_TOKEN)) {
+      if (body.username !== undefined) MOCK_ADMIN_USER.username = body.username
+      if (body.email !== undefined) MOCK_ADMIN_USER.email = body.email
+      if (body.address !== undefined) MOCK_ADMIN_USER.address = body.address
+      return [200, MOCK_ADMIN_USER]
+    } else {
+      if (body.username !== undefined) MOCK_USER.username = body.username
+      if (body.email !== undefined) MOCK_USER.email = body.email
+      if (body.address !== undefined) MOCK_USER.address = body.address
+      return [200, MOCK_USER]
+    }
+  }
+
   /* ── Applications (Customer) ──────────────────────── */
   if (m === 'get' && url.endsWith('/applications/me')) {
     // Tìm đơn vay mới nhất của Customer (MOCK_USER.id = 1)

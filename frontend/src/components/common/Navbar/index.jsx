@@ -34,8 +34,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-6">
             {token ? (
               <>
-                <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
-                <NavLink to="/chat"      className={navLinkClass}>Tư vấn AI</NavLink>
+                <NavLink to="/dashboard" className="btn-primary text-sm px-5 py-2">Vào Dashboard</NavLink>
                 <div className="flex items-center gap-3 ml-2 pl-4 border-l border-gray-200">
                   <span className="text-sm text-gray-500">
                     Xin chào, <span className="font-medium text-gray-800">{user?.username}</span>
@@ -70,8 +69,7 @@ const Navbar = () => {
           <div className="md:hidden border-t border-gray-100 py-3 space-y-1">
             {token ? (
               <>
-                <MobileLink to="/dashboard" onClick={() => setOpen(false)}>Dashboard</MobileLink>
-                <MobileLink to="/chat"      onClick={() => setOpen(false)}>Tư vấn AI</MobileLink>
+                <MobileLink to="/dashboard" onClick={() => setOpen(false)}>Vào Dashboard</MobileLink>
                 <div className="px-3 pt-3 border-t border-gray-100">
                   <p className="text-xs text-gray-400 mb-2">Đã đăng nhập: {user?.username}</p>
                   <button onClick={handleLogout} className="btn-outline w-full text-sm">Đăng xuất</button>
