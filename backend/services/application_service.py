@@ -16,6 +16,24 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_TERM = 36  # months — used to estimate installment from outstanding debt
+
+
+def _safe_monthly_installment(cic_record) -> float:
+    """
+    Return the CIC monthly installment, with a safety fallback.
+
+    If total_monthly_installment is 0/null but total_outstanding_debt > 0,
+    this is a stale CIC record from before the installment column migration.
+    Estimate: outstanding_debt / 36 months as a conservative fallback.
+    """
+    installment = float(cic_record.total_monthly_installment or 0)
+    if installment > 0:
+        return installment
+    outstanding = float(cic_record.total_outstanding_debt or 0)
+    if outstanding > 0:
+        return round(outstanding / _FALLBACK_TERM, 2)
+    return 0.0
 
 def _get_user(db: Session, email: str) -> User:
     user = db.query(User).filter(User.email == email).first()
@@ -88,7 +106,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
-            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
 
     computed_dti = compute_combined_dti(
         monthly_income,
@@ -144,7 +162,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
         # Store outstanding debt for admin visibility
         cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
-        cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+        cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
         logger.info("CIC enrichment applied for %s", user.email)
 
     # ── Build CIC summary for frontend display ──
@@ -249,8 +267,8 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
             cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
             # Store outstanding debt for admin visibility
             cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
-            cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
-            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+            cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
 
     payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
     payload.dti = None
