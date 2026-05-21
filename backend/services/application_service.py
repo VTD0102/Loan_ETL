@@ -16,6 +16,24 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_TERM = 36  # months — used to estimate installment from outstanding debt
+
+
+def _safe_monthly_installment(cic_record) -> float:
+    """
+    Return the CIC monthly installment, with a safety fallback.
+
+    If total_monthly_installment is 0/null but total_outstanding_debt > 0,
+    this is a stale CIC record from before the installment column migration.
+    Estimate: outstanding_debt / 36 months as a conservative fallback.
+    """
+    installment = float(cic_record.total_monthly_installment or 0)
+    if installment > 0:
+        return installment
+    outstanding = float(cic_record.total_outstanding_debt or 0)
+    if outstanding > 0:
+        return round(outstanding / _FALLBACK_TERM, 2)
+    return 0.0
 
 def _get_user(db: Session, email: str) -> User:
     user = db.query(User).filter(User.email == email).first()
@@ -66,13 +84,14 @@ def _build_app_fields(payload, prediction: dict) -> dict:
     }
 
 
-def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
+def evaluate(db: Session, bureau_db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     """
-    Phase 1 — chạy ML + binary-search suggestion, KHÔNG lưu DB (trừ AUTO_REJECTED).
+    Phase 1 — chạy ML + binary-search suggestion, luôn lưu DB.
 
     Trả về ApplicationEvaluateResponse:
       - AUTO_REJECTED : đã lưu DB, trả lý do + suggestion
-      - PENDING_REVIEW: chưa lưu DB, trả is_perfect_fit + suggestion
+      - PENDING_REVIEW: đã lưu DB ngay, trả is_perfect_fit + suggestion + application_id
+        (RAG và Chat AI sẽ đọc đúng số liệu đã hiển thị trên UI)
     """
     user = _get_user(db, user_email)
     _check_active_application(db, user.id)
@@ -86,9 +105,9 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     existing_monthly_debt = 0.0
     cic_record = None
     if user.cccd:
-        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        cic_record = cic_service.lookup_by_cccd(bureau_db, user.cccd)
         if cic_record:
-            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
 
     computed_dti = compute_combined_dti(
         monthly_income,
@@ -145,7 +164,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
         # Store outstanding debt for admin visibility
         cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
-        cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+        cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
         # Derive bureau-only ML features (avg_dpd_recent, num_installs_dpd10, etc.)
         # from CIC mock so they vary across applicants instead of using constant
         # artifact defaults. See cic_service.derive_bureau_features for details.
@@ -183,50 +202,35 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     payload.dti = computed_dti_decimal
 
     prob = prediction["default_probability"]
+    app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"
 
-    if prob > 0.4:
-        new_app = LoanApplication(
-            user_id=user.id,
-            status="AUTO_REJECTED",
-            **_build_app_fields(payload, prediction),
-            default_probability=prob,
-            risk_level="High",
-            risk_score=prediction["risk_score"],
-            recommended_amount=prediction["suggested_amount"],
-            recommended_term=prediction["suggested_term"],
-            model_version=prediction["model_version"],
-            feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
-            imputed_features=prediction["imputed_features"],
-        )
-        db.add(new_app)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            raise HTTPException(400, "Bạn đã có đơn đang xử lý")
-        db.refresh(new_app)
-
-        return {
-            "status":              "AUTO_REJECTED",
-            "application_id":      str(new_app.id),
-            "default_probability": prob,
-            "risk_level":          "High",
-            "risk_score":          prediction["risk_score"],
-            "credit_score_computed": prediction.get("credit_score_computed", 0),
-            "is_perfect_fit":      False,
-            "suggested_amount":    prediction["suggested_amount"],
-            "suggested_term":      prediction["suggested_term"],
-            "model_version":       prediction["model_version"],
-            "computed_dti":        computed_dti,
-            "cic_summary":         cic_summary,
-            "existing_monthly_debt": existing_monthly_debt,
-        }
+    # ── Always save to DB so RAG reads the exact same prediction the UI shows ──
+    new_app = LoanApplication(
+        user_id=user.id,
+        status=app_status,
+        **_build_app_fields(payload, prediction),
+        default_probability=prob,
+        risk_level=prediction["risk_level"] if prob <= 0.4 else "High",
+        risk_score=prediction["risk_score"],
+        recommended_amount=prediction["suggested_amount"],
+        recommended_term=prediction["suggested_term"],
+        model_version=prediction["model_version"],
+        feature_snapshot={**(prediction["feature_snapshot"] or {}), **cic_comparison},
+        imputed_features=prediction["imputed_features"],
+    )
+    db.add(new_app)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Bạn đã có đơn đang xử lý")
+    db.refresh(new_app)
 
     return {
-        "status":              "PENDING_REVIEW",
-        "application_id":      None,
+        "status":              app_status,
+        "application_id":      str(new_app.id),
         "default_probability": prob,
-        "risk_level":          prediction["risk_level"],
+        "risk_level":          new_app.risk_level,
         "risk_score":          prediction["risk_score"],
         "credit_score_computed": prediction.get("credit_score_computed", 0),
         "is_perfect_fit":      prediction["is_perfect_fit"],
@@ -239,28 +243,79 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
     }
 
 
-def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
+def confirm(db: Session, bureau_db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     """
-    Phase 2 — user xác nhận (có thể đã điều chỉnh loan/term); lưu vào DB.
-    Validate loan_amount ≤ max safe amount trước khi lưu.
+    Phase 2 — user xác nhận (có thể đã điều chỉnh loan/term).
+
+    Nếu application_id được gửi kèm và loan_amount/term không thay đổi so với
+    bản ghi evaluate đã lưu → reuse ngay, không chạy lại ML.
+    (Đây là fix chính cho bug không đồng bộ: RAG đọc đúng số liệu đã hiển thị trên UI.)
+
+    Nếu loan_amount/term khác → xóa bản ghi tạm, chạy lại ML với giá trị mới.
     """
     user = _get_user(db, user_email)
-    _check_active_application(db, user.id)
+
+    # ── If evaluate saved an application_id, try to reuse it ──
+    existing_app = None
+    if payload.application_id:
+        existing_app = (
+            db.query(LoanApplication)
+            .filter(
+                LoanApplication.id == payload.application_id,
+                LoanApplication.user_id == user.id,
+                LoanApplication.status == "PENDING_REVIEW",
+            )
+            .first()
+        )
+
+    # ── Reuse prediction if loan/term unchanged ──
+    if existing_app:
+        amount_unchanged = abs(float(existing_app.loan_amount) - float(payload.loan_amount)) < 0.01
+        term_unchanged   = existing_app.term == int(payload.term)
+
+        if amount_unchanged and term_unchanged:
+            # Perfect reuse: UI showed this exact prediction, no ML re-run needed
+            logger.info(
+                "confirm: reusing evaluate prediction for app %s (loan/term unchanged)",
+                existing_app.id,
+            )
+            return {
+                "application_id":      str(existing_app.id),
+                "status":              existing_app.status,
+                "default_probability": float(existing_app.default_probability or 0),
+                "risk_level":          existing_app.risk_level,
+                "risk_score":          existing_app.risk_score,
+                "suggested_amount":    float(existing_app.recommended_amount or 0),
+                "suggested_term":      existing_app.recommended_term,
+            }
+
+        # User adjusted loan/term: delete temp record and create fresh one
+        logger.info(
+            "confirm: loan/term changed (%.0f→%.0f, %s→%s), re-running ML for app %s",
+            float(existing_app.loan_amount), float(payload.loan_amount),
+            existing_app.term, payload.term,
+            existing_app.id,
+        )
+        db.delete(existing_app)
+        db.flush()  # release the unique index before inserting new
+    else:
+        # Fallback: no matching temp record (e.g. auto-confirm path or direct call)
+        _check_active_application(db, user.id)
 
     # ── CIC enrichment (same as evaluate) ──
     cic_comparison = {}
     existing_monthly_debt = 0.0
     bureau_features: dict = {}
     if user.cccd:
-        cic_record = cic_service.lookup_by_cccd(db, user.cccd)
+        cic_record = cic_service.lookup_by_cccd(bureau_db, user.cccd)
         if cic_record:
             if cic_record.blacklist_flag:
                 raise HTTPException(400, "Tài khoản bị cấm vay do nằm trong danh sách đen CIC")
             cic_comparison = cic_service.apply_cic_to_payload(payload, cic_record)
             # Store outstanding debt for admin visibility
             cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
-            cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
-            existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+            cic_comparison["cic_monthly_installment"] = _safe_monthly_installment(cic_record)
+            existing_monthly_debt = _safe_monthly_installment(cic_record)
             bureau_features = cic_service.derive_bureau_features(cic_record)
             if bureau_features:
                 cic_comparison["bureau_derived"] = bureau_features

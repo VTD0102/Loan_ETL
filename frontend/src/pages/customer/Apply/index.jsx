@@ -114,6 +114,7 @@ const ChatWidget = ({ context, onClose }) => {
   ])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [sessionId, setSessionId] = useState(null)
   const messagesEndRef = useRef(null)
 
   const sendMessage = async () => {
@@ -126,11 +127,15 @@ const ChatWidget = ({ context, onClose }) => {
       const { default: api } = await import('../../../services/api')
       const res = await api.post('/chat', {
         message: userMsg,
-        session_id: null,
+        session_id: sessionId,
       })
+      if (!sessionId && res.data.session_id) {
+        setSessionId(res.data.session_id)
+      }
       setMessages(prev => [...prev, { role: 'assistant', text: res.data.response }])
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Xin lỗi, có lỗi khi kết nối AI. Vui lòng thử lại.' }])
+    } catch (err) {
+      const detail = err?.response?.data?.detail
+      setMessages(prev => [...prev, { role: 'assistant', text: detail || 'Xin lỗi, có lỗi khi kết nối AI. Vui lòng thử lại.' }])
     } finally {
       setSending(false)
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -223,7 +228,8 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
     setError('')
     setSubmitting(true)
     try {
-      await onConfirm({ ...originalData, loan_amount: amt, term: Number(confirmTerm) })
+      // Pass application_id so backend reuses the exact same ML prediction shown to user
+      await onConfirm({ ...originalData, loan_amount: amt, term: Number(confirmTerm), application_id: evalResult?.application_id || null })
     } finally {
       setSubmitting(false)
     }
@@ -417,8 +423,8 @@ const ApplyPage = () => {
 
       // PENDING_REVIEW
       if (result.is_perfect_fit) {
-        // Auto-confirm — send directly to admin
-        const confirmRes = await confirmApplication(payload)
+        // Auto-confirm — send directly to admin, reuse saved prediction via application_id
+        const confirmRes = await confirmApplication({ ...payload, application_id: result.application_id })
         setModal({ type: 'success', data: confirmRes.data })
       } else {
         // Show suggestion modal
@@ -595,6 +601,10 @@ const ApplyPage = () => {
                     <p className="text-sm font-semibold text-gray-800">{formatCurrency(cicData.record?.total_outstanding_debt || 0)}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Nghĩa vụ nợ hàng tháng</p>
+                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_monthly_installment || 0).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tiền quá hạn</p>
                     <p className={`text-sm font-semibold ${Number(cicData.record?.total_overdue_amount || 0) > 0 ? 'text-danger-600' : 'text-gray-800'}`}>
                       {formatCurrency(cicData.record?.total_overdue_amount || 0)}
@@ -611,6 +621,16 @@ const ApplyPage = () => {
                     <p className={`text-sm font-semibold ${cicData.record?.bad_debt_flag ? 'text-danger-600' : 'text-success-600'}`}>
                       {cicData.record?.bad_debt_flag ? 'Có' : 'Không'}
                     </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Danh sách đen</p>
+                    <p className={`text-sm font-semibold ${cicData.record?.blacklist_flag ? 'text-danger-600' : 'text-success-600'}`}>
+                      {cicData.record?.blacklist_flag ? 'Có' : 'Không'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Lần tra cứu tín dụng</p>
+                    <p className="text-sm font-semibold text-gray-800">{cicData.record?.num_credit_inquiries ?? 0}</p>
                   </div>
                 </div>
               </div>

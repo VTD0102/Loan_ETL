@@ -1,44 +1,44 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom'
 import useAuthStore from '../../../store/authStore'
 
 const NAV_ITEMS = [
   {
-    to: '/admin/dashboard',
+    to: '/dashboard',
     label: 'Dashboard',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
       </svg>
     ),
   },
   {
-    to: '/admin/pending',
-    label: 'Chờ xét duyệt',
+    to: '/apply',
+    label: 'Tạo đơn vay',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
   {
-    to: '/admin/applications',
-    label: 'Tất cả đơn vay',
+    to: '/chat',
+    label: 'Tư vấn AI',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
   },
 ]
 
-const AdminLayout = () => {
-  const navigate      = useNavigate()
-  const user          = useAuthStore((s) => s.user)
-  const logout        = useAuthStore((s) => s.logout)
+const CustomerLayout = () => {
+  const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const [open, setOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
@@ -49,7 +49,7 @@ const AdminLayout = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* ── Sidebar ─────────────────────────────── */}
+      {/* ── Sidebar cố định ─────────────────────── */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 shadow-sm
@@ -59,17 +59,17 @@ const AdminLayout = () => {
         `}
       >
         {/* Logo */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-gray-100">
-          <span className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+        <Link to="/dashboard" className="h-16 flex items-center gap-3 px-6 border-b border-gray-100 select-none">
+          <span className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm">
             CI
           </span>
           <div>
             <p className="text-sm font-bold text-gray-900 leading-tight">CreditIntel</p>
-            <p className="text-xs text-gray-400 leading-tight">Admin Panel</p>
+            <p className="text-xs text-gray-400 leading-tight">Customer Portal</p>
           </div>
-        </div>
+        </Link>
 
-        {/* Nav */}
+        {/* Nav Links */}
         <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => (
             <NavLink
@@ -91,7 +91,7 @@ const AdminLayout = () => {
         </nav>
       </aside>
 
-      {/* Backdrop mobile */}
+      {/* Backdrop di động */}
       {open && (
         <div
           className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm md:hidden"
@@ -99,11 +99,11 @@ const AdminLayout = () => {
         />
       )}
 
-      {/* ── Main content ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 md:pl-64">
-        {/* Top header */}
-        <header className="h-16 sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm flex items-center justify-between px-4 sm:px-6">
-          {/* Hamburger */}
+      {/* ── Main Content Container ──────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 md:pl-64 h-screen">
+        {/* Topbar Header */}
+        <header className="h-16 sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+          {/* Hamburger Mobile Button */}
           <button
             onClick={() => setOpen((o) => !o)}
             className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
@@ -114,13 +114,13 @@ const AdminLayout = () => {
             </svg>
           </button>
 
-          {/* Logo mobile */}
+          {/* Mobile Logo */}
           <div className="flex items-center gap-2 md:hidden">
-            <span className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">CI</span>
-            <span className="text-sm font-bold text-gray-900">Admin</span>
+            <span className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm">CI</span>
+            <span className="text-sm font-bold text-gray-900">CreditIntel</span>
           </div>
 
-          {/* Right: user info with Dropdown */}
+          {/* Right Area: Avatar Dropdown */}
           <div className="relative ml-auto">
             <button
               onClick={() => setDropdownOpen((o) => !o)}
@@ -128,7 +128,7 @@ const AdminLayout = () => {
             >
               <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center border border-primary-200 shadow-sm flex-shrink-0">
                 <span className="text-sm font-bold text-primary-700">
-                  {user?.username?.[0]?.toUpperCase() || 'A'}
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
               <span className="hidden sm:inline text-sm font-semibold text-gray-700 truncate max-w-[120px]">
@@ -144,27 +144,27 @@ const AdminLayout = () => {
               </svg>
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown Menu Overlay */}
             {dropdownOpen && (
               <>
-                {/* Backdrop to close when clicked outside */}
+                {/* Backdrop click-outside */}
                 <div
                   className="fixed inset-0 z-30"
                   onClick={() => setDropdownOpen(false)}
                 />
-                
+
                 <div className="absolute right-0 mt-2 w-56 rounded-xl bg-white border border-gray-200 shadow-xl z-40 py-2 animate-fade-in origin-top-right">
                   <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-xs text-gray-400">Tài khoản Admin</p>
+                    <p className="text-xs text-gray-400">Tài khoản thường</p>
                     <p className="text-sm font-bold text-gray-800 truncate">{user?.username}</p>
                     <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
                   </div>
-                  
+
                   <div className="p-1">
                     <button
                       onClick={() => {
                         setDropdownOpen(false)
-                        navigate('/admin/profile')
+                        navigate('/profile')
                       }}
                       className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-gray-700 hover:bg-primary-50 hover:text-primary-700 transition-all duration-150"
                     >
@@ -175,9 +175,9 @@ const AdminLayout = () => {
                       Thông tin cá nhân
                     </button>
                   </div>
-                  
+
                   <div className="border-t border-gray-100 my-1" />
-                  
+
                   <div className="p-1">
                     <button
                       onClick={() => {
@@ -199,8 +199,8 @@ const AdminLayout = () => {
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-auto">
+        {/* Page Content Outlet */}
+        <main className="flex-1 overflow-y-auto min-h-0">
           <Outlet />
         </main>
       </div>
@@ -208,4 +208,4 @@ const AdminLayout = () => {
   )
 }
 
-export default AdminLayout
+export default CustomerLayout

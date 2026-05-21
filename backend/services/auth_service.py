@@ -7,7 +7,7 @@ from schemas.user import UserCreate as UserRegister, UserLogin, TokenOut
 from core.security import create_access_token, hash_password, verify_password
 
 
-def register(db: Session, payload: UserRegister):
+def register(db: Session, bureau_db: Session, payload: UserRegister):
     # Check email
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(
@@ -39,7 +39,22 @@ def register(db: Session, payload: UserRegister):
     except IntegrityError:
         db.rollback()
         raise HTTPException(400, "Email hoặc CCCD đã tồn tại")
+    
     db.refresh(new_user)
+
+    # Automatically generate an external-like bureau profile for this new customer
+    from services import cic_service
+    try:
+        cic_service.create_bureau_profile_if_missing(bureau_db, new_user.cccd, new_user.full_name)
+        if not new_user.cccd or not new_user.full_name:
+            raise ValueError("CCCD và họ tên không được để trống")
+        cic_service.create_bureau_profile_if_missing(db, new_user.cccd, new_user.full_name)
+    except Exception as e:
+        db.rollback()
+        # If bureau generation fails, rollback the entire registration to prevent orphaned users
+        db.delete(new_user)
+        db.commit()
+        raise HTTPException(500, f"Lỗi hệ thống khi khởi tạo hồ sơ tín dụng: {str(e)}")
 
     token_payload = {"sub": new_user.email, "role": new_user.role}
     token = create_access_token(token_payload)

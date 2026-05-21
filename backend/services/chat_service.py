@@ -63,6 +63,20 @@ _ADJUSTMENT_PERSONAL_ACTION_TERMS = (
     "hồ sơ của tôi",
     "ho so cua toi",
 )
+_ADJUSTMENT_RESUBMIT_TERMS = (
+    "nộp lại",
+    "nop lai",
+    "nộp đơn",
+    "nop don",
+    "gửi lại",
+    "gui lai",
+    "nộp theo",
+    "nop theo",
+    "tự động nộp",
+    "tu dong nop",
+    "nộp khoản vay",
+    "nop khoan vay",
+)
 _AFFIRMATIVE_KEYWORDS = (
     "đồng ý",
     "dong y",
@@ -183,9 +197,20 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             sources = []
         if pending_action is not None and not error_flag:
             session.pending_action = pending_action
-    except (RAGError, ml_service.ModelPredictionError, _LoanAdjustmentToolError):
+    except _LoanAdjustmentToolError:
+        logger.exception("Loan adjustment tool failed")
+        answer = (
+            "Xin lỗi, mình không thể mô phỏng phương án nộp lại lúc này. "
+            "Vui lòng thử lại sau ít phút."
+        )
+        error_flag = True
+    except (RAGError, ml_service.ModelPredictionError):
         logger.exception("Chat pipeline failed")
         answer = _RAG_ERROR_MESSAGE
+        error_flag = True
+    except Exception as exc:
+        logger.exception("Chat pipeline unknown error")
+        answer = f"Lỗi không xác định: {exc}"
         error_flag = True
 
     # 3) Save the assistant turn (success or error placeholder).
@@ -467,6 +492,7 @@ def _is_loan_adjustment_request(message: str) -> bool:
     has_adjustment_wording = any(term in text for term in _ADJUSTMENT_WORDING_TERMS)
     has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
     has_personal_action = any(term in text for term in _ADJUSTMENT_PERSONAL_ACTION_TERMS)
+    has_resubmit = any(term in text for term in _ADJUSTMENT_RESUBMIT_TERMS)
     return (
         has_direct_action
         and (has_context or has_help_action or has_personal_action)
@@ -474,6 +500,9 @@ def _is_loan_adjustment_request(message: str) -> bool:
         has_context
         and has_help_action
         and (has_direct_action or has_term_question or has_adjustment_wording)
+    ) or (
+        has_resubmit
+        and (has_help_action or has_context)
     )
 
 
@@ -505,6 +534,15 @@ def _format_loan_adjustment_context(
             f"- Xác suất vỡ nợ: {best.default_probability:.2%}",
             f"- Mức rủi ro: {best.risk_level}",
         ])
+    
+    if result.proposal is not None:
+        lines.append(
+            "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống vừa thiết lập một phương án nộp lại đang chờ xác nhận. "
+            "Bạn CÓ THỂ nộp lại khoản vay này thay khách hàng. Hãy thông báo chi tiết phương án đề xuất ở trên cho khách hàng "
+            "và hướng dẫn họ nhắn 'Đồng ý' hoặc 'Xác nhận' để bạn tự động nộp đơn mới, hoặc 'Hủy' để bỏ qua phương án này. "
+            "Tuyệt đối KHÔNG BẢO khách hàng tự thao tác."
+        )
+
     return "\n".join(lines)
 
 
