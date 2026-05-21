@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from db.session import get_db
+from db.session import get_db, get_bureau_db
 from schemas.user import TokenOut, UserLogin, UserCreate as UserRegister
 from services import auth_service
 
@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.post("/register", response_model=TokenOut, status_code=201)
-def register(payload: UserRegister, db: Session = Depends(get_db)):
+def register(payload: UserRegister, db: Session = Depends(get_db), bureau_db: Session = Depends(get_bureau_db)):
     """
     **Register a new customer account.**
     - Validates email uniqueness.
@@ -17,7 +17,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
     - Sets default role to 'customer'.
     - Returns minimal user payload.
     """
-    return auth_service.register(db, payload)
+    return auth_service.register(db, bureau_db, payload)
 
 
 @router.post("/login", response_model=TokenOut)

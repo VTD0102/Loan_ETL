@@ -13,7 +13,7 @@ import os
 # Ensure backend/ is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db.session import SessionLocal
+from db.session import SessionLocal, BureauSessionLocal
 from services import synthetic_service
 
 
@@ -24,10 +24,12 @@ def main():
 
     print(f"⏳ Đang sinh {args.count} khoản vay giả lập...")
     db = SessionLocal()
+    bureau_db = BureauSessionLocal()
     try:
-        stats = synthetic_service.generate_batch(db, count=args.count)
+        stats = synthetic_service.generate_batch(db, bureau_db, count=args.count)
     finally:
         db.close()
+        bureau_db.close()
 
     print(f"\n✅ Kết quả:")
     print(f"   Tạo thành công : {stats['created']}/{stats['requested']}")

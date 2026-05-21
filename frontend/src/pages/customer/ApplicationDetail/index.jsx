@@ -415,6 +415,16 @@ const ApplicationDetailPage = () => {
                       {cicData.record?.bad_debt_flag ? 'Có' : 'Không'}
                     </p>
                   </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Danh sách đen</p>
+                    <p className={`text-sm font-semibold ${cicData.record?.blacklist_flag ? 'text-danger-600' : 'text-success-600'}`}>
+                      {cicData.record?.blacklist_flag ? 'Có' : 'Không'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Lần tra cứu tín dụng</p>
+                    <p className="text-sm font-semibold text-gray-800">{cicData.record?.num_credit_inquiries ?? 0}</p>
+                  </div>
                 </div>
               </div>
             ) : (

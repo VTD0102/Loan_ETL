@@ -168,6 +168,7 @@ const AdminApplicationDetailPage = () => {
     { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
     { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
     { label: 'Thu nhập xác minh',  value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
+    { label: 'Danh sách đen',      value: app.feature_snapshot?.cic_blacklisted != null ? (app.feature_snapshot.cic_blacklisted ? 'Có' : 'Không') : '—' },
   ]
   
   const isCicApplied = app.feature_snapshot?.cic_applied

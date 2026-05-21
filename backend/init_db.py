@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from db.session import engine
+from db.session import engine, bureau_engine, BureauBase
 from models import Base
 
 # Incremental column migrations (idempotent — safe to re-run)
@@ -37,9 +37,13 @@ _INDEX_MIGRATIONS = [
 
 def init_database():
     try:
-        print("⏳ Đang kết nối tới Supabase và khởi tạo các bảng Backend (Sân trước)...")
+        print("⏳ Đang kết nối tới Supabase và khởi tạo các bảng Backend (Main DB)...")
         Base.metadata.create_all(bind=engine)
-        print("✅ THÀNH CÔNG! Đã tạo xong các bảng: users, loan_applications, personal_info.")
+        print("✅ THÀNH CÔNG! Đã tạo xong các bảng Main DB: users, loan_applications...")
+
+        print("⏳ Đang kết nối tới Supabase và khởi tạo các bảng Bureau (CIC DB)...")
+        BureauBase.metadata.create_all(bind=bureau_engine)
+        print("✅ THÀNH CÔNG! Đã tạo xong các bảng Bureau DB: cic_credit_records.")
 
         print("⏳ Chạy column migrations...")
         with engine.connect() as conn:

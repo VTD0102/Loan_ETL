@@ -24,26 +24,26 @@ logger = logging.getLogger(__name__)
 
 # ── Lookup ────────────────────────────────────────────────────────────────────
 
-def lookup_by_cccd(db: Session, cccd: str) -> Optional[CICRecord]:
+def lookup_by_cccd(bureau_db: Session, cccd: str) -> Optional[CICRecord]:
     """Find a CIC record by CCCD. Returns None if not found."""
-    return db.query(CICRecord).filter(CICRecord.cccd == cccd).first()
+    return bureau_db.query(CICRecord).filter(CICRecord.cccd == cccd).first()
 
 
-def get_user_cic(db: Session, user_email: str) -> Optional[CICRecord]:
+def get_user_cic(db: Session, bureau_db: Session, user_email: str) -> Optional[CICRecord]:
     """Get the CIC record for a logged-in user (via their cccd)."""
     user = db.query(User).filter(User.email == user_email).first()
     if not user or not user.cccd:
         return None
-    return lookup_by_cccd(db, user.cccd)
+    return lookup_by_cccd(bureau_db, user.cccd)
 
 
-def create_bureau_profile_if_missing(db: Session, cccd: str, full_name: str) -> CICRecord:
+def create_bureau_profile_if_missing(bureau_db: Session, cccd: str, full_name: str) -> CICRecord:
     """
     Ensure a CIC profile exists for the given CCCD.
     If it does not exist, simulate an external bureau generation
     and persist the profile.
     """
-    existing = lookup_by_cccd(db, cccd)
+    existing = lookup_by_cccd(bureau_db, cccd)
     if existing:
         return existing
 
@@ -65,9 +65,9 @@ def create_bureau_profile_if_missing(db: Session, cccd: str, full_name: str) -> 
         blacklist_reason=cic_data.get("blacklist_reason"),
         loan_history=cic_data.get("loan_history", []),
     )
-    db.add(new_cic)
-    db.commit()
-    db.refresh(new_cic)
+    bureau_db.add(new_cic)
+    bureau_db.commit()
+    bureau_db.refresh(new_cic)
     logger.info("Generated new bureau profile for CCCD: %s", cccd)
     return new_cic
 
