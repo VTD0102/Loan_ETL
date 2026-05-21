@@ -24,7 +24,7 @@ _REWRITE_SYSTEM_PROMPT = (
     "Chỉ dùng thông tin có trong câu hỏi hiện tại, tóm tắt hội thoại và các lượt gần đây. "
     "Không bịa thêm trạng thái hồ sơ, số tiền, DTI, điểm tín dụng hoặc kết quả duyệt. "
     "Nếu câu hỏi đã độc lập, giữ nguyên hoặc chỉnh rất nhẹ. "
-    "Chỉ trả về một câu truy vấn, không giải thích, không nhãn."
+    "Chỉ trả về một câu truy vấn, không giải thích, không nhãn.C"
 )
 
 _rewrite_llm = None

@@ -8,94 +8,78 @@
 Dự án CreditIntel được phát triển theo mô hình phân lớp rõ ràng, kết hợp chặt chẽ giữa xử lý dữ liệu (Data Engineering), huấn luyện mô hình (Machine Learning) và vận hành trực tuyến (Web Application + RAG Chatbot).
 
 ```mermaid
-flowchart TB
-    %% ===== CỘT 1: CLIENT-SIDE (REACT APP) =====
-    subgraph CLIENT["🖥️ Client-Side (React 18 + Zustand)"]
+graph TB
+    User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
+    Login --> JWT["🔑 Zustand Store\n(Bearer JWT Auth)"]
+
+    %% Phân nhánh theo vai trò
+    JWT -->|Role: Customer| FE_C
+    JWT -->|Role: Admin| FE_A
+
+    subgraph FE_C["📋 Giao diện Khách hàng (React)"]
         direction TB
-        User(("👤 Người dùng")) --> Login["🔐 Đăng nhập / Đăng ký"]
-        Login --> JWT["🔑 Zustand Store\n(JWT Bearer)"]
-        
-        JWT -->|Customer| CustPortal["📋 Customer Portal\n· Dashboard / Apply\n· RAG Chat AI"]
-        JWT -->|Admin| AdminPanel["🛡️ Admin Panel\n· Review & Stats"]
+        C_MAIN["📊 Portal (Dashboard / Apply / History)"]
+        C_CHAT["💬 Chat AI (RAG Chatbot)"]
     end
 
-    %% ===== CỘT 2: API & BACKEND (FASTAPI) =====
-    subgraph BE["⚙️ Backend Layer (FastAPI)"]
+    subgraph FE_A["🛡️ Giao diện Admin (React)"]
         direction TB
-        subgraph API_GW["🌐 API Gateway & Auth"]
-            ROUTERS["🌐 API Routers\n/auth · /applications · /admin\n/chat · /credit-score"]
-            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification)"]
+        A_PANEL["🖥️ Admin Panel (Review & Stats)"]
+    end
+
+    %% Kết nối Frontend -> API Gateway
+    C_MAIN -->|"REST API"| ROUTERS
+    C_CHAT -->|"REST API"| ROUTERS
+    A_PANEL -->|"REST API"| ROUTERS
+
+    subgraph BACKEND["⚙️ Backend & API Layer (FastAPI)"]
+        direction TB
+        subgraph API_GW["🌐 API Gateway & Security"]
+            ROUTERS["🌐 API Routers\n/auth · /applications · /admin · /chat · /credit-score"]
+            JWT_MW["🛂 JWT Auth Middleware\n(Roles verification & Verification)"]
             ROUTERS --> JWT_MW
         end
-        
-        subgraph SVCS["📦 Business Services"]
+
+        subgraph SERVICES["📦 Business Services"]
             direction TB
-            SVC_AUTH["auth_service\n(Xử lý Auth/JWT)"]
-            SVC_APP["application_service\n(Quản lý hồ sơ vay)"]
-            SVC_ADMIN["admin_service\n(Duyệt đơn & Thống kê)"]
-            SVC_ML["ml_service\n(LightGBM risk scoring)"]
-            SVC_CS["credit_score_service\n(FICO score & SHAP)"]
-            SVC_CHAT["chat_service\n(Điều phối RAG chat)"]
-            SVC_ADJ["loan_adjustment_tool\n(Giả lập tái cấu trúc)"]
+            SVC_AUTH["🔑 auth_service\n(Đăng nhập / Đăng ký / JWT)"]
+            SVC_APP["📄 application_service\n(Nghiệp vụ hồ sơ vay)"]
+            SVC_ADMIN["🛡️ admin_service\n(Phê duyệt & Thống kê)"]
+            SVC_ML["🧠 ml_service\n(LightGBM risk inference)"]
+            SVC_CS["📈 credit_score_service\n(FICO score & SHAP)"]
+            SVC_CHAT["💬 chat_service\n(Orchestrate RAG session)"]
+            SVC_ADJ["🛠️ loan_adjustment_tool\n(Mô phỏng khoản vay)"]
             
-            %% Service-to-service internal connections
             SVC_CHAT --> SVC_ADJ
             SVC_CHAT --> SVC_APP
             SVC_APP --> SVC_ML
             SVC_ADJ --> SVC_ML
         end
-        
-        JWT_MW --> SVC_AUTH
-        JWT_MW --> SVC_APP
-        JWT_MW --> SVC_ADMIN
-        JWT_MW --> SVC_ML
-        JWT_MW --> SVC_CS
-        JWT_MW --> SVC_CHAT
+        JWT_MW --> SERVICES
     end
 
-    CustPortal -->|"REST API"| ROUTERS
-    AdminPanel -->|"REST API"| ROUTERS
+    %% Kết nối Services -> Chuyên sâu RAG / ML
+    SVC_CHAT -->|"Gọi RAG Pipeline"| RAG_MOD
+    SVC_ML -->|"Chạy mô hình"| ML_MOD
+    SVC_CS -->|"Tính FICO / SHAP"| ML_MOD
 
-    %% ===== CỘT 3: ENGINE MODULES (RAG & ML) =====
-    subgraph ENGINES["⚙️ Core Engine Modules"]
+    subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
         direction TB
-        subgraph RAG_MOD["🤖 RAG Module (backend/rag/)"]
-            direction TB
-            CHAIN["chain.py\n(LCEL RAG Pipeline)"]
-            RETRIEVER["retriever.py\n(Hybrid Search)"]
-            CHAIN --> RETRIEVER
-        end
-
-        subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
-            direction TB
-            RISK_M["customer_risk_model.pkl\n(LightGBM model)"]
-            SCORE_M["scorecard_model.pkl\n(FICO Scorecard)"]
-        end
+        CHAIN["chain.py (RAG Pipeline)"]
+        RETRIEVER["retriever.py (Hybrid Search)"]
+        CHAIN --> RETRIEVER
     end
 
-    SVC_CHAT -->|"Orchestrate RAG"| CHAIN
-    SVC_ML -->|"Predict Risk"| RISK_M
-    SVC_CS -->|"Score FICO"| SCORE_M
-    SVC_ADJ -->|"Simulate ML"| RISK_M
-
-    %% ===== CỘT 4: DATA & EXTERNAL INFRA =====
-    subgraph INFRA["💾 Hạ Tầng & Dịch Vụ"]
+    subgraph ML_MOD["🧠 ML Module (machinelearning/)"]
         direction TB
-        subgraph STORAGE["💾 Databases"]
-            PG[("🐘 PostgreSQL\n(Users, Loans, Chat)")]
-            QD[("🔷 Qdrant\n(Vector KB)")]
-        end
-        OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
+        RISK_M["customer_risk_model.pkl\n(LightGBM v4)"]
+        SCORE_M["scorecard_model.pkl\n(FICO score)"]
     end
 
-    %% Kết nối từ Engines và Services đến Infra
-    CHAIN -->|"LLM Queries"| OR
-    RETRIEVER -->|"Vector query"| QD
-    SVC_AUTH -->|"CRUD Users"| PG
-    SVC_APP -->|"CRUD Đơn vay"| PG
-    SVC_ADMIN -->|"Cập nhật & Thống kê"| PG
-    SVC_CS -->|"Đọc đơn vay"| PG
-    CHAIN -->|"Save session"| PG
+    %% Kết nối xuống Cơ sở dữ liệu và API ngoài
+    RAG_MOD -->|"Search vector"| QD[("🔷 Qdrant\nVector DB")]
+    RAG_MOD -->|"LLM & Embed"| OR["☁️ OpenRouter API\n(Gemini 2.5 Flash)"]
+    SERVICES -->|"Lưu đơn/Chat/Users"| PG[("🐘 PostgreSQL")]
 
     %% ===== STYLING =====
     classDef user fill:#6366f1,stroke:#4f46e5,color:#fff,stroke-width:2px
@@ -114,8 +98,8 @@ flowchart TB
     class User user
     class Login auth
     class JWT jwt
-    class CustPortal cust
-    class AdminPanel adm
+    class C_MAIN,C_CHAT cust
+    class A_PANEL adm
     class ROUTERS be
     class JWT_MW jwt_mw
     class SVC_AUTH,SVC_APP,SVC_ADMIN,SVC_ML,SVC_CS,SVC_CHAT,SVC_ADJ svc
@@ -124,17 +108,13 @@ flowchart TB
     class PG,QD db
     class OR ext
 
-    style CLIENT fill:transparent,stroke:#0ea5e9,stroke-width:2px
-    style CustPortal fill:transparent,stroke:#0ea5e9,stroke-width:1px
-    style AdminPanel fill:transparent,stroke:#f97316,stroke-width:1px
-    style BE fill:transparent,stroke:#f59e0b,stroke-width:2px
+    style FE_C fill:transparent,stroke:#0ea5e9,stroke-width:2px
+    style FE_A fill:transparent,stroke:#f97316,stroke-width:2px
+    style BACKEND fill:transparent,stroke:#f59e0b,stroke-width:2px
     style API_GW fill:transparent,stroke:#fbbf24,stroke-width:1px,stroke-dasharray:5 5
-    style SVCS fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
-    style ENGINES fill:transparent,stroke:#8b5cf6,stroke-width:2px
-    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:1.5px
-    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:1.5px
-    style INFRA fill:transparent,stroke:#64748b,stroke-width:2px
-    style STORAGE fill:transparent,stroke:#0891b2,stroke-width:1.5px
+    style SERVICES fill:transparent,stroke:#d97706,stroke-width:1px,stroke-dasharray:5 5
+    style RAG_MOD fill:transparent,stroke:#7c3aed,stroke-width:3px
+    style ML_MOD fill:transparent,stroke:#10b981,stroke-width:3px
 ```
 
 
@@ -188,15 +168,13 @@ flowchart TD
         RetContext["Retrieved Docs\n· Knowledge Base"]
         ToneCtx["Personalization Tone\n· Status-based"]
         ConvMem["Conversation Summary\n+ Window History"]
-
-        SysPrompt --> UserCtx --> RetContext --> ToneCtx --> ConvMem
     end
 
-    ParentExpand --> RetContext
-    SkipRetrieval --> SysPrompt
-    SetPending --> SysPrompt
+    ParentExpand --> PROMPT
+    SkipRetrieval --> PROMPT
+    SetPending --> PROMPT
 
-    ConvMem --> LLMGen["🤖 LLM Gemini 2.5 Flash\ntemperature = 0.3"]
+    PROMPT --> LLMGen["🤖 LLM Gemini 2.5 Flash\ntemperature = 0.3"]
     LLMGen --> OutputGuard{"🛂 Output Guardrail"}
 
     OutputGuard -->|Rò rỉ DB/Key| Sanitize["Thay nội dung an toàn"]
@@ -222,13 +200,6 @@ flowchart TD
     class LLMGen llm
     class AdjCheck,RunAdj,SetPending,ProcessConfirm adj
     class Sanitize,Disclaimer,SaveMsg,UserResponse store
-
-    %% ===== Clickable links =====
-    click SysPrompt href "backend/rag/prompts.py" "System prompt template"
-    click UserCtx href "backend/rag/context_builder.py" "4-block user context builder"
-    click RetContext href "backend/rag/ingest.py" "Knowledge base ingest"
-    click ToneCtx href "backend/rag/personalizer.py" "Status-based personalizer"
-    click ConvMem href "backend/rag/memory.py" "Conversation memory"
 
     %% ===== Subgraph: viền rõ, nền trong suốt =====
     style RETRIEVAL fill:transparent,stroke:#7c3aed,stroke-width:3px
@@ -346,43 +317,12 @@ flowchart TD
     style RUNTIME fill:transparent,stroke:#dc2626,stroke-width:2px
 ```
 
-### Giải thích chi tiết Kiến trúc ETL & Machine Learning
-
-#### 1. Quy Trình Xử Lý Dữ Liệu 3 Lớp (ETL Pipeline via DuckDB)
-Hệ thống sử dụng cơ sở dữ liệu **DuckDB** cục bộ để thực thi lưu trữ và biến đổi dữ liệu thông qua các tập lệnh SQL tối ưu:
-* **Lớp Bronze (`load_bronze.py`)**: Đọc dữ liệu thô (định dạng CSV/Parquet) từ bộ dữ liệu ổn định tài chính *Home Credit Credit Risk Model Stability* (bao gồm bảng tĩnh `train_static`, các bảng quan hệ nhiều dòng `train_person_1`, `train_credit_bureau_a_1`, `train_applprev_1`) và tải trực tiếp vào DuckDB dưới schema `bronze` mà không làm thay đổi cấu trúc gốc.
-* **Lớp Silver (`etl_silver.py` & `transform_silver_hcv2.sql`)**: 
-  * Thực hiện làm sạch dữ liệu: xử lý giá trị khuyết thiếu (Null/None), ép kiểu dữ liệu chuẩn, chuẩn hóa dữ liệu dạng chuỗi, và loại bỏ ngoại lai.
-  * Xử lý quan hệ bảng đa chiều (Multi-depth tables): Các bảng có `depth=0` (như thông tin cá nhân cơ bản) được liên kết trực tiếp theo `case_id`. Các bảng có `depth=1` (như lịch sử tín dụng tại trung tâm thông tin tín dụng - Bureau, hoặc các đơn vay trước đó - Previous Applications) được thực hiện tổng hợp (aggregate) gom nhóm theo `case_id` (ví dụ: đếm số hợp đồng đang hoạt động, tính tổng nợ quá hạn tối đa, tỷ lệ đơn vay trước bị từ chối) trước khi join phẳng.
-  * Dữ liệu sau khi làm sạch được ghi vào bảng `silver.hc_v2_cleansed`.
-* **Lớp Gold (`etl_gold.py` & `transform_gold_hcv2.sql`)**:
-  * Thực hiện xây dựng các thuộc tính đặc trưng (Feature Engineering): tính toán tỷ lệ nợ trên thu nhập (Debt-to-Income - DTI), tỷ lệ giá trị khoản vay trên thu nhập năm, logarit hóa thu nhập, gán cờ cảnh báo rủi ro cao (high DTI flag), gán cờ nợ xấu, cờ gia hạn nợ (prolongations), cờ số lần truy vấn lịch sử tín dụng trong 30 ngày qua.
-  * Toàn bộ 35 đặc trưng được lọc và lưu trữ tại bảng phẳng `gold.hc_features_v2`. Đặc biệt: **Không sử dụng các biến tự khai báo hoặc điểm số tự định biên của khách hàng** nhằm đảm bảo tính khách quan và kiểm chứng được.
-
-#### 2. Huấn Luyện Mô Hình & Quy Đổi Điểm Số (Machine Learning Training)
-* **Kiểm định chất lượng dữ liệu (`validate_data.py`)**: Trước khi huấn luyện, pipeline tự động chạy kiểm tra chất lượng dữ liệu: tỷ lệ khuyết thiếu (null rate) của từng cột đặc trưng không được vượt ngưỡng cho phép, kiểm tra sự tồn tại của các giá trị vô cực (Infinity), và kiểm tra độ lệch phân bổ của nhãn mục tiêu (`is_default`).
-* **Mô hình Dự Báo Rủi Ro Khách Hàng (LightGBM - `retrain_customer_model.py`)**:
-  * Sử dụng thuật toán tăng cường độ dốc LightGBM phiên bản v4 với 35 đặc trưng hành vi thực tế.
-  * Huấn luyện trên tập dữ liệu phân tách 80/20 có phân tầng (stratified split) theo tỷ lệ vỡ nợ để tránh mất cân bằng nhãn.
-  * Cấu hình siêu tham số: `n_estimators=800`, `learning_rate=0.03`, `num_leaves=63`, `min_child_samples=50`, kích hoạt cờ cân bằng trọng số tự động `is_unbalance=True`.
-  * Mô hình xuất ra file đóng gói `customer_risk_model.pkl` kèm theo danh sách đặc trưng mặc định (feature defaults) để thay thế khi dữ liệu đầu vào của ứng dụng bị thiếu hụt tại runtime.
-* **Mô hình Thẻ Điểm Tín Dụng (Logistic Regression Scorecard - `train_scorecard.py`)**:
-  * Nhằm giải thích lý do từ chối/phê duyệt trực quan cho khách hàng, hệ thống huấn luyện thêm một mô hình hồi quy Logistic kết hợp chuẩn hóa dữ liệu đầu vào (`StandardScaler`).
-  * Điểm số vỡ nợ P(default) được quy đổi sang thang điểm **FICO chuẩn quốc tế (từ 300 đến 850)** sử dụng các tham số PDO (Points to Double the Odds):
-    * `factor = PDO / ln(2)`
-    * `base_logit = -ln(base_odds_good)`
-    * `Score = base_score - factor * (model_logit - base_logit)`
-  * Với cấu hình mặc định: `base_score = 600`, `base_odds_good = 50`, `PDO = 20`. Điểm số tối đa là 850 (cực kỳ an toàn) và tối thiểu là 300 (rủi ro vỡ nợ cực cao).
-  * Mô hình và trọng số hệ số điểm (scorecard scaling params) được đóng gói vào file `scorecard_model.pkl`.
-
-#### 3. Vận Hành Và Suy Luận Trực Tuyến (Runtime Inference)
-* Khi khách hàng gửi đơn vay mới thông qua Giao diện hoặc khi RAG chatbot kích hoạt công cụ đề xuất khoản vay tối ưu, Backend sẽ gọi các service tương ứng:
-  * **`ml_service`**: Tải mô hình LightGBM từ file `.pkl`, đối chiếu các trường thông tin trong đơn vay của khách hàng, tự động điền các đặc trưng lịch sử tín dụng lấy từ DB hoặc điền giá trị mặc định của hệ thống (`feature_defaults`), chạy dự đoán xác suất vỡ nợ P(default). Kết quả được phân loại theo ngưỡng quyết định tự động:
-    * **Rủi ro thấp** (P <= 0.20): Phê duyệt tự động.
-    * **Rủi ro trung bình** (0.20 < P <= 0.40): Chờ duyệt thủ công từ admin.
-    * **Rủi ro cao** (P > 0.40): Từ chối tự động.
-  * **`credit_score_service`**: Tải mô hình Logistic Regression, tính toán điểm FICO chi tiết cho người dùng và trích xuất lý do đóng góp đặc trưng (Feature Contributions) tương tự SHAP để giải thích rõ vì sao điểm số của họ tăng hoặc giảm (ví dụ: do tỷ lệ nợ quá cao, hoặc có lịch sử trả nợ tốt).
-
+> **Chú thích ETL & ML:**
+> - **Bronze**: Load raw Parquet của Home Credit Credit Risk Model Stability vào DuckDB, giữ nguyên schema gốc.
+> - **Silver**: Làm sạch dữ liệu (xử lý null, chuẩn hóa kiểu dữ liệu, loại bỏ outliers) theo SQL transforms.
+> - **Gold**: Feature engineering nâng cao (tạo các chỉ số tài chính, aggregation từ bureau/previous applications/CB queries) → bảng `gold.hc_features_v2`.
+> - **Training**: 2 model được train: LightGBM v4 cho dự đoán rủi ro vỡ nợ (35 feature, không dùng `credit_score` tự khai báo) và Logistic Regression scorecard (30 feature, FICO-style 300–850).
+> - **Runtime**: Backend load model artifacts bằng `joblib` và chạy inference real-time khi khách hàng nộp đơn.
 ---
 
 ## Cấu Trúc Dự Án
