@@ -187,9 +187,9 @@ def _generate_good_profile() -> dict[str, Any]:
     term = random.choice(_TERM_OPTIONS)
     emp = random.choices(["Employed", "Self-employed"], weights=[80, 20])[0]
 
-    # CIC: 0-2 active loans, 0-3 closed, no bad debt, high score
-    num_active = random.choices([0, 1, 2], weights=[40, 40, 20])[0]
-    num_closed = random.randint(0, 3)
+    # CIC: 0-3 active loans, 1-4 closed, no bad debt, high score
+    num_active = random.choices([0, 1, 2, 3], weights=[10, 50, 30, 10])[0]
+    num_closed = random.randint(1, 4)
     cic = _build_consistent_cic(
         num_active=num_active,
         num_closed=num_closed,
@@ -332,6 +332,51 @@ _PROFILE_GENERATORS = {
 }
 
 _PROFILE_WEIGHTS = [60, 25, 15]  # good, risky, defaulter
+
+
+def _generate_thin_file_profile() -> dict[str, Any]:
+    """Thin-file: little to no credit history, minimal active debt."""
+    income = random.uniform(3000, 10000)
+    cic = _build_consistent_cic(
+        num_active=random.choices([0, 1], weights=[40, 60])[0],
+        num_closed=random.randint(0, 1),
+        income=income,
+        cic_score_range=(550, 700),  # Neutral score
+        bad_debt=False,
+        overdue_range=(0, 0),
+        dpd_range=(0, 0),
+    )
+    return {"_cic": cic}
+
+
+# ── Bureau Profile Generator ─────────────────────────────────────────────────
+
+def generate_bureau_profile_data(cccd: str, full_name: str) -> dict[str, Any]:
+    """
+    Generate only the CIC bureau data for a new customer.
+    This simulates an external credit bureau query.
+    Weights: 40% good, 30% thin-file, 20% risky, 10% defaulter.
+    """
+    profile_type = random.choices(
+        ["good", "thin_file", "risky", "defaulter"],
+        weights=[55, 10, 25, 10]
+    )[0]
+
+    if profile_type == "good":
+        profile = _generate_good_profile()
+    elif profile_type == "thin_file":
+        profile = _generate_thin_file_profile()
+    elif profile_type == "risky":
+        profile = _generate_risky_profile()
+    else:
+        profile = _generate_defaulter_profile()
+
+    cic_data = profile["_cic"]
+    
+    # Enrich with user info
+    cic_data["cccd"] = cccd
+    cic_data["full_name"] = full_name
+    return cic_data
 
 
 def _pick_profile() -> tuple[str, dict]:
