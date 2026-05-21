@@ -18,6 +18,67 @@ logger = logging.getLogger(__name__)
 
 _FALLBACK_TERM = 36  # months — used to estimate installment from outstanding debt
 
+# ── Sanity override: model trained on Home Credit dataset (modest incomes,
+# medium-sized loans) tends to over-reject borrowers whose loan is trivially
+# small relative to their income. The current_debt_ratio feature is also
+# arithmetically unfair on small loans (e.g. $617 overdue / $500 loan = 1.23,
+# which the model reads as catastrophic). Apply common-sense business rules
+# before persisting an AUTO_REJECTED decision.
+_OVERRIDE_LOAN_TO_INCOME_MAX = 0.05      # loan < 5% of monthly income
+_OVERRIDE_OVERDUE_TO_INCOME_MAX = 0.10   # overdue < 10% of monthly income
+_OVERRIDE_DTI_MAX = 0.30                 # total DTI < 30%
+_OVERRIDE_MAX_OVERDUE_DAYS = 30          # not yet "bad debt" by banking convention
+_OVERRIDE_PROB_CEILING = 0.15            # capped well below low threshold 0.20
+
+
+def _apply_sanity_override(
+    raw_prob: float,
+    payload: ApplicationCreate | ApplicationConfirm,
+    *,
+    computed_dti: float,
+    existing_monthly_debt: float,
+) -> tuple[float, str | None]:
+    """
+    If a loan is obviously safe by banking common-sense, cap the ML probability
+    so the borrower is not rejected by an out-of-distribution model prediction.
+
+    Returns (possibly-capped-prob, override_reason or None).
+    """
+    monthly_income = float(payload.monthly_income or 0)
+    loan_amount = float(payload.loan_amount or 0)
+    total_overdue = float(getattr(payload, "total_overdue_amount", 0) or 0)
+    max_overdue_days = int(getattr(payload, "max_credit_overdue_days", 0) or 0)
+    has_bad_debt = bool(getattr(payload, "has_bad_debt", False))
+
+    if monthly_income <= 0 or loan_amount <= 0:
+        return raw_prob, None
+
+    loan_to_income = loan_amount / monthly_income
+    overdue_to_income = total_overdue / monthly_income
+
+    conditions_met = (
+        loan_to_income < _OVERRIDE_LOAN_TO_INCOME_MAX
+        and overdue_to_income < _OVERRIDE_OVERDUE_TO_INCOME_MAX
+        and computed_dti < _OVERRIDE_DTI_MAX
+        and not has_bad_debt
+        and max_overdue_days < _OVERRIDE_MAX_OVERDUE_DAYS
+    )
+    if not conditions_met or raw_prob <= _OVERRIDE_PROB_CEILING:
+        return raw_prob, None
+
+    reason = (
+        f"Sanity override: khoản vay ({loan_amount:.0f}) chỉ chiếm "
+        f"{loan_to_income*100:.2f}% thu nhập tháng, nợ quá hạn "
+        f"({total_overdue:.0f}) tương đương {overdue_to_income*100:.2f}% thu nhập, "
+        f"DTI tổng {computed_dti*100:.1f}%, không nợ xấu, max overdue {max_overdue_days} ngày. "
+        f"Mô hình ML ({raw_prob*100:.1f}%) bị bỏ qua do nằm ngoài phân phối huấn luyện."
+    )
+    logger.info(
+        "Sanity override fired: raw_prob=%.4f → capped=%.4f | loan/income=%.4f overdue/income=%.4f dti=%.4f",
+        raw_prob, _OVERRIDE_PROB_CEILING, loan_to_income, overdue_to_income, computed_dti,
+    )
+    return _OVERRIDE_PROB_CEILING, reason
+
 
 def _safe_monthly_installment(cic_record) -> float:
     """
@@ -201,8 +262,15 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
     # ── Set the exact DTI used by ML on payload for DB storage ──
     payload.dti = computed_dti_decimal
 
-    prob = prediction["default_probability"]
+    raw_prob = prediction["default_probability"]
+    prob, override_reason = _apply_sanity_override(
+        raw_prob,
+        payload,
+        computed_dti=computed_dti,
+        existing_monthly_debt=existing_monthly_debt,
+    )
     app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"
+    risk_level = "Low" if override_reason else (prediction["risk_level"] if prob <= 0.4 else "High")
 
     # ── Always save to DB so RAG reads the exact same prediction the UI shows ──
     new_app = LoanApplication(
@@ -210,7 +278,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         status=app_status,
         **_build_app_fields(payload, prediction),
         default_probability=prob,
-        risk_level=prediction["risk_level"] if prob <= 0.4 else "High",
+        risk_level=risk_level,
         risk_score=prediction["risk_score"],
         recommended_amount=prediction["suggested_amount"],
         recommended_term=prediction["suggested_term"],
@@ -230,6 +298,8 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         "status":              app_status,
         "application_id":      str(new_app.id),
         "default_probability": prob,
+        "raw_default_probability": raw_prob,
+        "override_reason":     override_reason,
         "risk_level":          new_app.risk_level,
         "risk_score":          prediction["risk_score"],
         "credit_score_computed": prediction.get("credit_score_computed", 0),
@@ -347,15 +417,22 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
     )
     payload.dti = Decimal(str(round(computed_dti, 4)))
 
-    prob       = prediction["default_probability"]
+    raw_prob = prediction["default_probability"]
+    prob, override_reason = _apply_sanity_override(
+        raw_prob,
+        payload,
+        computed_dti=computed_dti,
+        existing_monthly_debt=existing_monthly_debt,
+    )
     app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"
+    risk_level = "Low" if override_reason else prediction["risk_level"]
 
     new_app = LoanApplication(
         user_id=user.id,
         status=app_status,
         **_build_app_fields(payload, prediction),
         default_probability=prob,
-        risk_level=prediction["risk_level"],
+        risk_level=risk_level,
         risk_score=prediction["risk_score"],
         recommended_amount=prediction["suggested_amount"],
         recommended_term=prediction["suggested_term"],
@@ -376,7 +453,9 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
         "application_id":      str(new_app.id),
         "status":              new_app.status,
         "default_probability": prob,
-        "risk_level":          prediction["risk_level"],
+        "raw_default_probability": raw_prob,
+        "override_reason":     override_reason,
+        "risk_level":          risk_level,
         "risk_score":          prediction["risk_score"],
         "suggested_amount":    prediction["suggested_amount"],
         "suggested_term":      prediction["suggested_term"],

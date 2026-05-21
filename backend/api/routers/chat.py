@@ -49,3 +49,31 @@ def get_context(
     """
     from rag.context_builder import build_context_json
     return build_context_json(db, current_user["sub"])
+
+
+@router.get("/sessions")
+def list_sessions(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_customer),
+):
+    """List all chat sessions for the current user, newest first."""
+    return chat_service.list_sessions(db, current_user["sub"])
+
+
+@router.post("/sessions", status_code=201)
+def create_session(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_customer),
+):
+    """Create a new empty chat session and return its id."""
+    return chat_service.create_session(db, current_user["sub"])
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(require_customer),
+):
+    """Delete a chat session (cascades to its messages)."""
+    return chat_service.delete_session(db, current_user["sub"], session_id)

@@ -25,12 +25,21 @@ Feature mapping from Supabase application data → v2 scorecard features:
 - DPD, bureau, demographic fields: from application, defaults for legacy rows.
 """
 import math
+import warnings
+
 import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names",
+    category=UserWarning,
+    module="sklearn",
+)
 
 from core.scoring import pd_to_credit_score, score_to_band
 from models.application import LoanApplication

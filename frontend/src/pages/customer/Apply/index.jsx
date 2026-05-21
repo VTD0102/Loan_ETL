@@ -732,6 +732,22 @@ const ApplyPage = () => {
           <p className="text-gray-500 text-sm mb-5">
             Hồ sơ của bạn đang chờ admin xét duyệt. Chúng tôi sẽ thông báo sớm nhất có thể.
           </p>
+          {modal?.data?.override_reason && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs font-semibold text-amber-800">Đánh giá bởi business rule</p>
+                {modal?.data?.raw_default_probability != null && (
+                  <span className="ml-auto text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                    ML thô: {(modal.data.raw_default_probability * 100).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-amber-700">{modal.data.override_reason}</p>
+            </div>
+          )}
           <div className="flex gap-3">
             <button onClick={() => navigate('/dashboard')} className="btn-outline flex-1">Về Dashboard</button>
             <button onClick={() => navigate(`/application/${modal?.data?.application_id}`)} className="btn-primary flex-1">

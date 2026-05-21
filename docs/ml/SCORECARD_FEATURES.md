@@ -6,7 +6,13 @@
 > **Ngày cập nhật:** Tháng 5 năm 2026
 > **File artifact:** `machinelearning/ml/models/scorecard_model.pkl`
 > **Script huấn luyện:** `machinelearning/ml/train_scorecard.py`
-> **Dữ liệu:** 300,360 rows từ `gold.hc_features_v1` | Tỷ lệ vỡ nợ: 8.07%
+> **Dữ liệu (v2 / hiện hành):** 1,526,659 rows từ `gold.hc_features_v2` | Tỷ lệ vỡ nợ: 3.14%
+> **ROC-AUC re-verified trên 305,332 test rows (2026-05-22):** **0.7367**
+> **Score distribution v2:** min=300, max=850 (toán học); thực tế **99.92% rơi vào 500–669** (Fair + Good band)
+> **Median:** 596 · **p5–p95:** 556–624 (phổ rất hẹp do default rate thấp 3.14%)
+> **Khách hàng đạt ≥ 600:** 43.21% · **≥ 670:** 0.04% · **≥ 740:** <0.01%
+>
+> _(Số liệu cũ "300,360 rows · 8.07%" của v1 trong các section bên dưới được giữ làm tham chiếu lịch sử — không còn áp dụng cho production.)_
 
 ---
 
@@ -80,7 +86,16 @@ score ∈ [300, 850]  (clamp)
 | 0.40 | 499 | Rất cao (ngưỡng AUTO_REJECT) |
 | 0.50 | 487 | Cực kỳ cao |
 
-> **Nhận xét:** Với tập dữ liệu Home Credit (8.07% default rate), điểm thực tế của phần lớn khách hàng rơi vào 471–676. Ngưỡng 600 trên lý thuyết tương đương P ≈ 2%, còn thực tế hiếm đạt được.
+> **Nhận xét (số liệu lịch sử v1, 8.07% default rate):** Với tập dữ liệu Home Credit, điểm thực tế của phần lớn khách hàng rơi vào 471–676. Ngưỡng 600 trên lý thuyết tương đương P ≈ 2%, còn thực tế hiếm đạt được.
+>
+> **Cập nhật v2 (re-evaluated 2026-05-22):** Phân phối **dịch lên phía cao và hẹp lại** vì default rate giảm còn 3.14%. Thực tế **99.92% khách hàng rơi vào 500–669** (Fair + Good band):
+> - Poor (300–499): chỉ 0.05% — default rate 13.1%
+> - Fair (500–579): **23.74%** — default rate 7.66%
+> - Good (580–669): **76.18%** — default rate 1.81%
+> - Very Good (670–739): 0.03% — default rate 0%
+> - Excellent + Exceptional: tổng <0.01%
+>
+> Ngưỡng **600 KHÔNG còn "hiếm đạt"**: **43.21% khách hàng đạt ≥ 600** trên v2. Ngược lại, ngưỡng **670 cực hiếm — chỉ 0.04%** (không tăng theo tỉ lệ như band Good).
 
 ---
 

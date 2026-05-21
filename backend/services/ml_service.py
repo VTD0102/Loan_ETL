@@ -1,9 +1,17 @@
 import logging
+import warnings
 
 import joblib
 import pandas as pd
 from pathlib import Path
 from typing import Any
+
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names",
+    category=UserWarning,
+    module="sklearn",
+)
 
 from schemas.application import ApplicationBase
 from services.model_feature_builder import (

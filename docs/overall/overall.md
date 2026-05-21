@@ -53,7 +53,7 @@ Hệ thống gồm 4 thành phần chính:
 Xử lý dataset Kaggle Home Credit thông qua pipeline Python thuần:
 - **Bronze** (`bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw`): Load CSV thô vào DuckDB local.
 - **Silver** (`silver.home_credit_cleansed`): Làm sạch, xử lý missing, tính `is_default`.
-- **Gold** (`gold.hc_features_v1`): Feature engineering đầy đủ (~25 features) phục vụ train LR Scorecard.
+- **Gold** (`gold.hc_features_v2`): Feature engineering đầy đủ (~25 features) phục vụ train LR Scorecard.
 
 #### Nhánh B: Prosper (SQL Scripts + PostgreSQL)
 Xử lý Prosper Loan Data thông qua script SQL chạy trên Supabase:
@@ -190,7 +190,7 @@ Loan_ETL/
 │   ├── pipeline.py             # Orchestrator: bronze → silver → gold
 │   ├── load_bronze.py          # Load CSV → bronze.home_credit_raw + prev + bureau
 │   ├── etl_silver.py           # Bronze → silver.home_credit_cleansed
-│   └── etl_gold.py             # Silver → gold.hc_features_v1
+│   └── etl_gold.py             # Silver → gold.hc_features_v2
 │
 ├── ml/                         # Machine Learning scripts
 │   ├── __init__.py
@@ -219,7 +219,7 @@ Loan_ETL/
 │   ├── transform_core.sql      # Silver → Core (Prosper)
 │   ├── transform_gold.sql      # Core → Gold (Prosper, loan_features_v1)
 │   ├── transform_silver_homecredit.sql  # Silver HC (PostgreSQL version)
-│   └── transform_gold_homecredit.sql    # Gold HC (hc_features_v1 PostgreSQL)
+│   └── transform_gold_homecredit.sql    # Gold HC (hc_features_v2 PostgreSQL)
 │
 ├── home-credit-default-risk/   # Raw Kaggle dataset files
 │   ├── application_train.csv   # ~307K rows, nguồn chính
@@ -258,7 +258,7 @@ Loan_ETL/
 |---|---|---|---|
 | `etl/load_bronze.py` | CSV files (Kaggle) | `bronze.home_credit_raw`, `bronze.previous_application_raw`, `bronze.bureau_raw` | Load dữ liệu thô, chọn lọc cột cần thiết |
 | `etl/etl_silver.py` | bronze tables | `silver.home_credit_cleansed` | Làm sạch, tính `is_default`, xử lý missing |
-| `etl/etl_gold.py` | silver table | `gold.hc_features_v1` | Feature engineering ~25 features cho Scorecard |
+| `etl/etl_gold.py` | silver table | `gold.hc_features_v2` | Feature engineering ~25 features cho Scorecard |
 | `etl/pipeline.py` | — | — | Orchestrator chạy bronze→silver→gold tuần tự |
 
 **Chạy pipeline:**
@@ -273,7 +273,7 @@ python -m etl.etl_gold
 ### 4.2. Machine Learning
 
 #### Model 1: Customer Risk Model (LightGBM)
-- **Train:** `ml/retrain_customer_model.py` — Train trên dữ liệu Home Credit (`gold.hc_features_v1`).
+- **Train:** `ml/retrain_customer_model.py` — Train trên dữ liệu Home Credit (`gold.hc_features_v2`).
 - **Inference:** `ml/predict_customer.py::predict_from_form()` — Nhận input từ form, kết hợp với các feature khác → prediction dict.
 - **Input features:**
 
@@ -300,7 +300,7 @@ python -m etl.etl_gold
 | `recommended_term` | Khuyến nghị kỳ hạn |
 
 #### Model 2: LR Scorecard (FICO-style)
-- **Train:** `ml/train_scorecard.py` — Logistic Regression trên `gold.hc_features_v1` (~25 features).
+- **Train:** `ml/train_scorecard.py` — Logistic Regression trên `gold.hc_features_v2` (~25 features).
 - **FICO PDO params:** `base_score=600`, `base_odds_good=50`, `PDO=20`.
 - **Output score:** 300–850. Bands: Poor (<580) / Fair (580–669) / Good (670–739) / Excellent (≥740).
 - **Inference:** `backend/services/credit_score_service.py::get_credit_score()`.
@@ -446,15 +446,18 @@ python tests_local/test_task_5_3.py
 
 ## 8. Hiệu năng Model (Kết quả đánh giá)
 
-### Customer Risk Model (LightGBM — Home Credit data)
-- **ROC-AUC:** ~0.75 trên test set.
-- **Đặc điểm:** Xử lý class imbalance (tỉ lệ 11:1) bằng `is_unbalance=True`. Top features: `credit_score_midpoint`, `ext_source_3`, `num_bureau_records`, `age_years`.
-- **Pipeline:** OrdinalEncoder + LGBMClassifier.
+### Customer Risk Model (LightGBM — `customer_lgbm_v4_stability`)
+- **ROC-AUC:** **0.8065** (re-verified 2026-05-22 trên 305,332 test rows từ `gold.hc_features_v2`).
+- **Threshold @ 0.4 (AUTO_REJECT):** reject_rate 38.1%, recall 82.1%, precision 6.8%.
+- **Đặc điểm:** Xử lý class imbalance (default rate 3.14%, tỉ lệ ~31:1) bằng `is_unbalance=True`. Top features (gain): `max_credit_overdue_days` (15.1%) · `age_years` (8.6%) · `previous_default_rate` (8.2%) · `term` (7.7%) · `max_dpd_24m` (7.2%) · `num_bureau_records` (6.3%).
+- **Pipeline:** OrdinalEncoder (2 categorical: employment_status + occupation_type) + LGBMClassifier — passthrough cho 33 numeric.
+- **Sanity override (2026-05-22):** `application_service._apply_sanity_override()` cap probability ở 0.15 khi loan/income <5%, overdue/income <10%, DTI <30%, no bad_debt, max_overdue_days <30 — chống over-reject user thu nhập cao vay nhỏ (OOD case).
 
-### LR Scorecard (Home Credit data)
-- **ROC-AUC:** ~0.73 trên test set.
+### LR Scorecard (`scorecard_model.pkl`)
+- **ROC-AUC:** **0.7367** (re-verified 2026-05-22 trên cùng 305k test rows).
 - **Algorithm:** Logistic Regression (C=0.1) — không dùng class_weight để giữ calibration tự nhiên.
-- **FICO PDO:** Score range 300–850, base=600, mean~trung bình của tập test.
+- **FICO PDO:** Score range 300–850 (lý thuyết). **Thực tế trên v2: 99.92% rơi vào 500–669** (Fair + Good). Median 596, p5–p95 = 556–624.
+- **Phân phối band:** Fair (500–579) 23.74% · Good (580–669) 76.18% · Very Good (670–739) 0.03% · Khách đạt ≥ 600 = **43.21%**.
 - **SHAP:** LinearExplainer cung cấp top-3 factors giải thích điểm cho từng user.
 
 ---

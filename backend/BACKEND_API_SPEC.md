@@ -4,6 +4,40 @@ This document provides a comprehensive summary of all available REST endpoints i
 
 ---
 
+## Changelog — 2026-05-22
+
+### New endpoints
+
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| `GET`    | `/chat/sessions`              | customer | List all chat sessions của user, sort theo `updated_at desc`. Trả `{ sessions: [{id, title, created_at, updated_at, message_count}] }` |
+| `POST`   | `/chat/sessions`              | customer | Tạo session trống mới. Trả object session vừa tạo (title=null, message_count=0). HTTP 201. |
+| `DELETE` | `/chat/sessions/{session_id}` | customer | Xóa session — cascade tất cả messages + `pending_action` thông qua SQLAlchemy `cascade="all, delete-orphan"`. Trả `{ deleted: true, id: <session_id> }` |
+
+Service implementation: `backend/services/chat_service.py` — `list_sessions()`, `create_session()`, `delete_session()`.
+
+### Modified response — `ApplicationEvaluateResponse`
+
+`POST /applications/evaluate` thêm 2 field optional vào response (`backend/schemas/application.py`):
+
+```python
+raw_default_probability: Optional[float] = None  # ML output trước sanity override
+override_reason: Optional[str] = None            # Set khi sanity override cap raw_prob
+```
+
+- `raw_default_probability`: probability gốc từ LightGBM trước khi áp dụng override. Dùng cho audit/debug.
+- `override_reason`: Vietnamese string giải thích tại sao override fire (loan/income ratio, overdue/income ratio, DTI, ...). Frontend Apply modal hiện badge vàng khi field này non-null.
+
+`default_probability` (field hiện có) **vẫn là giá trị final** dùng để xác định `app_status` và `risk_level`. Nếu override fire, nó = `0.15` (cap), không phải giá trị raw từ ML.
+
+Tương tự: `POST /applications/confirm` cũng trả thêm 2 field này.
+
+### Migration cần chạy
+
+`chat_messages.error` column được dùng từ `backend/models/chat.py:47` nhưng schema cũ có thể thiếu. Chạy `python backend/init_db.py` để áp dụng (idempotent — `ADD COLUMN IF NOT EXISTS`).
+
+---
+
 ## 🔐 1. Authentication Module
 
 ### 1.1 Register Customer

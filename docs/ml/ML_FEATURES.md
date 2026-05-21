@@ -2,10 +2,64 @@
 
 > **Lưu ý 18/05/2026:** Tài liệu này mô tả pipeline v3 cũ. Pipeline hiện tại đã chuyển sang Home Credit Stability v2/v4, bỏ `credit_score`, `credit_score_midpoint`, `rating_ordinal`, `gender_male_flag`, `cnt_children`, `cnt_fam_members`. Xem `docs/migration_v2_summary.md` để lấy contract và metric mới nhất.
 
-> **Phiên bản model:** customer_lgbm_v3 (LightGBM) + scorecard_v3 (LR Scorecard)  
-> **Ngày cập nhật:** Tháng 5 năm 2026  
-> **Dữ liệu huấn luyện:** 300,360 rows từ `gold.hc_features_v1` (Home Credit Default Risk)  
-> **Tỷ lệ vỡ nợ thực tế:** 8.07%
+> **Phiên bản model:** customer_lgbm_v3 (LightGBM) + scorecard_v3 (LR Scorecard)
+> **Ngày cập nhật:** Tháng 5 năm 2026
+
+## Changelog — 2026-05-22
+
+### Sanity override (chống over-rejection do OOD)
+
+Vấn đề phát hiện: user $100k/tháng thu nhập, vay $500 (0.5% income), DTI 2.3%, không nợ xấu vẫn bị `AUTO_REJECTED` với P(default) = 63.1%.
+
+Root cause:
+- Model train trên Home Credit dataset (thu nhập trung bình thấp — `monthly_income` mean ≈ $40k); user $100k là **2.5× mean** → out-of-distribution → extrapolation không tin cậy
+- Feature `current_debt_ratio = total_overdue / loan_amount` = `$617 / $500` = `1.23` → model panic vì loan nhỏ làm denominator bé
+
+**Fix**: Thêm `_apply_sanity_override()` ở `backend/services/application_service.py` (applied cả trong `evaluate()` và `confirm()`). Khi đủ 5 điều kiện:
+
+| Điều kiện | Ngưỡng | Hằng số |
+|---|---|---|
+| `loan / monthly_income` | `< 5%` | `_OVERRIDE_LOAN_TO_INCOME_MAX = 0.05` |
+| `total_overdue / monthly_income` | `< 10%` | `_OVERRIDE_OVERDUE_TO_INCOME_MAX = 0.10` |
+| `dti` (đã gồm CIC) | `< 30%` | `_OVERRIDE_DTI_MAX = 0.30` |
+| `has_bad_debt` | `= False` | hard flag (không bypass) |
+| `max_credit_overdue_days` | `< 30 ngày` | `_OVERRIDE_MAX_OVERDUE_DAYS = 30` |
+
+→ Cap `default_probability` ở `0.15` (cách xa low threshold `0.20` và high threshold `0.40`), force `risk_level = "Low"`.
+
+Response API thêm 2 field: `raw_default_probability` (giá trị ML thô trước override) và `override_reason` (string Vietnamese giải thích tại sao). Frontend Apply modal hiển thị badge vàng "Đánh giá bởi business rule" khi `override_reason` non-null.
+
+**Không phải fix tận gốc** — lộ trình đúng dài hạn:
+1. Augment training data với synthetic high-income / small-loan samples
+2. Redesign `current_debt_ratio` chia cho `monthly_income` thay vì `loan_amount`
+3. OOD detection (Mahalanobis distance) → từ chối predict input quá xa training distribution
+4. Retrain với `pipeline.set_output(transform="pandas")` để giữ feature names xuyên suốt → bỏ silence warning bên dưới
+
+### Silence sklearn UserWarning
+
+`backend/services/ml_service.py` và `backend/services/credit_score_service.py` thêm:
+```python
+warnings.filterwarnings(
+    "ignore",
+    message="X does not have valid feature names",
+    category=UserWarning,
+    module="sklearn",
+)
+```
+
+Lý do: `ColumnTransformer` xuất numpy array (mất feature names) → `LGBMClassifier` log warning ở mỗi `predict_proba`. Model fallback theo **thứ tự cột** (đúng vì pipeline ổn định) → kết quả KHÔNG sai, nhưng log ngập warning. Filter có 3 điều kiện ANDed (message + category + module=sklearn) để không silence các UserWarning khác.
+
+Triệt để: bật `set_output(transform="pandas")` ở training script (mục 4 lộ trình trên) → hết warning + thêm guard rails khi feature names lệch.
+
+
+> **Dữ liệu huấn luyện (v2 / pipeline hiện tại):** 1,526,659 rows từ `gold.hc_features_v2` (Home Credit Credit Risk Model Stability)
+> **Tỷ lệ vỡ nợ thực tế:** 3.14%
+> **Model artifact hiện hành:** `customer_lgbm_v4_stability` — trained 2026-05-17
+> **ROC-AUC re-verified trên 305,332 test rows (2026-05-22):** **0.8065**
+> **Top 10 features by gain (v4):** `max_credit_overdue_days (15.1%)` → `age_years (8.6%)` → `previous_default_rate (8.2%)` → `term (7.7%)` → `max_dpd_24m (7.2%)` → `num_bureau_records (6.3%)` → `loan_amount (5.0%)` → `max_overdue_amount (4.8%)` → `occupation_type (4.3%)` → `num_cb_queries (3.5%)`
+> **Threshold @ 0.4 (current AUTO_REJECT cutoff):** reject_rate=38.1%, recall=82.1%, precision=6.8%
+>
+> _(Các số liệu cũ "300,360 rows · 8.07% default" trong các section bên dưới là từ v1 — đã được giữ làm tham chiếu lịch sử nhưng KHÔNG còn áp dụng cho production.)_
 
 ---
 
@@ -79,7 +133,7 @@
 | Realty agents | 748 | 7.9% |
 | Secretaries | 1,267 | 6.9% |
 
-Tỷ lệ vỡ nợ trung bình toàn tập: **8.07%**
+Tỷ lệ vỡ nợ trung bình toàn tập: **8.07%** _(v1 — pipeline cũ; v2 hiện tại = **3.14%** trên 1,526,659 rows)_
 
 ### 2.2 Theo DTI band
 

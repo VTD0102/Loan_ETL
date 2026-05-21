@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from rag.config import RERANKER_MODE
+from rag.config import RERANKER_MODEL
 logger = logging.getLogger(__name__)
 
 _singleton: "Reranker | None" = None

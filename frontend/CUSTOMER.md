@@ -4,6 +4,54 @@ Tài liệu này mô tả toàn bộ các tính năng dành cho **Khách hàng (
 
 ---
 
+## Changelog — 2026-05-22
+
+### Chat AI — Markdown rendering
+
+`frontend/src/components/customer/ChatMessage/index.jsx` được rewrite hoàn toàn:
+
+- **Dùng `react-markdown` + `remark-gfm`** (deps mới trong `package.json`) thay cho parser tự chế (regex `\*\*bold\*\*` cũ không xử lý được nested list, table, code block...)
+- **Custom Tailwind components** cho `p`, `ul`, `ol`, `li`, `strong`, `em`, `code`, `a`, `h1-h3` — giữ design system consistent
+- **Inline decorators** (regex post-process text nodes):
+  - `[faq.md]` / `[policy.md]` → `<SourceChip>` xanh có icon document
+  - `$617`, `₫500,000` → `<CurrencyBadge>` vàng amber, font tabular-nums
+  - `AUTO_REJECTED` / `APPROVED` / `PENDING_REVIEW` / `AWAITING_INFO` → `<StatusBadge>` uppercase màu theo trạng thái
+- **Bubble narrower**: `max-w-[65ch]` (~580px) thay cho `max-w-[78%]` — tránh dòng dài quá 90 ký tự, đọc dễ hơn trên desktop wide
+- **Bullets spacing**: `space-y-1.5` + `marker:text-primary-400` (bullets có màu brand)
+
+### Chat AI — Fix typewriter truncation
+
+Bug cũ: khi user gửi message mới **trong lúc typewriter đang chạy**, message trước đó bị "đóng băng" giữa chừng (vd "Chào", "Chào bạn duc, tôi xin", "Chào bạn duc, tôi xin lỗi vì sự gi").
+
+Root cause: state `displayed` (string) bị race condition giữa `setDisplayed(fullContent)` trong cleanup và rerender từ user message mới.
+
+Fix: chuyển state thành `animatedLength` (number); derive `displayed = typewriter ? content.slice(0, animatedLength) : content`. Khi `typewriter=false` thì `displayed` **luôn** === `fullContent`, không phụ thuộc trạng thái animation → bulletproof.
+
+### Chat AI — Multi-session sidebar (kiểu Gemini)
+
+`frontend/src/pages/customer/Chat/index.jsx` thêm sidebar trái (256px, có thể toggle):
+
+- **List sessions** từ `GET /chat/sessions` — sort theo `updated_at desc`, hiển thị title (lấy tự động từ message đầu tiên user gửi, max 80 chars) hoặc "Đoạn chat mới"
+- **Button "Đoạn chat mới"** — gọi `POST /chat/sessions`, switch sang session vừa tạo
+- **Hover/active → icon thùng rác** — click confirm → `DELETE /chat/sessions/{id}` (cascade messages)
+- **Switch session** — click item → `GET /chat/history?session_id=...` reload messages
+- **Auto refresh** sau mỗi message gửi để title session mới được cập nhật ngay
+- **Toggle sidebar** — nút hamburger trên header
+
+Helper functions thêm vào `frontend/src/services/chat.js`: `listChatSessions`, `createChatSession`, `deleteChatSession`.
+
+### Apply — Override badge
+
+`frontend/src/pages/customer/Apply/index.jsx` success modal hiện badge vàng "Đánh giá bởi business rule" khi response có `override_reason` non-null. Hiển thị:
+
+- Icon info amber + tiêu đề
+- Pill bên phải: "ML thô: 63.1%" (giá trị `raw_default_probability`)
+- Body text: reasoning từ backend (vd: "Sanity override: khoản vay (500) chỉ chiếm 0.50% thu nhập tháng...")
+
+Mục đích: minh bạch với user rằng quyết định ACCEPT đã bypass model ML do business rule fire — không phải user "may mắn".
+
+---
+
 ## Tổng quan luồng chính
 
 ```

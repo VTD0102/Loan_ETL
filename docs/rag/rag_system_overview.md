@@ -1,8 +1,34 @@
 # Tổng Quan Hệ Thống AI RAG — CreditIntel
 
 > **Phạm vi:** `backend/rag/` · `backend/services/chat_service.py` · `backend/api/routers/chat.py` · `backend/services/loan_adjustment_tool.py`
-> **Ngày cập nhật:** 2026-05-21
+> **Ngày cập nhật:** 2026-05-22
 > **Tác giả:** Đội ngũ phát triển AI/RAG CreditIntel
+
+---
+
+## Changelog — 2026-05-22
+
+| Thay đổi | File | Mục đích |
+|---|---|---|
+| Fix typo import `RERANKER_MODE` → `RERANKER_MODEL` | `backend/rag/reranker.py:12` | Module crash khi load do tên không tồn tại trong `rag/config.py` |
+| Pre-warm reranker khi server start | `backend/main.py` (`@app.on_event("startup")`) | Chuyển download model 1.1GB (`jinaai/jina-reranker-v2-base-multilingual`) từ "request đầu tiên" sang "lúc uvicorn boot" → UX không còn bị block 44s ở câu chat đầu |
+| Thêm rule 8 (format Markdown) vào `SYSTEM_TEMPLATE` | `backend/rag/prompts.py` | Yêu cầu LLM mỗi bullet trên 1 dòng, paragraph cách bằng dòng trống → frontend render đúng (không còn wall-of-text inline `* **bullet:**`) |
+| Thêm rule 9 (chống hallucinate tool execution) | `backend/rag/prompts.py` | Cấm AI claim "Tôi sẽ chạy mô hình / Xin chờ giây lát / Hệ thống đang tính toán" — đây là async claim mà backend không có khả năng thực hiện |
+| Mở rộng `_ADJUSTMENT_RESUBMIT_TERMS` (+8 cặp keyword) | `backend/services/chat_service.py` | Bắt được cụm AI hay đề xuất làm quick-reply như "đề xuất gói vay phù hợp", "phương án khác"... — coordination bug giữa AI suggestion ↔ backend trigger |
+| Thêm 3 endpoint multi-session | `backend/api/routers/chat.py`, `backend/services/chat_service.py` | `GET /chat/sessions` · `POST /chat/sessions` · `DELETE /chat/sessions/{id}` cho UI sidebar kiểu Gemini |
+
+### Bug coordination tool calling (chưa fix tận gốc)
+
+Hiện tại tool calling của RAG là **regex keyword matching**, không phải LLM function-calling thật. Hệ quả:
+- Mọi cụm AI gợi ý trong response phải được add vào `_ADJUSTMENT_*_TERMS` bằng tay
+- LLM không biết tool tồn tại theo cách formal — chỉ biết qua context block injection
+- Khi keyword trigger fail, LLM hallucinate (claim "Tôi sẽ tính toán...") thay vì gọi tool
+
+**Lộ trình đề xuất**: chuyển sang OpenRouter function calling (Gemini hỗ trợ) — refactor 1 ngày, bỏ toàn bộ regex.
+
+### Schema migration cần chạy 1 lần
+
+`chat_messages.error` column được dùng trong code (`backend/models/chat.py:47`) nhưng có thể chưa có trong DB hiện tại. Migration đã có trong `backend/init_db.py:9` (`ADD COLUMN IF NOT EXISTS error BOOLEAN NOT NULL DEFAULT FALSE`) — cần chạy `python init_db.py` để áp dụng nếu hệ thống chưa migrate.
 
 ---
 

@@ -76,6 +76,23 @@ _ADJUSTMENT_RESUBMIT_TERMS = (
     "tu dong nop",
     "nộp khoản vay",
     "nop khoan vay",
+    # Phrases that the AI itself suggests as quick-replies — must trigger the tool
+    "gói vay phù hợp",
+    "goi vay phu hop",
+    "khoản vay phù hợp",
+    "khoan vay phu hop",
+    "đề xuất gói",
+    "de xuat goi",
+    "đề xuất khoản vay",
+    "de xuat khoan vay",
+    "đề xuất phương án",
+    "de xuat phuong an",
+    "gợi ý gói",
+    "goi y goi",
+    "phương án khác",
+    "phuong an khac",
+    "phương án vay",
+    "phuong an vay",
 )
 _AFFIRMATIVE_KEYWORDS = (
     "đồng ý",
@@ -282,6 +299,74 @@ def history(db: Session, user_email: str, session_id: Any = None) -> dict:
             for row in messages
         ],
     }
+
+
+def list_sessions(db: Session, user_email: str) -> dict:
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    rows = (
+        db.query(
+            ChatSession.id,
+            ChatSession.title,
+            ChatSession.created_at,
+            ChatSession.updated_at,
+            func.count(ChatMessage.id).label("message_count"),
+        )
+        .outerjoin(ChatMessage, ChatMessage.session_id == ChatSession.id)
+        .filter(ChatSession.user_id == user.id)
+        .group_by(ChatSession.id)
+        .order_by(ChatSession.updated_at.desc(), ChatSession.created_at.desc())
+        .all()
+    )
+    return {
+        "sessions": [
+            {
+                "id": str(r.id),
+                "title": r.title or "Đoạn chat mới",
+                "created_at": r.created_at,
+                "updated_at": r.updated_at,
+                "message_count": int(r.message_count or 0),
+            }
+            for r in rows
+        ]
+    }
+
+
+def create_session(db: Session, user_email: str) -> dict:
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    session = ChatSession(user_id=user.id, title=None)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return {
+        "id": str(session.id),
+        "title": session.title or "Đoạn chat mới",
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+        "message_count": 0,
+    }
+
+
+def delete_session(db: Session, user_email: str, session_id: Any) -> dict:
+    user = db.query(User).filter(User.email == user_email).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.user_id == user.id)
+        .first()
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    db.delete(session)
+    db.commit()
+    return {"deleted": True, "id": str(session_id)}
 
 
 def _enforce_rate_limit(db: Session, user_id: Any) -> None:

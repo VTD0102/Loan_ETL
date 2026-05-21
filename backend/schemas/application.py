@@ -150,6 +150,8 @@ class ApplicationEvaluateResponse(BaseModel):
     status: str                           # AUTO_REJECTED | PENDING_REVIEW
     application_id: str                   # Luôn có — đã lưu DB để RAG đọc đúng số liệu
     default_probability: float
+    raw_default_probability: Optional[float] = None  # ML output before sanity override
+    override_reason: Optional[str] = None # Set when sanity override capped raw_prob
     risk_level: str                       # Low | Medium | High
     risk_score: int
     is_perfect_fit: bool                  # True → tự submit thẳng cho admin
