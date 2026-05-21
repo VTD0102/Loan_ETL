@@ -32,6 +32,7 @@ def compute_suggestion(
     payload,
     artifact: dict[str, Any],
     previous_applications: list[Any] | None = None,
+    bureau_features: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Returns:
@@ -48,14 +49,14 @@ def compute_suggestion(
     requested_amount = float(payload.loan_amount)
     requested_term   = int(payload.term)
 
-    base_prob = _predict(payload, artifact, requested_amount, requested_term, prev)
+    base_prob = _predict(payload, artifact, requested_amount, requested_term, prev, bureau_features)
 
     # Build: {term: max_reviewable_amount} for every term below auto-reject.
     candidates: list[tuple[int, float]] = []
     for term in _TERMS:
-        if _predict(payload, artifact, _MIN_LOAN, term, prev) >= HIGH:
+        if _predict(payload, artifact, _MIN_LOAN, term, prev, bureau_features) >= HIGH:
             continue  # even minimum loan is auto-reject risk on this term
-        max_reviewable = _binary_search(payload, artifact, term, HIGH, prev)
+        max_reviewable = _binary_search(payload, artifact, term, HIGH, prev, bureau_features)
         candidates.append((term, max_reviewable))
 
     if not candidates:
@@ -107,6 +108,7 @@ def validate_confirmed_values(
     payload,
     artifact: dict[str, Any],
     previous_applications: list[Any] | None = None,
+    bureau_features: dict[str, Any] | None = None,
 ) -> None:
     """
     Raises ValueError if (loan_amount, term) exceeds the max reviewable amount.
@@ -118,14 +120,14 @@ def validate_confirmed_values(
     confirmed_amount = float(payload.loan_amount)
     confirmed_term   = int(payload.term)
 
-    p_min = _predict(payload, artifact, _MIN_LOAN, confirmed_term, prev)
+    p_min = _predict(payload, artifact, _MIN_LOAN, confirmed_term, prev, bureau_features)
     if p_min >= HIGH:
         raise ValueError(
             f"Với kỳ hạn {confirmed_term} tháng, không có khoản vay nào "
             f"dưới ngưỡng từ chối tự động. Vui lòng chọn kỳ hạn khác."
         )
 
-    max_reviewable = _binary_search(payload, artifact, confirmed_term, HIGH, prev)
+    max_reviewable = _binary_search(payload, artifact, confirmed_term, HIGH, prev, bureau_features)
     if confirmed_amount > max_reviewable * 1.02:  # 2% buffer for rounding
         raise ValueError(
             f"Khoản vay ${confirmed_amount:,.0f} vượt hạn mức có thể gửi xét duyệt "
@@ -135,11 +137,11 @@ def validate_confirmed_values(
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
-def _binary_search(payload, artifact, term, threshold, prev) -> float:
+def _binary_search(payload, artifact, term, threshold, prev, bureau_features=None) -> float:
     lo, hi = _MIN_LOAN, _MAX_LOAN
     for _ in range(_SEARCH_ITERATIONS):
         mid = (lo + hi) / 2
-        prob = _predict(payload, artifact, mid, term, prev)
+        prob = _predict(payload, artifact, mid, term, prev, bureau_features)
         if prob < threshold:
             lo = mid
         else:
@@ -147,14 +149,16 @@ def _binary_search(payload, artifact, term, threshold, prev) -> float:
     return lo
 
 
-def _predict(payload, artifact, loan_amount: float, term: int, prev: list) -> float:
+def _predict(payload, artifact, loan_amount: float, term: int, prev: list, bureau_features=None) -> float:
     from services.model_feature_builder import apply_dti_risk_floor, build_model_input
     modified = payload.model_copy(update={
         "loan_amount": Decimal(str(round(loan_amount, 2))),
         "term":        int(term),
         "dti":         None,
     })
-    built    = build_model_input(modified, artifact, previous_applications=prev)
+    built    = build_model_input(
+        modified, artifact, previous_applications=prev, bureau_features=bureau_features,
+    )
     pipeline = artifact["pipeline"]
     feature_cols = artifact["feature_cols"]
     row      = pd.DataFrame([built.features], columns=feature_cols)

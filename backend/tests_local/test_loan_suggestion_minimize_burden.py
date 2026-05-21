@@ -80,7 +80,7 @@ def _make_predictor(safe_caps: dict[int, float]) -> Any:
     Step-function ensures binary search converges to exactly safe_caps[term].
     Terms missing from safe_caps (or cap=0) always return 0.50 — never reviewable.
     """
-    def fake(payload, artifact, loan_amount: float, term: int, prev):
+    def fake(payload, artifact, loan_amount: float, term: int, prev, bureau_features=None):
         cap = safe_caps.get(term, 0.0)
         if cap == 0.0:
             return 0.50

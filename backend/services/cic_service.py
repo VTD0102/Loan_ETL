@@ -60,6 +60,49 @@ def enrich_from_cic(cic: CICRecord) -> CICEnrichmentResult:
     )
 
 
+def derive_bureau_features(cic: CICRecord) -> dict:
+    """
+    Derive ML-internal bureau features from CIC mock data so they vary across
+    applicants instead of falling through to artifact defaults at inference.
+
+    Returns a dict of feature_name → value. Keys that cannot be derived from
+    the current CIC schema (e.g. `cb_queries_30d`, `total_prolongations`) are
+    omitted and will fall through to `feature_defaults` in `build_model_input`.
+
+    Approximation note: mock `loan_history` entries are `{lender, amount,
+    status, dpd_max}` with no `opened_at`/`closed_at`, so windowed metrics
+    (`avg_dpd_recent`, `max_dpd_24m`) collapse to "all loans in history".
+    Good enough to break the constant-default behavior; not a substitute
+    for retraining on data with matching distribution.
+    """
+    out: dict = {}
+
+    # num_cb_queries — trivial mapping from existing CIC field.
+    if cic.num_credit_inquiries is not None:
+        out["num_cb_queries"] = int(cic.num_credit_inquiries)
+
+    history = cic.loan_history or []
+    if not history:
+        return out
+
+    dpds = [int(loan.get("dpd_max") or 0) for loan in history]
+
+    if dpds:
+        out["avg_dpd_recent"] = sum(dpds) / len(dpds)
+        out["max_dpd_24m"] = max(dpds)
+        out["num_installs_dpd10"] = sum(1 for d in dpds if d > 10)
+
+    overdue_amounts = [
+        float(loan.get("amount") or 0)
+        for loan in history
+        if str(loan.get("status") or "").lower() == "overdue"
+    ]
+    if overdue_amounts:
+        out["max_overdue_amount"] = max(overdue_amounts)
+
+    return out
+
+
 def apply_cic_to_payload(payload, cic: CICRecord) -> dict:
     """
     Apply CIC data to an application payload object.

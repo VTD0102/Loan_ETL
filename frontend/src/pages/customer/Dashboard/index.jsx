@@ -4,6 +4,7 @@ import { getMyApplication } from '../../../services/applications'
 import useAuthStore from '../../../store/authStore'
 import ApplicationCard from '../../../components/customer/ApplicationCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import { selectLatestApplication } from './selectLatestApplication'
 
 const ACTIVE_STATUSES = ['PENDING_REVIEW', 'AWAITING_INFO', 'INFO_SUBMITTED']
 const REJECTED_STATUSES = ['AUTO_REJECTED', 'ADMIN_REJECTED']
@@ -37,7 +38,7 @@ const DashboardPage = () => {
     const fetchApp = async () => {
       try {
         const res = await getMyApplication()
-        setApp(res.data?.[0] ?? res.data)
+        setApp(selectLatestApplication(res.data))
       } catch (err) {
         if (err.response?.status !== 404) setError('Không thể tải dữ liệu.')
       } finally {
@@ -83,25 +84,25 @@ const DashboardPage = () => {
                 <EmptyState onApply={() => navigate('/apply')} />
               </div>
             ) : (
-              <div className="card p-6">
+              <section>
                 <div className="flex items-center justify-between mb-5">
                   <h2 className="text-lg font-semibold text-gray-900">Đơn vay hiện tại</h2>
                 </div>
                 <ApplicationCard app={app} />
-              </div>
+              </section>
             )}
 
             {/* Rejected history */}
             {isRejected && app && (
-              <div className="mt-6 card p-6">
+              <section className="mt-6">
                 <h2 className="text-base font-semibold text-gray-900 mb-4">Đơn gần đây</h2>
                 <ApplicationCard app={app} compact />
-                <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+                <div className="mt-4 text-center">
                   <button onClick={() => navigate('/apply')} className="btn-primary">
                     Nộp đơn vay mới
                   </button>
                 </div>
-              </div>
+              </section>
             )}
           </>
         )}

@@ -6,6 +6,7 @@ import { evaluateApplication, confirmApplication } from '../../../services/appli
 import { getMyCIC } from '../../../services/cic'
 import Modal from '../../../components/common/Modal'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
+import { formatCurrency } from '../../../utils/format'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const TERM_OPTIONS = [12, 24, 36, 48, 60]
@@ -36,11 +37,23 @@ const INCOME_TYPE_OPTIONS = [
   { value: 'OTHER', label: 'Khác / chưa xác định' },
 ]
 
+const FIELD_CLASS =
+  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm outline-none transition-all duration-150 placeholder:text-gray-400 focus:border-primary-400 focus:ring-4 focus:ring-primary-50 disabled:bg-gray-50'
+
+const SELECT_CLASS =
+  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm outline-none transition-all duration-150 focus:border-primary-400 focus:ring-4 focus:ring-primary-50'
+
+const DTI_STYLES = {
+  success: { text: 'text-success-600', bar: 'bg-success-500' },
+  warning: { text: 'text-warning-600', bar: 'bg-warning-500' },
+  danger:  { text: 'text-danger-600',  bar: 'bg-danger-500' },
+}
+
 // ── Helper components ──────────────────────────────────────────────────────
 const FieldRow = ({ label, hint, error, children }) => (
-  <div>
+  <div className="space-y-1.5">
     <div className="flex items-center gap-1.5 mb-1.5">
-      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <label className="text-sm font-semibold text-gray-800">{label}</label>
       {hint && (
         <span className="group relative">
           <svg className="w-4 h-4 text-gray-400 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,11 +72,37 @@ const FieldRow = ({ label, hint, error, children }) => (
 )
 
 const SectionTitle = ({ title }) => (
-  <div className="flex items-center gap-3 pt-2">
-    <span className="text-sm font-semibold text-gray-700">{title}</span>
-    <div className="flex-1 h-px bg-gray-100" />
+  <div className="flex items-center gap-3 pt-3 pb-1">
+    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-100">
+      <SectionIcon title={title} />
+    </div>
+    <div>
+      <h2 className="text-sm font-bold text-gray-900">{title}</h2>
+      <p className="text-xs text-gray-500">{SECTION_DESCRIPTIONS[title]}</p>
+    </div>
+    <div className="ml-auto hidden h-px flex-1 bg-gray-100 sm:block" />
   </div>
 )
+
+const SECTION_DESCRIPTIONS = {
+  'Thông tin tài chính': 'Khoản vay, thu nhập và mục đích sử dụng vốn.',
+  'Thông tin cá nhân': 'Các dữ liệu nền giúp mô hình đánh giá đúng hồ sơ.',
+  'Hồ sơ tín dụng (CIC)': 'Dữ liệu tín dụng được tra cứu tự động theo CCCD.',
+}
+
+const SectionIcon = ({ title }) => {
+  const path = title === 'Thông tin tài chính'
+    ? 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8v2m0 14v2m8-8h-2M6 12H4m13.657-5.657-1.414 1.414M7.757 16.243l-1.414 1.414m0-11.314 1.414 1.414m8.486 8.486 1.414 1.414'
+    : title === 'Thông tin cá nhân'
+      ? 'M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.5a7.5 7.5 0 0115 0'
+      : 'M9 12l2 2 4-4m5-2.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-1.5'
+
+  return (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
+    </svg>
+  )
+}
 
 // ── Chat Widget ────────────────────────────────────────────────────────────
 const ChatWidget = ({ context, onClose }) => {
@@ -174,11 +213,12 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
   const liveMonthlyPayment = liveTerm > 0 ? liveAmount / liveTerm : 0
   const liveDti       = monthlyIncome > 0 ? (liveMonthlyPayment + existingDebt) / monthlyIncome : 0
   const dtiColor      = liveDti > 0.4 ? 'danger' : liveDti > 0.25 ? 'warning' : 'success'
+  const dtiStyle      = DTI_STYLES[dtiColor]
 
   const handleConfirm = async () => {
     const amt = parseFloat(confirmAmount)
     if (!amt || amt <= 0) { setError('Vui lòng nhập khoản vay hợp lệ'); return }
-    if (amt > maxAmt) { setError(`Khoản vay không được vượt hạn mức xét duyệt $${maxAmt.toLocaleString()}`); return }
+    if (amt > maxAmt) { setError(`Khoản vay không được vượt hạn mức xét duyệt ${formatCurrency(maxAmt)}`); return }
     if (!TERM_OPTIONS.includes(Number(confirmTerm))) { setError('Kỳ hạn không hợp lệ'); return }
     setError('')
     setSubmitting(true)
@@ -218,11 +258,11 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
             </div>
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Khoản vay ban đầu</p>
-              <p className="font-semibold text-gray-800">${Number(originalData?.loan_amount).toLocaleString()} / {originalData?.term}th</p>
+              <p className="font-semibold text-gray-800">{formatCurrency(originalData?.loan_amount)} / {originalData?.term}th</p>
             </div>
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Hạn mức tối đa có thể xét duyệt</p>
-              <p className="font-bold text-primary-600">${maxAmt.toLocaleString()}</p>
+              <p className="font-bold text-primary-600">{formatCurrency(maxAmt)}</p>
             </div>
             <div>
               <p className="text-gray-500 text-xs mb-0.5">Kỳ hạn phù hợp nhất</p>
@@ -237,18 +277,18 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
                 DTI — {liveAmount !== Number(originalData?.loan_amount) || liveTerm !== Number(originalData?.term)
                   ? 'cập nhật theo khoản vay mới' : 'tính tự động'}
               </p>
-              <p className={`text-sm font-bold text-${dtiColor}-600`}>
+              <p className={`text-sm font-bold ${dtiStyle.text}`}>
                 {(liveDti * 100).toFixed(1)}%
               </p>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
-                className={`h-2 rounded-full transition-all bg-${dtiColor}-500`}
+                className={`h-2 rounded-full transition-all ${dtiStyle.bar}`}
                 style={{ width: `${Math.min(liveDti * 100, 100)}%` }}
               />
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
-              = (${liveMonthlyPayment.toFixed(0)}/th trả góp {existingDebt > 0 ? `+ $${existingDebt.toFixed(0)}/th nợ CIC cũ ` : ''}÷ ${Number(monthlyIncome).toLocaleString()} thu nhập). 
+              = ({formatCurrency(liveMonthlyPayment)}/th trả góp {existingDebt > 0 ? `+ ${formatCurrency(existingDebt)}/th nợ CIC cũ ` : ''}÷ {formatCurrency(monthlyIncome)} thu nhập). 
               Dưới 25% tốt · 25-40% chấp nhận · &gt;40% rủi ro cao.
             </p>
           </div>
@@ -263,21 +303,21 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
                 step="100"
                 min="500"
                 max={maxAmt}
-                className="input"
+                className={FIELD_CLASS}
                 value={confirmAmount}
                 onChange={e => { setConfirmAmount(e.target.value); setError('') }}
               />
             </div>
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Kỳ hạn</label>
-              <select className="input" value={confirmTerm} onChange={e => { setConfirmTerm(Number(e.target.value)); setError('') }}>
+              <select className={SELECT_CLASS} value={confirmTerm} onChange={e => { setConfirmTerm(Number(e.target.value)); setError('') }}>
                 {TERM_OPTIONS.map(t => <option key={t} value={t}>{t} tháng</option>)}
               </select>
             </div>
           </div>
           {error && <p className="text-xs text-danger-600 mb-3">{error}</p>}
           <p className="text-xs text-gray-400 mb-5">
-            Khoản vay không được vượt ${maxAmt.toLocaleString()} (ngưỡng trước khi bị từ chối tự động).
+            Khoản vay không được vượt {formatCurrency(maxAmt)} (ngưỡng trước khi bị từ chối tự động).
           </p>
 
           {/* Actions */}
@@ -407,8 +447,8 @@ const ApplyPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gray-50 px-4 py-10">
+      <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-8">
           <button onClick={() => navigate('/dashboard')} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-primary-600 mb-4 transition-colors">
@@ -417,36 +457,51 @@ const ApplyPage = () => {
             </svg>
             Quay lại Dashboard
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Nộp đơn vay mới</h1>
-          <p className="text-gray-500 mt-1">Vui lòng điền đầy đủ tất cả thông tin. AI sẽ đánh giá hồ sơ trong vài giây.</p>
+          <div className="rounded-2xl border border-primary-100 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="mb-2 inline-flex rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 ring-1 ring-primary-100">
+                  AI Credit Review
+                </p>
+                <h1 className="text-2xl font-bold text-gray-900">Nộp đơn vay mới</h1>
+                <p className="mt-1 max-w-xl text-sm text-gray-500">
+                  Nhập thông tin tài chính và hồ sơ cá nhân. Hệ thống sẽ kiểm tra CIC và đánh giá rủi ro tự động.
+                </p>
+              </div>
+              <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
+                <p className="text-xs font-medium text-gray-500">Đơn vị tiền tệ</p>
+                <p className="text-sm font-bold text-gray-900">USD</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="card p-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <div className="card overflow-hidden">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-7 p-6 sm:p-8" noValidate>
 
             {/* ── Section 1: Tài chính ─────────────────────────── */}
             <SectionTitle title="Thông tin tài chính" />
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Thu nhập hàng tháng (USD)" error={errors.monthly_income?.message}>
-                <input type="number" step="0.01" min="1" placeholder="5000"
-                  className={`input ${errors.monthly_income ? 'input-error' : ''}`}
+                <input type="number" step="0.01" min="1" placeholder="5,000"
+                  className={`${FIELD_CLASS} ${errors.monthly_income ? 'input-error' : ''}`}
                   {...register('monthly_income', { required: 'Bắt buộc', min: { value: 1, message: 'Phải > 0' } })} />
               </FieldRow>
               <FieldRow label="Số tiền muốn vay (USD)" error={errors.loan_amount?.message}>
-                <input type="number" step="0.01" min="500" placeholder="10000"
-                  className={`input ${errors.loan_amount ? 'input-error' : ''}`}
+                <input type="number" step="0.01" min="500" placeholder="10,000"
+                  className={`${FIELD_CLASS} ${errors.loan_amount ? 'input-error' : ''}`}
                   {...register('loan_amount', { required: 'Bắt buộc', min: { value: 500, message: 'Tối thiểu $500' }, max: { value: 150000, message: 'Tối đa $150,000' } })} />
               </FieldRow>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Kỳ hạn vay" error={errors.term?.message}>
-                <select className={`input ${errors.term ? 'input-error' : ''}`} {...register('term', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.term ? 'input-error' : ''}`} {...register('term', { required: 'Bắt buộc' })}>
                   {TERM_OPTIONS.map(t => <option key={t} value={t}>{t} tháng</option>)}
                 </select>
               </FieldRow>
               <FieldRow label="Mục đích vay" error={errors.listing_category?.message}>
-                <select className={`input ${errors.listing_category ? 'input-error' : ''}`} {...register('listing_category', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.listing_category ? 'input-error' : ''}`} {...register('listing_category', { required: 'Bắt buộc' })}>
                   {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </FieldRow>
@@ -454,7 +509,7 @@ const ApplyPage = () => {
 
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Có nhà riêng không?" error={errors.is_homeowner?.message}>
-                <select className={`input ${errors.is_homeowner ? 'input-error' : ''}`} {...register('is_homeowner', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.is_homeowner ? 'input-error' : ''}`} {...register('is_homeowner', { required: 'Bắt buộc' })}>
                   <option value="false">Không</option>
                   <option value="true">Có</option>
                 </select>
@@ -465,12 +520,12 @@ const ApplyPage = () => {
             <SectionTitle title="Thông tin cá nhân" />
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Tình trạng việc làm" error={errors.employment_status?.message}>
-                <select className={`input ${errors.employment_status ? 'input-error' : ''}`} {...register('employment_status', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.employment_status ? 'input-error' : ''}`} {...register('employment_status', { required: 'Bắt buộc' })}>
                   {EMPLOYMENT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
               </FieldRow>
               <FieldRow label="Loại thu nhập" error={errors.occupation_type?.message}>
-                <select className={`input ${errors.occupation_type ? 'input-error' : ''}`} {...register('occupation_type', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.occupation_type ? 'input-error' : ''}`} {...register('occupation_type', { required: 'Bắt buộc' })}>
                   {INCOME_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </FieldRow>
@@ -479,24 +534,24 @@ const ApplyPage = () => {
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Số năm kinh nghiệm làm việc" hint="0 nếu chưa đi làm, đã nghỉ hưu hoặc không có việc" error={errors.years_employed?.message}>
                 <input type="number" step="0.5" min="0" max="50" placeholder="3"
-                  className={`input ${errors.years_employed ? 'input-error' : ''}`}
+                  className={`${FIELD_CLASS} ${errors.years_employed ? 'input-error' : ''}`}
                   {...register('years_employed', { required: 'Bắt buộc', min: { value: 0, message: 'Từ 0' }, max: { value: 50, message: 'Tối đa 50' } })} />
               </FieldRow>
               <FieldRow label="Tuổi" error={errors.age_years?.message}>
                 <input type="number" step="1" min="18" max="100" placeholder="30"
-                  className={`input ${errors.age_years ? 'input-error' : ''}`}
+                  className={`${FIELD_CLASS} ${errors.age_years ? 'input-error' : ''}`}
                   {...register('age_years', { required: 'Bắt buộc', min: { value: 18, message: 'Ít nhất 18 tuổi' }, max: { value: 100, message: 'Tối đa 100' } })} />
               </FieldRow>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-5">
               <FieldRow label="Trình độ học vấn" error={errors.education_ordinal?.message}>
-                <select className={`input ${errors.education_ordinal ? 'input-error' : ''}`} {...register('education_ordinal', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.education_ordinal ? 'input-error' : ''}`} {...register('education_ordinal', { required: 'Bắt buộc' })}>
                   {EDUCATION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </FieldRow>
               <FieldRow label="Tình trạng hôn nhân" error={errors.is_married_flag?.message}>
-                <select className={`input ${errors.is_married_flag ? 'input-error' : ''}`} {...register('is_married_flag', { required: 'Bắt buộc' })}>
+                <select className={`${SELECT_CLASS} ${errors.is_married_flag ? 'input-error' : ''}`} {...register('is_married_flag', { required: 'Bắt buộc' })}>
                   <option value="false">Chưa kết hôn</option>
                   <option value="true">Đã kết hôn</option>
                 </select>
@@ -507,14 +562,14 @@ const ApplyPage = () => {
             <SectionTitle title="Hồ sơ tín dụng (CIC)" />
 
             {cicLoading ? (
-              <div className="flex items-center gap-2 p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100">
                 <LoadingSpinner size="sm" />
                 <span className="text-sm text-gray-500">Đang tra cứu CIC...</span>
               </div>
             ) : cicData?.found ? (
               <div className="space-y-3">
                 {/* CIC Source banner */}
-                <div className="flex items-center gap-2 p-3 bg-success-50 border border-success-200 rounded-lg">
+                <div className="flex items-center gap-3 rounded-2xl border border-success-200 bg-success-50 p-4">
                   <svg className="w-4 h-4 text-success-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -537,12 +592,12 @@ const ApplyPage = () => {
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tổng dư nợ</p>
-                    <p className="text-sm font-semibold text-gray-800">${Number(cicData.record?.total_outstanding_debt || 0).toLocaleString()}</p>
+                    <p className="text-sm font-semibold text-gray-800">{formatCurrency(cicData.record?.total_outstanding_debt || 0)}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Tiền quá hạn</p>
                     <p className={`text-sm font-semibold ${Number(cicData.record?.total_overdue_amount || 0) > 0 ? 'text-danger-600' : 'text-gray-800'}`}>
-                      ${Number(cicData.record?.total_overdue_amount || 0).toLocaleString()}
+                      {formatCurrency(cicData.record?.total_overdue_amount || 0)}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-3">
@@ -560,7 +615,7 @@ const ApplyPage = () => {
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <div className="flex items-start gap-3">
                   <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -578,7 +633,7 @@ const ApplyPage = () => {
             )}
 
             <div className="pt-2">
-              <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 text-base shadow-lg shadow-primary-100">
                 {loading && <LoadingSpinner size="sm" className="mr-2" />}
                 {loading ? 'Đang phân tích hồ sơ...' : 'Nộp đơn & Phân tích AI'}
               </button>
@@ -623,7 +678,7 @@ const ApplyPage = () => {
             <div className="bg-primary-50 border border-primary-100 rounded-lg p-3 mb-4 text-left">
               <p className="text-sm font-medium text-primary-700 mb-1">Gợi ý khoản vay phù hợp:</p>
               <p className="text-xs text-primary-600">
-                Tối đa <strong>${modal.data.suggested_amount.toLocaleString()}</strong> trong <strong>{modal.data.suggested_term} tháng</strong> có thể được chấp nhận.
+                Tối đa <strong>{formatCurrency(modal.data.suggested_amount)}</strong> trong <strong>{modal.data.suggested_term} tháng</strong> có thể được chấp nhận.
               </p>
             </div>
           )}

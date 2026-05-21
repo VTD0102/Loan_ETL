@@ -33,10 +33,19 @@ def _load():
     return _artifact
 
 
-def predict(payload: ApplicationBase, db: Any = None, user_id: Any = None) -> dict:
+def predict(
+    payload: ApplicationBase,
+    db: Any = None,
+    user_id: Any = None,
+    bureau_features: dict[str, Any] | None = None,
+) -> dict:
     """
     Runs ML prediction + binary-search loan suggestion.
     Returns full evaluation dict including suggestion and perfect_fit flag.
+
+    `bureau_features` is an optional dict of CIC-derived features
+    (see cic_service.derive_bureau_features) that override the constant
+    artifact defaults for imputed/aliased features.
     """
     try:
         artifact  = _load()
@@ -47,7 +56,12 @@ def predict(payload: ApplicationBase, db: Any = None, user_id: Any = None) -> di
         previous = fetch_previous_applications(db, user_id)
 
         # ── Core prediction ────────────────────────────────────────────────
-        built = build_model_input(payload, artifact, previous_applications=previous)
+        built = build_model_input(
+            payload,
+            artifact,
+            previous_applications=previous,
+            bureau_features=bureau_features,
+        )
         row   = pd.DataFrame([built.features], columns=artifact["feature_cols"])
         raw_prob = float(pipeline.predict_proba(row)[0, 1])
         prob = apply_dti_risk_floor(
@@ -73,7 +87,12 @@ def predict(payload: ApplicationBase, db: Any = None, user_id: Any = None) -> di
         )
 
         # ── Suggestion via binary search ───────────────────────────────────
-        suggestion = compute_suggestion(payload, artifact, previous_applications=previous)
+        suggestion = compute_suggestion(
+            payload,
+            artifact,
+            previous_applications=previous,
+            bureau_features=bureau_features,
+        )
         risk_level = suggestion["risk_level"] if prob < threshold["high"] else "High"
 
         return {

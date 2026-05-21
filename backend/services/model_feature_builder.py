@@ -55,6 +55,7 @@ def build_model_input(
     artifact: dict[str, Any],
     *,
     previous_applications: Iterable[Any] | None = None,
+    bureau_features: dict[str, Any] | None = None,
 ) -> FeatureBuildResult:
     feature_cols = artifact.get("feature_cols")
     if not feature_cols:
@@ -124,6 +125,15 @@ def build_model_input(
         "employment_status":      emp_group,
         "occupation_type":        occupation,
     }
+
+    # Bureau features derived from CIC mock (cic_service.derive_bureau_features).
+    # Overrides constant aliases (max_dpd_24m, max_overdue_amount) and fills
+    # previously-imputed features (avg_dpd_recent, num_installs_dpd10, num_cb_queries).
+    # Keys not present here continue to fall through to artifact defaults.
+    if bureau_features:
+        for col, val in bureau_features.items():
+            if val is not None:
+                values[col] = val
 
     ordered: dict[str, Any] = {}
     imputed: list[str] = []

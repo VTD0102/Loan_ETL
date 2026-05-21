@@ -104,6 +104,7 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
 
     # ── CIC enrichment: replace self-reported bureau fields with verified data ──
     cic_comparison = {}
+    bureau_features: dict = {}
     if user.cccd and cic_record:
         # Blacklist check — reject immediately without ML
         if cic_record.blacklist_flag:
@@ -145,6 +146,12 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         # Store outstanding debt for admin visibility
         cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
         cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
+        # Derive bureau-only ML features (avg_dpd_recent, num_installs_dpd10, etc.)
+        # from CIC mock so they vary across applicants instead of using constant
+        # artifact defaults. See cic_service.derive_bureau_features for details.
+        bureau_features = cic_service.derive_bureau_features(cic_record)
+        if bureau_features:
+            cic_comparison["bureau_derived"] = bureau_features
         logger.info("CIC enrichment applied for %s", user.email)
 
     # ── Build CIC summary for frontend display ──
@@ -166,7 +173,9 @@ def evaluate(db: Session, user_email: str, payload: ApplicationCreate) -> dict:
         cic_summary = {"found": False}
 
     try:
-        prediction = ml_service.predict(payload, db=db, user_id=user.id)
+        prediction = ml_service.predict(
+            payload, db=db, user_id=user.id, bureau_features=bureau_features or None,
+        )
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
 
@@ -241,6 +250,7 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     # ── CIC enrichment (same as evaluate) ──
     cic_comparison = {}
     existing_monthly_debt = 0.0
+    bureau_features: dict = {}
     if user.cccd:
         cic_record = cic_service.lookup_by_cccd(db, user.cccd)
         if cic_record:
@@ -251,6 +261,9 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
             cic_comparison["cic_outstanding_debt"] = float(cic_record.total_outstanding_debt or 0)
             cic_comparison["cic_monthly_installment"] = float(cic_record.total_monthly_installment or 0)
             existing_monthly_debt = float(cic_record.total_monthly_installment or 0)
+            bureau_features = cic_service.derive_bureau_features(cic_record)
+            if bureau_features:
+                cic_comparison["bureau_derived"] = bureau_features
 
     payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
     payload.dti = None
@@ -258,8 +271,13 @@ def confirm(db: Session, user_email: str, payload: ApplicationConfirm) -> dict:
     try:
         artifact = ml_service._load()
         previous = fetch_previous_applications(db, user.id)
-        validate_confirmed_values(payload, artifact, previous_applications=previous)
-        prediction = ml_service.predict(payload, db=db, user_id=user.id)
+        validate_confirmed_values(
+            payload, artifact, previous_applications=previous,
+            bureau_features=bureau_features or None,
+        )
+        prediction = ml_service.predict(
+            payload, db=db, user_id=user.id, bureau_features=bureau_features or None,
+        )
     except ml_service.ModelPredictionError as exc:
         raise HTTPException(503, f"ML model không khả dụng: {exc}") from exc
     except ValueError as exc:
