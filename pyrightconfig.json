@@ -1,0 +1,15 @@
+{
+  "include": [
+    "backend/**/*.py",
+    "machinelearning/**/*.py"
+  ],
+  "extraPaths": [
+    "backend"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": false,
+  "reportMissingModuleSource": false
+}

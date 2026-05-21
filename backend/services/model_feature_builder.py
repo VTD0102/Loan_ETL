@@ -66,7 +66,7 @@ def build_model_input(
 
     monthly_income = _number(payload.monthly_income)
     loan_amount    = _number(payload.loan_amount)
-    term           = int(payload.term)
+    term           = payload.term
     cic_monthly    = _number(getattr(payload, "cic_monthly_installment", None))
 
     # DTI includes existing CIC debt so the model sees total repayment burden.
@@ -102,23 +102,23 @@ def build_model_input(
         "current_debt_ratio":     total_overdue / loan_amount if loan_amount > 0 else 0.0,
         "total_debt_to_income":   total_overdue / (monthly_income * 12) if monthly_income > 0 else 0.0,
         # DPD and bureau proxies available from application data
-        "max_dpd_24m":            int(payload.max_credit_overdue_days),
-        "num_active_credit":      int(payload.num_active_credit),
-        "num_bureau_records":     int(payload.num_bureau_records),
-        "num_active_credit_bureau": int(payload.num_active_credit),
+        "max_dpd_24m":            (payload.max_credit_overdue_days or 0),
+        "num_active_credit":      (payload.num_active_credit or 0),
+        "num_bureau_records":     (payload.num_bureau_records or 0),
+        "num_active_credit_bureau": (payload.num_active_credit or 0),
         "total_overdue_amount":   total_overdue,
-        "max_credit_overdue_days": int(payload.max_credit_overdue_days),
-        "has_bad_debt":           int(bool(payload.has_bad_debt)),
+        "max_credit_overdue_days": (payload.max_credit_overdue_days or 0),
+        "has_bad_debt":           int(payload.has_bad_debt or False),
         "max_overdue_amount":     total_overdue,
         # Previous applications from local DB
         **history,
         # Demographics and categoricals
-        "age_years":              int(payload.age_years),
-        "years_employed":         float(_number(payload.years_employed)),
-        "education_ordinal":      int(payload.education_ordinal),
-        "is_homeowner":           int(bool(payload.is_homeowner)),
-        "income_verifiable_flag": int(bool(payload.income_verifiable_flag)),
-        "is_married_flag":        int(bool(payload.is_married_flag)),
+        "age_years":              payload.age_years,
+        "years_employed":         _number(payload.years_employed),
+        "education_ordinal":      payload.education_ordinal,
+        "is_homeowner":           int(payload.is_homeowner),
+        "income_verifiable_flag": int(payload.income_verifiable_flag or False),
+        "is_married_flag":        int(payload.is_married_flag),
         "income_missing_flag":    0,
         "dti_missing_flag":       0,
         "employment_status":      emp_group,
@@ -216,12 +216,23 @@ def fetch_previous_applications(db: Any, user_id: Any) -> list[Any]:
     if db is None or user_id is None:
         return []
     from models.application import LoanApplication
-    return (
+    import datetime
+    all_apps = (
         db.query(LoanApplication)
         .filter(LoanApplication.user_id == user_id)
         .order_by(LoanApplication.submitted_at.desc())
         .all()
     )
+    if not all_apps:
+        return []
+    # Exclude applications submitted in the last 30 minutes to prevent counting
+    # the current session's rejection as a historical default.
+    if all_apps[0].submitted_at.tzinfo:
+        now = datetime.datetime.now(all_apps[0].submitted_at.tzinfo)
+    else:
+        now = datetime.datetime.now()
+    cutoff = now - datetime.timedelta(minutes=30)
+    return [app for app in all_apps if app.submitted_at < cutoff]
 
 
 def _history_features(previous_applications: list[Any], high_threshold: float) -> dict[str, Any]:
