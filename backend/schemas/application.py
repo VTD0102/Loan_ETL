@@ -74,7 +74,7 @@ class ApplicationCreate(ApplicationBase):
 
 class ApplicationConfirm(ApplicationBase):
     """Dùng khi user xác nhận sau modal gợi ý — có thể điều chỉnh loan_amount và term."""
-    pass
+    application_id: Optional[str] = None  # ID đơn tạm từ evaluate — để reuse prediction
 
 
 class AdminReject(BaseModel):
@@ -146,9 +146,9 @@ class AdminApplicationRead(ApplicationRead):
 
 
 class ApplicationEvaluateResponse(BaseModel):
-    """Kết quả evaluate — chưa lưu vào DB (trừ AUTO_REJECTED)."""
+    """Kết quả evaluate — luôn lưu vào DB với status PENDING_REVIEW hoặc AUTO_REJECTED."""
     status: str                           # AUTO_REJECTED | PENDING_REVIEW
-    application_id: Optional[str] = None  # chỉ có khi AUTO_REJECTED (đã lưu DB)
+    application_id: str                   # Luôn có — đã lưu DB để RAG đọc đúng số liệu
     default_probability: float
     risk_level: str                       # Low | Medium | High
     risk_score: int

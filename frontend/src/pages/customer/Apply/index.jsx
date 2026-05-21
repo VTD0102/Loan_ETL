@@ -183,7 +183,8 @@ const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose })
     setError('')
     setSubmitting(true)
     try {
-      await onConfirm({ ...originalData, loan_amount: amt, term: Number(confirmTerm) })
+      // Pass application_id so backend reuses the exact same ML prediction shown to user
+      await onConfirm({ ...originalData, loan_amount: amt, term: Number(confirmTerm), application_id: evalResult?.application_id || null })
     } finally {
       setSubmitting(false)
     }
@@ -377,8 +378,8 @@ const ApplyPage = () => {
 
       // PENDING_REVIEW
       if (result.is_perfect_fit) {
-        // Auto-confirm — send directly to admin
-        const confirmRes = await confirmApplication(payload)
+        // Auto-confirm — send directly to admin, reuse saved prediction via application_id
+        const confirmRes = await confirmApplication({ ...payload, application_id: result.application_id })
         setModal({ type: 'success', data: confirmRes.data })
       } else {
         // Show suggestion modal

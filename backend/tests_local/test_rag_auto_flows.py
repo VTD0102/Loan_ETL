@@ -108,11 +108,11 @@ def test_rag_auto_submission_flow():
     rag_calls = []
     mock_reply = "Dựa trên hồ sơ bị từ chối của bạn, tôi đề xuất giảm số tiền vay xuống 8000 USD với kỳ hạn 60 tháng. Bạn có đồng ý nộp đơn với phương án này không?"
     
-    def fake_rag_invoke(question, context, chat_history, **kwargs):
-        rag_calls.append({"question": question, "context": context})
+    def fake_rag_invoke(question, user_context, chat_history, **kwargs):
+        rag_calls.append({"question": question, "context": user_context})
         return {"answer": mock_reply, "source_documents": []}
     
-    chat_service._rag_invoke = fake_rag_invoke
+    chat_service._rag_invoke = fake_rag_invoke  # type: ignore
     
     try:
         user = create_test_user(db, "test_rag_autosubmit@example.com", "987654321098")
