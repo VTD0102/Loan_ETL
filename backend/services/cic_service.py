@@ -37,6 +37,41 @@ def get_user_cic(db: Session, user_email: str) -> Optional[CICRecord]:
     return lookup_by_cccd(db, user.cccd)
 
 
+def create_bureau_profile_if_missing(db: Session, cccd: str, full_name: str) -> CICRecord:
+    """
+    Ensure a CIC profile exists for the given CCCD.
+    If it does not exist, simulate an external bureau generation
+    and persist the profile.
+    """
+    existing = lookup_by_cccd(db, cccd)
+    if existing:
+        return existing
+
+    from services.synthetic_service import generate_bureau_profile_data
+    cic_data = generate_bureau_profile_data(cccd, full_name)
+    
+    new_cic = CICRecord(
+        cccd=cic_data["cccd"],
+        full_name=cic_data["full_name"],
+        cic_score=cic_data.get("cic_score"),
+        total_active_loans=cic_data.get("total_active_loans", 0),
+        total_outstanding_debt=cic_data.get("total_outstanding_debt", 0),
+        total_monthly_installment=cic_data.get("total_monthly_installment", 0),
+        total_overdue_amount=cic_data.get("total_overdue_amount", 0),
+        max_dpd_12m=cic_data.get("max_dpd_12m", 0),
+        num_credit_inquiries=cic_data.get("num_credit_inquiries", 0),
+        bad_debt_flag=cic_data.get("bad_debt_flag", False),
+        blacklist_flag=cic_data.get("blacklist_flag", False),
+        blacklist_reason=cic_data.get("blacklist_reason"),
+        loan_history=cic_data.get("loan_history", []),
+    )
+    db.add(new_cic)
+    db.commit()
+    db.refresh(new_cic)
+    logger.info("Generated new bureau profile for CCCD: %s", cccd)
+    return new_cic
+
+
 # ── Enrichment ────────────────────────────────────────────────────────────────
 
 def enrich_from_cic(cic: CICRecord) -> CICEnrichmentResult:

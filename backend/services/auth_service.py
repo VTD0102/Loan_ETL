@@ -39,7 +39,18 @@ def register(db: Session, payload: UserRegister):
     except IntegrityError:
         db.rollback()
         raise HTTPException(400, "Email hoặc CCCD đã tồn tại")
+    
     db.refresh(new_user)
+
+    # Automatically generate an external-like bureau profile for this new customer
+    from services import cic_service
+    try:
+        cic_service.create_bureau_profile_if_missing(db, new_user.cccd, new_user.full_name)
+    except Exception as e:
+        # If bureau generation fails, rollback the entire registration to prevent orphaned users
+        db.delete(new_user)
+        db.commit()
+        raise HTTPException(500, f"Lỗi hệ thống khi khởi tạo hồ sơ tín dụng: {str(e)}")
 
     token_payload = {"sub": new_user.email, "role": new_user.role}
     token = create_access_token(token_payload)
