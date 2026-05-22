@@ -45,10 +45,10 @@ def register(db: Session, bureau_db: Session, payload: UserRegister):
     # Automatically generate an external-like bureau profile for this new customer
     from services import cic_service
     try:
-        cic_service.create_bureau_profile_if_missing(bureau_db, new_user.cccd, new_user.full_name)
         if not new_user.cccd or not new_user.full_name:
             raise ValueError("CCCD và họ tên không được để trống")
-        cic_service.create_bureau_profile_if_missing(db, new_user.cccd, new_user.full_name)
+        cic_service.create_bureau_profile_if_missing(bureau_db, str(new_user.cccd), str(new_user.full_name))
+        cic_service.create_bureau_profile_if_missing(db, str(new_user.cccd), str(new_user.full_name))
     except Exception as e:
         db.rollback()
         # If bureau generation fails, rollback the entire registration to prevent orphaned users
