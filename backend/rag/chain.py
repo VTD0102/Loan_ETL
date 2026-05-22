@@ -145,14 +145,14 @@ def invoke(
 # ── Internal helpers (unchanged) ─────────────────────────────────────────────
 
 def _retrieve_documents(question: str) -> list[Any]:
-    retriever = get_retriever()
     try:
+        retriever = get_retriever()
         if hasattr(retriever, "invoke"):
             return retriever.invoke(question)
         return retriever.get_relevant_documents(question)
     except (openai.APITimeoutError, httpx.TimeoutException) as exc:
         raise RAGTimeoutError(f"Retrieval timed out: {exc}") from exc
-    except (openai.APIConnectionError, openai.APIError, UnexpectedResponse) as exc:
+    except Exception as exc:
         raise RetrievalError(f"Retrieval failed: {exc}") from exc
 
 
