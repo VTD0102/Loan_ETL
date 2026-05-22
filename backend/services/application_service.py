@@ -160,7 +160,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
     # ── Compute DTI once and use the same value for display, storage, and ML input ──
     monthly_income = float(payload.monthly_income)
     loan_amount = float(payload.loan_amount)
-    term = int(payload.term)
+    term = payload.term
 
     # Try to get existing debt from CIC
     existing_monthly_debt = 0.0
@@ -341,7 +341,7 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
     # ── Reuse prediction if loan/term unchanged ──
     if existing_app:
         amount_unchanged = abs(float(existing_app.loan_amount) - float(payload.loan_amount)) < 0.01
-        term_unchanged   = existing_app.term == int(payload.term)
+        term_unchanged   = existing_app.term == payload.term
 
         if amount_unchanged and term_unchanged:
             # Perfect reuse: UI showed this exact prediction, no ML re-run needed

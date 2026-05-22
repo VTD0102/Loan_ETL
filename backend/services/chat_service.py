@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -125,9 +125,8 @@ _NEGATIVE_KEYWORDS = (
     "đổi phương án khác",
     "doi phuong an khac",
 )
-_CONFIRMATION_PUNCTUATION_TRANSLATION = str.maketrans({
-    ch: " " for ch in ",.;:!?()[]{}\"'“”‘’"
-})
+_PUNCTUATION_CHARS = ",.;:!?()[]{}\"'“”‘’"
+_CONFIRMATION_PUNCTUATION_TRANSLATION = str.maketrans(_PUNCTUATION_CHARS, " " * len(_PUNCTUATION_CHARS))
 
 
 class _LoanAdjustmentToolError(Exception):
@@ -167,7 +166,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             sources=[],
             error=False,
         ))
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         try:
             db.commit()
         except Exception:
@@ -238,7 +237,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         sources=sources,
         error=error_flag,
     ))
-    session.updated_at = datetime.utcnow()
+    session.updated_at = datetime.now(timezone.utc)
     try:
         db.commit()
     except Exception:
@@ -370,7 +369,7 @@ def delete_session(db: Session, user_email: str, session_id: Any) -> dict:
 
 
 def _enforce_rate_limit(db: Session, user_id: Any) -> None:
-    one_min_ago = datetime.utcnow() - timedelta(minutes=1)
+    one_min_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     query_count = (
         db.query(func.count(ChatMessage.id))
         .join(ChatSession, ChatMessage.session_id == ChatSession.id)
@@ -525,12 +524,16 @@ def _confirm_pending_loan_adjustment(
         term=term,
     )
 
+    from db.session import BureauSessionLocal
+    bureau_db = BureauSessionLocal()
     try:
-        result = application_service.confirm(db, user_email, payload)
+        result = application_service.confirm(db, bureau_db, user_email, payload)
     except HTTPException as exc:
         if exc.status_code != status.HTTP_503_SERVICE_UNAVAILABLE:
             session.pending_action = None
         return f"Chưa thể nộp lại phương án này: {exc.detail}"
+    finally:
+        bureau_db.close()
 
     session.pending_action = None
     return (
@@ -592,7 +595,7 @@ def _is_loan_adjustment_request(message: str) -> bool:
 
 
 def _normalize_message(message: str) -> str:
-    text = str(message).strip().lower().translate(_CONFIRMATION_PUNCTUATION_TRANSLATION)
+    text = message.strip().lower().translate(_CONFIRMATION_PUNCTUATION_TRANSLATION)
     return " ".join(text.split())
 
 
