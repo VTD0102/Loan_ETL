@@ -226,7 +226,126 @@ Khách điền form → application_service → LoanApplication lưu DB
 
 ---
 
-*Cập nhật lần cuối: 2026-05-21*
+## Phần 4 — Phân tích nguyên nhân: tại sao Scorecard hardcode = 0?
+
+### 4.1 Giả thuyết của bạn
+
+> *"Phải chăng vì giao diện web CIC không cung cấp các feature đó, nên khi khách hàng
+> điền đơn vay xong nhấn nộp thì mặc định hardcode = 0?"*
+
+**Đúng một nửa** — cần phân biệt hai nhóm feature riêng biệt.
+
+---
+
+### 4.2 Nhóm 1 — Feature CIC có nhưng Scorecard bỏ qua (lỗi implementation)
+
+| Feature | Giá trị cứng | Dữ liệu CIC |
+|---|---|---|
+| `avg_dpd_recent` | `0.0` | `mean(loan_history[].dpd_max)` — đã có trong `derive_bureau_features()` |
+| `num_installs_dpd10` | `0` | `count(loan_history[].dpd_max > 10)` — đã có trong `derive_bureau_features()` |
+| `num_cb_queries` | `0` | `cic_credit_records.num_credit_inquiries` — đã có trong `derive_bureau_features()` |
+
+**Những feature này KHÔNG phải do khách hàng nhập trên giao diện web.**
+Chúng được backend tự động tra cứu từ `cic_credit_records` theo CCCD khi khách nộp đơn,
+cùng lúc với `total_active_loans`, `total_overdue_amount`, v.v. (flow dưới đây):
+
+```
+Khách nhấn "Nộp đơn"
+    │
+    ▼
+application_service.evaluate()
+    │
+    ├─► apply_cic_to_payload()  ← ghi bureau fields vào payload + DB
+    │       ├ num_active_credit, total_overdue_amount, has_bad_debt, ...
+    │       └ total_monthly_installment → cộng vào DTI
+    │
+    ├─► [LightGBM] ml_service.predict()
+    │       └─► build_model_input()
+    │               └─► cic_service.derive_bureau_features(cic_record)
+    │                       ├ avg_dpd_recent       ✅ được dùng
+    │                       ├ num_installs_dpd10   ✅ được dùng
+    │                       └ num_cb_queries       ✅ được dùng
+    │
+    └─► [Scorecard] credit_score_service._score_application(app, db)
+            └─► _build_features(app, ...)
+                    ├ avg_dpd_recent     → hardcode 0.0  ❌  ← KHÔNG gọi derive_bureau_features()
+                    ├ num_installs_dpd10 → hardcode 0    ❌
+                    └ num_cb_queries     → hardcode 0    ❌
+```
+
+**Nguyên nhân thực sự:** `_build_features()` được viết trước khi `derive_bureau_features()`
+tồn tại. Khi LightGBM pipeline được cập nhật để gọi hàm này, `credit_score_service.py`
+không được cập nhật theo — đây là **implementation gap**, không phải data unavailability.
+
+Dữ liệu CIC đã có sẵn trong database. Không cần thay đổi form, không cần retrain model.
+
+---
+
+### 4.3 Nhóm 2 — Feature CIC thực sự không có (hardcode đúng)
+
+| Feature | Giá trị cứng | Lý do |
+|---|---|---|
+| `total_prolongations` | `0` | CIC schema (`cic_credit_records`) không có cột track số lần gia hạn |
+| `cb_queries_30d` | `0` | CIC chỉ có tổng `num_credit_inquiries`, không phân chia theo window 30 ngày |
+
+**Đây mới là trường hợp "web CIC không cung cấp"** — không phải do giao diện, mà do
+hệ thống CIC mô phỏng chưa lưu granularity đó. Hardcode = 0 là fallback đúng (median
+training cũng ≈ 0 cho cả hai feature này).
+
+---
+
+### 4.4 Phương án xử lý — Fix Scorecard (không cần retrain)
+
+**Mục tiêu:** `_score_application()` lấy CIC record và truyền `bureau_features` vào
+`_build_features()` — giống cách LightGBM pipeline đã làm.
+
+**Bước 1** — Sửa `_build_features()` nhận thêm `bureau_features` dict:
+
+```python
+def _build_features(app, num_previous_loans: int, previous_default_rate: float,
+                    dti_p75: float, bureau_features: dict | None = None) -> pd.DataFrame:
+    bf = bureau_features or {}
+    ...
+    return pd.DataFrame([{
+        ...
+        "avg_dpd_recent":     bf.get("avg_dpd_recent", 0.0),   # ← thay hardcode
+        "num_installs_dpd10": bf.get("num_installs_dpd10", 0),  # ← thay hardcode
+        "num_cb_queries":     bf.get("num_cb_queries", 0),      # ← thay hardcode
+        ...
+    }])
+```
+
+**Bước 2** — Sửa `_score_application()` để fetch CIC và gọi `derive_bureau_features()`:
+
+```python
+def _score_application(app, db: Session) -> dict:
+    from services.cic_service import get_cic_record, derive_bureau_features
+    ...
+    bureau_features = {}
+    try:
+        cic_record = get_cic_record(str(app.user_id), bureau_db=...)
+        if cic_record:
+            bureau_features = derive_bureau_features(cic_record)
+    except Exception:
+        pass  # graceful fallback — dùng 0 nếu CIC không có
+
+    df = _build_features(app, num_prev_loans, prev_default_rate, dti_p75, bureau_features)
+    ...
+```
+
+> **Lưu ý:** `_score_application()` hiện nhận `db: Session` (Supabase DB). Để fetch
+> CIC cần thêm `bureau_db: Session` hoặc dùng một connection riêng — xem cách
+> `application_service.evaluate()` xử lý hai session.
+
+**Kết quả sau fix:**
+- Scorecard không còn inflate điểm FICO cho khách hàng có DPD xấu
+- Ba feature `avg_dpd_recent`, `num_installs_dpd10`, `num_cb_queries` nhất quán
+  giữa LightGBM và Scorecard
+- Không cần retrain bất kỳ model nào
+
+---
+
+*Cập nhật lần cuối: 2026-05-27*
 *Tham chiếu: `backend/services/cic_service.py`, `backend/services/credit_score_service.py`,
 `backend/models/cic.py`, `machinelearning/ml/retrain_customer_model.py`,
 `machinelearning/ml/train_scorecard.py`, `machinelearning/database/transform_silver_hcv2.sql`*
