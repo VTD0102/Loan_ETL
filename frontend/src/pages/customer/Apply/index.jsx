@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
 import { evaluateApplication, confirmApplication } from '../../../services/applications'
+import { sendMessage as sendChatMessage } from '../../../services/chat'
 import { getMyCIC } from '../../../services/cic'
+import RejectedRagAdvisorModal from '../../../components/customer/RejectedRagAdvisorModal'
 import Modal from '../../../components/common/Modal'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 import { formatCurrency } from '../../../utils/format'
@@ -104,265 +106,20 @@ const SectionIcon = ({ title }) => {
   )
 }
 
-// ── Chat Widget ────────────────────────────────────────────────────────────
-const ChatWidget = ({ context, onClose }) => {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      text: `Xin chào! Tôi là trợ lý AI của CreditIntel. Tôi đã được cung cấp thông tin về đơn vay của bạn${context ? ` (xác suất vỡ nợ: ${(context.default_probability * 100).toFixed(1)}%, rủi ro: ${context.risk_level})` : ''}. Bạn có thể hỏi tôi bất kỳ điều gì về hồ sơ vay.`,
-    },
-  ])
-  const [input, setInput] = useState('')
-  const [sending, setSending] = useState(false)
-  const [sessionId, setSessionId] = useState(null)
-  const messagesEndRef = useRef(null)
 
-  const sendMessage = async () => {
-    if (!input.trim() || sending) return
-    const userMsg = input.trim()
-    setInput('')
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }])
-    setSending(true)
-    try {
-      const { default: api } = await import('../../../services/api')
-      const res = await api.post('/chat', {
-        message: userMsg,
-        session_id: sessionId,
-      })
-      if (!sessionId && res.data.session_id) {
-        setSessionId(res.data.session_id)
-      }
-      setMessages(prev => [...prev, { role: 'assistant', text: res.data.response }])
-    } catch (err) {
-      const detail = err?.response?.data?.detail
-      setMessages(prev => [...prev, { role: 'assistant', text: detail || 'Xin lỗi, có lỗi khi kết nối AI. Vui lòng thử lại.' }])
-    } finally {
-      setSending(false)
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }
-
-  return (
-    <div className="fixed bottom-4 right-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 flex flex-col" style={{ height: '420px' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-primary-600 rounded-t-2xl">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-400 rounded-full" />
-          <span className="text-sm font-semibold text-white">Trợ lý AI CreditIntel</span>
-        </div>
-        <button onClick={onClose} className="text-white/70 hover:text-white">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] text-xs px-3 py-2 rounded-2xl ${
-              m.role === 'user'
-                ? 'bg-primary-600 text-white rounded-tr-sm'
-                : 'bg-gray-100 text-gray-800 rounded-tl-sm'
-            }`}>
-              {m.text}
-            </div>
-          </div>
-        ))}
-        {sending && (
-          <div className="flex justify-start">
-            <div className="bg-gray-100 text-gray-500 text-xs px-3 py-2 rounded-2xl rounded-tl-sm">
-              <LoadingSpinner size="sm" />
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-      {/* Input */}
-      <div className="flex gap-2 px-3 py-2 border-t border-gray-100">
-        <input
-          className="input flex-1 text-xs py-1.5"
-          placeholder="Nhập câu hỏi..."
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-        />
-        <button onClick={sendMessage} disabled={sending} className="btn-primary px-3 py-1.5 text-xs">
-          Gửi
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Suggestion Modal (Pre-approval) ────────────────────────────────────────
-const SuggestionModal = ({ open, evalResult, originalData, onConfirm, onClose }) => {
-  const [confirmAmount, setConfirmAmount] = useState(originalData?.loan_amount || '')
-  const [confirmTerm, setConfirmTerm] = useState(originalData?.term || 36)
-  const [error, setError] = useState('')
-  const [chatOpen, setChatOpen] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  if (!open || !evalResult) return null
-
-  const isLow    = evalResult.risk_level === 'Low'
-  const prob     = (evalResult.default_probability * 100).toFixed(1)
-  const maxAmt   = evalResult.suggested_amount
-  const sugTerm  = evalResult.suggested_term
-
-  // Reactive DTI: recalculate when amount/term changes
-  const monthlyIncome = originalData?.monthly_income || 1
-  const existingDebt  = evalResult.existing_monthly_debt || 0
-  const liveAmount    = parseFloat(confirmAmount) || 0
-  const liveTerm      = parseInt(confirmTerm) || 36
-  const liveMonthlyPayment = liveTerm > 0 ? liveAmount / liveTerm : 0
-  const liveDti       = monthlyIncome > 0 ? (liveMonthlyPayment + existingDebt) / monthlyIncome : 0
-  const dtiColor      = liveDti > 0.4 ? 'danger' : liveDti > 0.25 ? 'warning' : 'success'
-  const dtiStyle      = DTI_STYLES[dtiColor]
-
-  const handleConfirm = async () => {
-    const amt = parseFloat(confirmAmount)
-    if (!amt || amt <= 0) { setError('Vui lòng nhập khoản vay hợp lệ'); return }
-    if (amt > maxAmt) { setError(`Khoản vay không được vượt hạn mức xét duyệt ${formatCurrency(maxAmt)}`); return }
-    if (!TERM_OPTIONS.includes(Number(confirmTerm))) { setError('Kỳ hạn không hợp lệ'); return }
-    setError('')
-    setSubmitting(true)
-    try {
-      // Pass application_id so backend reuses the exact same ML prediction shown to user
-      await onConfirm({ ...originalData, loan_amount: amt, term: Number(confirmTerm), application_id: evalResult?.application_id || null })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
-          {/* Risk badge */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold mb-4 ${
-            isLow ? 'bg-success-50 text-success-700' : 'bg-warning-50 text-warning-700'
-          }`}>
-            <div className={`w-2 h-2 rounded-full ${isLow ? 'bg-success-500' : 'bg-warning-500'}`} />
-            Rủi ro {isLow ? 'THẤP' : 'TRUNG BÌNH'}
-          </div>
-
-          <h2 className="text-lg font-bold text-gray-900 mb-1">
-            {isLow ? 'Có khoản vay tối ưu hơn cho bạn' : 'Đơn vay trong mức chấp nhận được'}
-          </h2>
-          <p className="text-sm text-gray-500 mb-5">
-            {isLow
-              ? 'Với hồ sơ tài chính của bạn, hệ thống đề xuất khoản vay phù hợp hơn bên dưới.'
-              : 'Khoản vay này có thể bị admin từ chối. Bạn nên xem xét điều chỉnh theo gợi ý.'}
-          </p>
-
-          {/* Info grid */}
-          <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-xl p-4 mb-3 text-sm">
-            <div>
-              <p className="text-gray-500 text-xs mb-0.5">Xác suất vỡ nợ</p>
-              <p className={`font-bold text-base ${isLow ? 'text-success-600' : 'text-warning-600'}`}>{prob}%</p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs mb-0.5">Khoản vay ban đầu</p>
-              <p className="font-semibold text-gray-800">{formatCurrency(originalData?.loan_amount)} / {originalData?.term}th</p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs mb-0.5">Hạn mức tối đa có thể xét duyệt</p>
-              <p className="font-bold text-primary-600">{formatCurrency(maxAmt)}</p>
-            </div>
-            <div>
-              <p className="text-gray-500 text-xs mb-0.5">Kỳ hạn phù hợp nhất</p>
-              <p className="font-bold text-primary-600">{sugTerm} tháng</p>
-            </div>
-          </div>
-
-          {/* Live DTI display — updates when amount/term changes */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-gray-600">
-                DTI — {liveAmount !== Number(originalData?.loan_amount) || liveTerm !== Number(originalData?.term)
-                  ? 'cập nhật theo khoản vay mới' : 'tính tự động'}
-              </p>
-              <p className={`text-sm font-bold ${dtiStyle.text}`}>
-                {(liveDti * 100).toFixed(1)}%
-              </p>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all ${dtiStyle.bar}`}
-                style={{ width: `${Math.min(liveDti * 100, 100)}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-gray-400 mt-1">
-              = ({formatCurrency(liveMonthlyPayment)}/th trả góp {existingDebt > 0 ? `+ ${formatCurrency(existingDebt)}/th nợ CIC cũ ` : ''}÷ {formatCurrency(monthlyIncome)} thu nhập). 
-              Dưới 25% tốt · 25-40% chấp nhận · &gt;40% rủi ro cao.
-            </p>
-          </div>
-
-          {/* Confirm inputs */}
-          <p className="text-sm font-medium text-gray-700 mb-3">Xác nhận khoản vay cuối cùng:</p>
-          <div className="grid grid-cols-2 gap-3 mb-2">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Số tiền vay (USD)</label>
-              <input
-                type="number"
-                step="100"
-                min="500"
-                max={maxAmt}
-                className={FIELD_CLASS}
-                value={confirmAmount}
-                onChange={e => { setConfirmAmount(e.target.value); setError('') }}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">Kỳ hạn</label>
-              <select className={SELECT_CLASS} value={confirmTerm} onChange={e => { setConfirmTerm(Number(e.target.value)); setError('') }}>
-                {TERM_OPTIONS.map(t => <option key={t} value={t}>{t} tháng</option>)}
-              </select>
-            </div>
-          </div>
-          {error && <p className="text-xs text-danger-600 mb-3">{error}</p>}
-          <p className="text-xs text-gray-400 mb-5">
-            Khoản vay không được vượt {formatCurrency(maxAmt)} (ngưỡng trước khi bị từ chối tự động).
-          </p>
-
-          {/* Actions */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => setChatOpen(true)}
-              className="btn-outline flex-1 flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              Chat với AI
-            </button>
-            <button
-              onClick={handleConfirm}
-              disabled={submitting}
-              className="btn-primary flex-1 flex items-center justify-center gap-2"
-            >
-              {submitting && <LoadingSpinner size="sm" />}
-              Xác nhận gửi đơn
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Chat widget */}
-      {chatOpen && <ChatWidget context={evalResult} onClose={() => setChatOpen(false)} />}
-    </>
-  )
-}
 
 // ── Main Apply page ────────────────────────────────────────────────────────
 const ApplyPage = () => {
   const navigate  = useNavigate()
   const [loading, setLoading]         = useState(false)
-  const [modal, setModal]             = useState(null)  // { type: 'rejected'|'suggestion'|'success', data }
-  const [originalFormData, setOriginalFormData] = useState(null)
-  const [chatOpen, setChatOpen]       = useState(false)
+  const [modal, setModal]             = useState(null)  // { type: 'rejected'|'success', data }
+  const [rejectedAdvisor, setRejectedAdvisor] = useState({
+    sessionId: null,
+    pendingAction: null,
+    ragResponse: '',
+    submitting: false,
+    submittedMessage: '',
+  })
   const [cicData, setCicData]         = useState(null)     // { found, record }
   const [cicLoading, setCicLoading]   = useState(true)
 
@@ -412,24 +169,39 @@ const ApplyPage = () => {
     setLoading(true)
     try {
       const payload = buildPayload(data)
-      setOriginalFormData(payload)
       const res   = await evaluateApplication(payload)
       const result = res.data
 
       if (result.status === 'AUTO_REJECTED') {
+        let advisorState = {
+          sessionId: null,
+          pendingAction: null,
+          ragResponse: '',
+          submitting: false,
+          submittedMessage: '',
+        }
+        try {
+          const chatRes = await sendChatMessage({
+            message: 'Đề xuất 3 khoản vay phù hợp cho hồ sơ bị từ chối',
+          })
+          advisorState = {
+            ...advisorState,
+            sessionId: chatRes.data?.session_id || null,
+            pendingAction: chatRes.data?.pending_action || null,
+            ragResponse: chatRes.data?.response || '',
+          }
+        } catch (chatErr) {
+          advisorState.ragResponse = chatErr.response?.data?.detail || 'Chưa thể tải phương án RAG. Vui lòng thử lại sau ít phút.'
+        }
+        setRejectedAdvisor(advisorState)
         setModal({ type: 'rejected', data: result })
         return
       }
 
-      // PENDING_REVIEW
-      if (result.is_perfect_fit) {
-        // Auto-confirm — send directly to admin, reuse saved prediction via application_id
-        const confirmRes = await confirmApplication({ ...payload, application_id: result.application_id })
-        setModal({ type: 'success', data: confirmRes.data })
-      } else {
-        // Show suggestion modal
-        setModal({ type: 'suggestion', data: result })
-      }
+      // For any status other than AUTO_REJECTED (e.g. APPROVED or PENDING_REVIEW):
+      // Auto-confirm the application directly and show the success modal!
+      const confirmRes = await confirmApplication({ ...payload, application_id: result.application_id })
+      setModal({ type: 'success', data: confirmRes.data })
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Nộp đơn thất bại. Vui lòng thử lại.')
     } finally {
@@ -437,19 +209,48 @@ const ApplyPage = () => {
     }
   }
 
-  const handleConfirm = async (confirmedPayload) => {
-    try {
-      const res = await confirmApplication(confirmedPayload)
-      setModal({ type: 'success', data: res.data })
-    } catch (err) {
-      const detail = err.response?.data?.detail
-      if (err.response?.status === 422) {
-        toast.error(detail || 'Khoản vay vượt mức an toàn được gợi ý.')
-      } else {
-        toast.error(detail || 'Gửi đơn thất bại. Vui lòng thử lại.')
-      }
-      throw err
+  const handleRejectedAdvisorConfirm = async (selectedIndex) => {
+    if (!rejectedAdvisor.sessionId) {
+      toast.error('Chưa có phiên RAG để xác nhận phương án. Vui lòng thử lại.')
+      return
     }
+
+    setRejectedAdvisor((prev) => ({ ...prev, submitting: true }))
+    try {
+      const res = await sendChatMessage({
+        message: `Xác nhận phương án ${selectedIndex + 1}`,
+        session_id: rejectedAdvisor.sessionId,
+      })
+      setRejectedAdvisor((prev) => ({
+        ...prev,
+        pendingAction: res.data?.pending_action || null,
+        submittedMessage: res.data?.response || 'Đã nộp lại hồ sơ mới.',
+      }))
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Không thể nộp lại phương án. Vui lòng thử lại.')
+    } finally {
+      setRejectedAdvisor((prev) => ({ ...prev, submitting: false }))
+    }
+  }
+
+  const handleRejectedAdvisorClose = async () => {
+    if (rejectedAdvisor.submitting) return
+
+    if (rejectedAdvisor.sessionId && rejectedAdvisor.pendingAction && !rejectedAdvisor.submittedMessage) {
+      try {
+        await sendChatMessage({ message: 'Hủy', session_id: rejectedAdvisor.sessionId })
+      } catch {
+        // Closing the modal should not be blocked by chat cleanup failure.
+      }
+    }
+    setModal(null)
+    setRejectedAdvisor({
+      sessionId: null,
+      pendingAction: null,
+      ragResponse: '',
+      submitting: false,
+      submittedMessage: '',
+    })
   }
 
   return (
@@ -662,63 +463,17 @@ const ApplyPage = () => {
         </div>
       </div>
 
-      {/* ── Modal: AUTO_REJECTED ─────────────────────────────── */}
-      <Modal open={modal?.type === 'rejected'} onClose={() => setModal(null)} title="Kết quả đánh giá">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-danger-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-danger-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Đơn không đủ điều kiện</h3>
-          <p className="text-gray-500 text-sm mb-3">
-            Xác suất vỡ nợ: <strong className="text-danger-600">{((modal?.data?.default_probability || 0) * 100).toFixed(1)}%</strong> — vượt ngưỡng 40%.
-          </p>
-          <div className="bg-danger-50 border border-danger-100 rounded-lg p-3 mb-4 text-left">
-            <p className="text-sm font-medium text-danger-700 mb-1">Lý do từ chối:</p>
-            <p className="text-xs text-danger-600">Mức rủi ro CAO — xác suất vỡ nợ vượt ngưỡng cho phép (40%)</p>
-          </div>
-          {modal?.data?.computed_dti != null && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4 text-left">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs font-medium text-gray-600">Tỷ lệ nợ/thu nhập (DTI)</p>
-                <p className={`text-sm font-bold ${modal.data.computed_dti > 0.4 ? 'text-danger-600' : modal.data.computed_dti > 0.25 ? 'text-warning-600' : 'text-success-600'}`}>
-                  {(modal.data.computed_dti * 100).toFixed(1)}%
-                </p>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full ${modal.data.computed_dti > 0.4 ? 'bg-danger-500' : modal.data.computed_dti > 0.25 ? 'bg-warning-500' : 'bg-success-500'}`}
-                  style={{ width: `${Math.min(modal.data.computed_dti * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {modal?.data?.suggested_amount > 0 && (
-            <div className="bg-primary-50 border border-primary-100 rounded-lg p-3 mb-4 text-left">
-              <p className="text-sm font-medium text-primary-700 mb-1">Gợi ý khoản vay phù hợp:</p>
-              <p className="text-xs text-primary-600">
-                Tối đa <strong>{formatCurrency(modal.data.suggested_amount)}</strong> trong <strong>{modal.data.suggested_term} tháng</strong> có thể được chấp nhận.
-              </p>
-            </div>
-          )}
-          <div className="flex gap-3">
-            <button
-              onClick={() => setChatOpen(true)}
-              className="btn-outline flex-1 flex items-center justify-center gap-2 text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              Chat với AI
-            </button>
-            <button onClick={() => navigate('/dashboard')} className="btn-primary flex-1">
-              Về Dashboard
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <RejectedRagAdvisorModal
+        open={modal?.type === 'rejected'}
+        evaluation={modal?.data}
+        pendingAction={rejectedAdvisor.pendingAction}
+        ragResponse={rejectedAdvisor.ragResponse}
+        submitting={rejectedAdvisor.submitting}
+        submittedMessage={rejectedAdvisor.submittedMessage}
+        onClose={handleRejectedAdvisorClose}
+        onCancel={handleRejectedAdvisorClose}
+        onConfirm={handleRejectedAdvisorConfirm}
+      />
 
       {/* ── Modal: SUCCESS ───────────────────────────────────── */}
       <Modal open={modal?.type === 'success'} onClose={() => setModal(null)} title="Kết quả đánh giá">
@@ -757,22 +512,8 @@ const ApplyPage = () => {
         </div>
       </Modal>
 
-      {/* ── Pre-approval Suggestion Modal ─────────────────────── */}
-      <SuggestionModal
-        open={modal?.type === 'suggestion'}
-        evalResult={modal?.data}
-        originalData={originalFormData}
-        onConfirm={handleConfirm}
-        onClose={() => setModal(null)}
-      />
 
-      {/* ── Floating Chat Widget (after rejection) ─────────────── */}
-      {chatOpen && (
-        <ChatWidget
-          context={modal?.data}
-          onClose={() => setChatOpen(false)}
-        />
-      )}
+
     </div>
   )
 }

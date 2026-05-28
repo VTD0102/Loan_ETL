@@ -161,6 +161,55 @@ def test_tool_selects_passing_term_at_original_amount():
     assert result.proposal.loan_amount == Decimal("50000")
     assert result.proposal.term == 36
     assert result.proposal.default_probability == 0.32
+    assert result.proposals is not None
+    assert [proposal.term for proposal in result.proposals] == [36, 48, 60]
+
+
+def test_pending_action_contains_three_proposal_options():
+    app = _rejected_app()
+    proposals = [
+        tool.LoanAdjustmentProposal(
+            loan_amount=Decimal("35000"),
+            term=36,
+            default_probability=0.28,
+            risk_level="Medium",
+            risk_score=72,
+            model_version="test-model",
+        ),
+        tool.LoanAdjustmentProposal(
+            loan_amount=Decimal("35000"),
+            term=48,
+            default_probability=0.24,
+            risk_level="Low",
+            risk_score=76,
+            model_version="test-model",
+        ),
+        tool.LoanAdjustmentProposal(
+            loan_amount=Decimal("30000"),
+            term=24,
+            default_probability=0.31,
+            risk_level="Medium",
+            risk_score=69,
+            model_version="test-model",
+        ),
+    ]
+    result = tool.LoanAdjustmentResult(
+        status="proposal",
+        source_application_id=str(app.id),
+        current_loan_amount=app.loan_amount,
+        current_term=app.term,
+        current_default_probability=0.55,
+        proposal=proposals[0],
+        best_observed=None,
+        message="proposal",
+        proposals=proposals,
+    )
+
+    action = tool.build_pending_action(result, now=datetime(2026, 5, 19, 10, 0, 0))
+
+    assert action["proposal"]["loan_amount"] == "35000"
+    assert [item["term"] for item in action["proposals"]] == [36, 48, 24]
+    assert action["proposals"][1]["loan_amount"] == "35000"
 
 
 def test_tool_falls_back_to_recommended_amount_when_original_amount_fails():
@@ -441,6 +490,7 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
 
 if __name__ == "__main__":
     test_tool_selects_passing_term_at_original_amount()
+    test_pending_action_contains_three_proposal_options()
     test_tool_falls_back_to_recommended_amount_when_original_amount_fails()
     test_tool_skips_candidates_that_confirm_validation_would_reject()
     test_tool_uses_newest_same_user_auto_rejected_application()

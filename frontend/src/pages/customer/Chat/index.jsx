@@ -7,6 +7,7 @@ import {
   deleteChatSession,
 } from '../../../services/chat'
 import ChatMessage from '../../../components/customer/ChatMessage'
+import LoanAdjustmentActionCard from '../../../components/customer/LoanAdjustmentActionCard'
 import LoadingSpinner from '../../../components/common/LoadingSpinner'
 
 const SUGGESTIONS = [
@@ -14,6 +15,7 @@ const SUGGESTIONS = [
   'Làm thế nào để tăng điểm tín dụng?',
   'Tôi nên vay bao nhiêu là hợp lý?',
   'DTI là gì và ảnh hưởng như thế nào?',
+  'Đề xuất gói vay phù hợp',
 ]
 
 const CHAT_SESSION_KEY = 'creditintel_chat_session_id'
@@ -95,6 +97,7 @@ const ChatbotPage = () => {
   const [typingMsgId,  setTypingMsgId]  = useState(null)
   const [sessions,     setSessions]     = useState([])
   const [sidebarOpen,  setSidebarOpen]  = useState(true)
+  const [pendingAction, setPendingAction] = useState(null)
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
 
@@ -114,6 +117,7 @@ const ChatbotPage = () => {
       const loaded = res.data?.messages || []
       const resolvedId = res.data?.session_id || targetSessionId || null
       setSessionId(resolvedId)
+      setPendingAction(res.data?.pending_action || null)
       if (resolvedId) localStorage.setItem(CHAT_SESSION_KEY, resolvedId)
       else localStorage.removeItem(CHAT_SESSION_KEY)
       setMessages(loaded.length > 0
@@ -122,6 +126,7 @@ const ChatbotPage = () => {
     } catch {
       setMessages([DEFAULT_MESSAGE])
       setSessionId(null)
+      setPendingAction(null)
       localStorage.removeItem(CHAT_SESSION_KEY)
     } finally {
       setHydrating(false)
@@ -167,6 +172,7 @@ const ChatbotPage = () => {
         // current session was deleted — clear and start fresh
         localStorage.removeItem(CHAT_SESSION_KEY)
         setSessionId(null)
+        setPendingAction(null)
         setMessages([DEFAULT_MESSAGE])
       }
     } catch {
@@ -197,6 +203,7 @@ const ChatbotPage = () => {
       const reply = res.data?.response || res.data?.reply || res.data?.message || res.data?.content || 'Xin lỗi, tôi chưa hiểu câu hỏi. Bạn có thể diễn đạt lại không?'
       const msgId = Date.now()
       setMessages((prev) => [...prev, { id: msgId, role: 'assistant', content: reply }])
+      setPendingAction(res.data?.pending_action || null)
       setTypingMsgId(msgId)
       refreshSessions()
     } catch {
@@ -293,6 +300,16 @@ const ChatbotPage = () => {
               <ChatMessage key={msg.id || i} message={msg} typewriter={!!msg.id && msg.id === typingMsgId} />
             ))}
             {loading && <TypingIndicator />}
+            {pendingAction && (
+              <div className="pl-11">
+                <LoanAdjustmentActionCard
+                  action={pendingAction}
+                  loading={loading}
+                  onConfirm={(index) => handleSend(`Xác nhận phương án ${index + 1}`)}
+                  onCancel={() => handleSend('Hủy')}
+                />
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
         </div>

@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -22,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 _RAG_ERROR_MESSAGE = (
     "Xin lỗi, hệ thống đang gặp sự cố tạm thời. Vui lòng thử lại sau ít phút."
+)
+_LOAN_ADJUSTMENT_ERROR_MESSAGE = (
+    "Xin lỗi, mình không thể mô phỏng phương án nộp lại lúc này. "
+    "Vui lòng thử lại sau ít phút."
 )
 _ADJUSTMENT_CONTEXT_TERMS = (
     "bị từ chối",
@@ -177,6 +182,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             "response": direct_answer,
             "session_id": session.id,
             "sources": [],
+            "pending_action": _serialize_pending_loan_adjustment_action(session),
         }
 
     has_pending_loan_adjustment = _has_pending_loan_adjustment_action(session)
@@ -215,10 +221,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
             session.pending_action = pending_action
     except _LoanAdjustmentToolError:
         logger.exception("Loan adjustment tool failed")
-        answer = (
-            "Xin lỗi, mình không thể mô phỏng phương án nộp lại lúc này. "
-            "Vui lòng thử lại sau ít phút."
-        )
+        answer = _LOAN_ADJUSTMENT_ERROR_MESSAGE
         error_flag = True
     except (RAGError, ml_service.ModelPredictionError):
         logger.exception("Chat pipeline failed")
@@ -252,6 +255,7 @@ def send(db: Session, user_email: str, payload_message: str, session_id: Any = N
         "response": answer,
         "session_id": session.id,
         "sources": sources,
+        "pending_action": _serialize_pending_loan_adjustment_action(session),
     }
 
 
@@ -288,6 +292,7 @@ def history(db: Session, user_email: str, session_id: Any = None) -> dict:
 
     return {
         "session_id": session.id,
+        "pending_action": _serialize_pending_loan_adjustment_action(session),
         "messages": [
             {
                 "role": row.role,
@@ -486,7 +491,11 @@ def _handle_pending_loan_adjustment_response(
         return "Mình đã hủy phương án nộp lại đang chờ xác nhận. Hồ sơ bị từ chối cũ không bị thay đổi."
 
     if _is_affirmative_response(message):
-        return _confirm_pending_loan_adjustment(db, user_email, user_id, session, action)
+        selected_index = _extract_selected_proposal_index(message)
+        return _confirm_pending_loan_adjustment(
+            db, user_email, user_id, session, action,
+            selected_index=selected_index,
+        )
 
     return None
 
@@ -499,12 +508,59 @@ def _has_pending_loan_adjustment_action(session: ChatSession) -> bool:
     )
 
 
+def _serialize_pending_loan_adjustment_action(session: ChatSession) -> dict[str, Any] | None:
+    action = getattr(session, "pending_action", None) or {}
+    if action.get("type") != "loan_term_adjustment":
+        return None
+    if action.get("status") != "pending_confirmation":
+        return None
+    if loan_adjustment_tool.is_pending_action_expired(action):
+        return None
+
+    proposal = action.get("proposal")
+    if not isinstance(proposal, dict):
+        return None
+
+    proposal_options = action.get("proposals")
+    if not isinstance(proposal_options, list) or not proposal_options:
+        proposal_options = [proposal]
+
+    return {
+        "type": "loan_term_adjustment",
+        "status": "pending_confirmation",
+        "source_application_id": action.get("source_application_id"),
+        "created_at": action.get("created_at"),
+        "expires_at": action.get("expires_at"),
+        "proposal": {
+            "loan_amount": proposal.get("loan_amount"),
+            "term": proposal.get("term"),
+            "default_probability": proposal.get("default_probability"),
+            "risk_level": proposal.get("risk_level"),
+            "risk_score": proposal.get("risk_score"),
+            "model_version": proposal.get("model_version"),
+        },
+        "proposals": [
+            {
+                "loan_amount": item.get("loan_amount"),
+                "term": item.get("term"),
+                "default_probability": item.get("default_probability"),
+                "risk_level": item.get("risk_level"),
+                "risk_score": item.get("risk_score"),
+                "model_version": item.get("model_version"),
+            }
+            for item in proposal_options
+            if isinstance(item, dict)
+        ],
+    }
+
+
 def _confirm_pending_loan_adjustment(
     db: Session,
     user_email: str,
     user_id: Any,
     session: ChatSession,
     action: dict[str, Any],
+    selected_index: int = 0,
 ) -> str:
     source_application_id = str(action.get("source_application_id") or "")
     source_app = loan_adjustment_tool.get_source_application(db, user_id, source_application_id)
@@ -512,7 +568,7 @@ def _confirm_pending_loan_adjustment(
         session.pending_action = None
         return "Không tìm thấy hồ sơ gốc của phương án này. Mình đã hủy phương án cũ; bạn hãy yêu cầu mô phỏng lại."
 
-    proposal_values = _extract_pending_proposal_values(action)
+    proposal_values = _extract_pending_proposal_values(action, selected_index=selected_index)
     if proposal_values is None:
         session.pending_action = None
         return "Phương án nộp lại đang chờ xác nhận không còn hợp lệ. Mình đã hủy phương án cũ; bạn hãy yêu cầu mô phỏng lại."
@@ -546,8 +602,21 @@ def _confirm_pending_loan_adjustment(
     )
 
 
-def _extract_pending_proposal_values(action: dict[str, Any]) -> tuple[Decimal, int] | None:
-    proposal = action.get("proposal")
+def _extract_pending_proposal_values(
+    action: dict[str, Any],
+    selected_index: int = 0,
+) -> tuple[Decimal, int] | None:
+    proposal = None
+    if selected_index > 0:
+        proposals = action.get("proposals")
+    else:
+        proposals = None
+    if isinstance(proposals, list) and selected_index < len(proposals):
+        candidate = proposals[selected_index]
+        if isinstance(candidate, dict):
+            proposal = candidate
+    if proposal is None:
+        proposal = action.get("proposal")
     if not isinstance(proposal, dict):
         return None
     try:
@@ -558,6 +627,14 @@ def _extract_pending_proposal_values(action: dict[str, Any]) -> tuple[Decimal, i
     if not loan_amount.is_finite() or loan_amount <= 0 or term <= 0:
         return None
     return loan_amount, term
+
+
+def _extract_selected_proposal_index(message: str) -> int:
+    text = _normalize_message(message)
+    match = re.search(r"(?:phương án|phuong an|gói|goi)\s+([123])\b", text)
+    if not match:
+        return 0
+    return int(match.group(1)) - 1
 
 
 def _is_affirmative_response(message: str) -> bool:
@@ -590,7 +667,7 @@ def _is_loan_adjustment_request(message: str) -> bool:
         and (has_direct_action or has_term_question or has_adjustment_wording)
     ) or (
         has_resubmit
-        and (has_help_action or has_context)
+        and (has_help_action or has_personal_action)
     )
 
 
@@ -625,9 +702,10 @@ def _format_loan_adjustment_context(
     
     if result.proposal is not None:
         lines.append(
-            "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống vừa thiết lập một phương án nộp lại đang chờ xác nhận. "
-            "Bạn CÓ THỂ nộp lại khoản vay này thay khách hàng. Hãy thông báo chi tiết phương án đề xuất ở trên cho khách hàng "
-            "và hướng dẫn họ nhắn 'Đồng ý' hoặc 'Xác nhận' để bạn tự động nộp đơn mới, hoặc 'Hủy' để bỏ qua phương án này. "
+            "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống vừa thiết lập các phương án nộp lại đang chờ xác nhận. "
+            "Bạn CÓ THỂ nộp lại khoản vay đã chọn thay khách hàng. Hãy thông báo 3 phương án đề xuất ở trên cho khách hàng "
+            "và nhấn mạnh rằng hồ sơ nộp lại chỉ thay đổi số tiền vay và kỳ hạn, không sửa các số liệu khác. "
+            "Hướng dẫn họ nhắn 'Đồng ý', 'Xác nhận', hoặc chọn một phương án để bạn tự động nộp đơn mới; nhắn 'Hủy' để bỏ qua. "
             "Tuyệt đối KHÔNG BẢO khách hàng tự thao tác."
         )
 

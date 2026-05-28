@@ -37,6 +37,7 @@ class LoanAdjustmentResult:
     proposal: LoanAdjustmentProposal | None
     best_observed: LoanAdjustmentProposal | None
     message: str
+    proposals: list[LoanAdjustmentProposal] | None = None
 
 
 def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResult:
@@ -118,15 +119,17 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
         )
 
     passing.sort(key=lambda item: item[0])
+    proposal_options = [proposal for _, proposal in passing[:3]]
     return LoanAdjustmentResult(
         status="proposal",
         source_application_id=str(app.id),
         current_loan_amount=app.loan_amount,
         current_term=app.term,
         current_default_probability=_float_or_none(app.default_probability),
-        proposal=passing[0][1],
+        proposal=proposal_options[0],
         best_observed=best_observed,
         message="A lower-risk loan adjustment is available.",
+        proposals=proposal_options,
     )
 
 
@@ -212,6 +215,10 @@ def build_pending_action(
             "risk_score": proposal.risk_score,
             "model_version": proposal.model_version,
         },
+        "proposals": [
+            _proposal_to_action_payload(option)
+            for option in (result.proposals or [proposal])
+        ],
     }
 
 
@@ -239,12 +246,28 @@ def format_result_for_rag(result: LoanAdjustmentResult) -> str:
     if result.proposal is None:
         return result.message
 
-    proposal = result.proposal
-    return (
-        f"{result.message} Proposed amount: {proposal.loan_amount}, "
-        f"term: {proposal.term} months, "
-        f"default probability: {proposal.default_probability:.2%}."
-    )
+    proposals = result.proposals or [result.proposal]
+    option_lines = [
+        (
+            f"Phương án {index}: số tiền {proposal.loan_amount}, "
+            f"kỳ hạn {proposal.term} tháng, "
+            f"xác suất vỡ nợ {proposal.default_probability:.2%}, "
+            f"mức rủi ro {proposal.risk_level}."
+        )
+        for index, proposal in enumerate(proposals, start=1)
+    ]
+    return f"{result.message}\n" + "\n".join(option_lines)
+
+
+def _proposal_to_action_payload(proposal: LoanAdjustmentProposal) -> dict[str, Any]:
+    return {
+        "loan_amount": str(proposal.loan_amount),
+        "term": proposal.term,
+        "default_probability": proposal.default_probability,
+        "risk_level": proposal.risk_level,
+        "risk_score": proposal.risk_score,
+        "model_version": proposal.model_version,
+    }
 
 
 def _latest_auto_rejected_application(db: Any, user_id: Any) -> LoanApplication | None:
