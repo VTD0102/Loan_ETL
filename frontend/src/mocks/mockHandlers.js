@@ -13,6 +13,7 @@ import {
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 const MOCK_CHAT_SESSION_ID = '00000000-0000-4000-8000-000000000001'
 const MOCK_CHAT_HISTORY_KEY = 'MOCK_CHAT_HISTORY'
+const MOCK_CHAT_PENDING_ACTION_KEY = 'MOCK_CHAT_PENDING_ACTION'
 
 const saveToStorage = () => {
   localStorage.setItem('MOCK_ADMIN_APPS', JSON.stringify(MOCK_ADMIN_APPS))
@@ -30,6 +31,64 @@ const getMockChatHistory = () => {
 const saveMockChatHistory = (messages) => {
   localStorage.setItem(MOCK_CHAT_HISTORY_KEY, JSON.stringify(messages))
 }
+
+const getMockPendingAction = () => {
+  try {
+    return JSON.parse(localStorage.getItem(MOCK_CHAT_PENDING_ACTION_KEY) || 'null')
+  } catch {
+    return null
+  }
+}
+
+const saveMockPendingAction = (action) => {
+  if (!action) {
+    localStorage.removeItem(MOCK_CHAT_PENDING_ACTION_KEY)
+    return
+  }
+  localStorage.setItem(MOCK_CHAT_PENDING_ACTION_KEY, JSON.stringify(action))
+}
+
+const createMockPendingAction = () => ({
+  type: 'loan_term_adjustment',
+  status: 'pending_confirmation',
+  source_application_id: 'mock-auto-rejected-application',
+  created_at: new Date().toISOString(),
+  expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+  proposal: {
+    loan_amount: '12000',
+    term: 36,
+    default_probability: 0.285,
+    risk_level: 'LOW',
+    risk_score: 28,
+    model_version: 'mock-model',
+  },
+  proposals: [
+    {
+      loan_amount: '12000',
+      term: 36,
+      default_probability: 0.285,
+      risk_level: 'LOW',
+      risk_score: 28,
+      model_version: 'mock-model',
+    },
+    {
+      loan_amount: '10000',
+      term: 24,
+      default_probability: 0.31,
+      risk_level: 'MEDIUM',
+      risk_score: 31,
+      model_version: 'mock-model',
+    },
+    {
+      loan_amount: '8000',
+      term: 12,
+      default_probability: 0.37,
+      risk_level: 'MEDIUM',
+      risk_score: 37,
+      model_version: 'mock-model',
+    },
+  ],
+})
 
 const mockPrediction = (body) => {
   const dtiRaw = parseFloat(body.dti || 0)
@@ -251,19 +310,41 @@ export const mockHandlers = async (config) => {
   /* ── Chat ─────────────────────────────────────────── */
   if (m === 'post' && url.endsWith('/chat')) {
     await delay(600) // extra delay to simulate LLM
-    const reply = getNextChatResponse()
+    const message = body.message || ''
+    const normalizedMessage = message.toLowerCase()
+    const wantsAdjustment = /gói vay|goi vay|phương án|phuong an|đổi kỳ hạn|doi ky han|nộp lại|nop lai|bị từ chối|bi tu choi/.test(normalizedMessage)
+    const confirmsAdjustment = /xác nhận|xac nhan|đồng ý|dong y|^ok$/.test(normalizedMessage.trim())
+    const cancelsAdjustment = /hủy|huy|không|khong/.test(normalizedMessage)
+    let pendingAction = getMockPendingAction()
+    let reply = getNextChatResponse()
+
+    if (confirmsAdjustment && pendingAction) {
+      const optionMatch = normalizedMessage.match(/(?:phương án|phuong an|gói|goi)\s+([123])/)
+      const selectedIndex = optionMatch ? Number(optionMatch[1]) - 1 : 0
+      const selected = pendingAction.proposals?.[selectedIndex] || pendingAction.proposal
+      reply = `Đã nộp lại hồ sơ mới với số tiền ${selected.loan_amount} và kỳ hạn ${selected.term} tháng. Trạng thái hiện tại: PENDING_REVIEW.`
+      pendingAction = null
+    } else if (cancelsAdjustment && pendingAction) {
+      reply = 'Mình đã hủy phương án nộp lại đang chờ xác nhận. Hồ sơ bị từ chối cũ không bị thay đổi.'
+      pendingAction = null
+    } else if (wantsAdjustment) {
+      pendingAction = createMockPendingAction()
+      reply = 'Mình đã tìm được 3 khoản vay phù hợp. Chọn một phương án bên dưới, sau đó bấm đồng ý để mình nộp lại hồ sơ mới.'
+    }
+
+    saveMockPendingAction(pendingAction)
     const history = getMockChatHistory()
     const nextHistory = [
       ...history,
-      { role: 'user', content: body.message || '' },
+      { role: 'user', content: message },
       { role: 'assistant', content: reply, sources: [] },
     ]
     saveMockChatHistory(nextHistory)
-    return [200, { response: reply, reply, session_id: MOCK_CHAT_SESSION_ID, sources: [] }]
+    return [200, { response: reply, reply, session_id: MOCK_CHAT_SESSION_ID, sources: [], pending_action: pendingAction }]
   }
 
   if (m === 'get' && url.includes('/chat/history')) {
-    return [200, { session_id: MOCK_CHAT_SESSION_ID, messages: getMockChatHistory() }]
+    return [200, { session_id: MOCK_CHAT_SESSION_ID, messages: getMockChatHistory(), pending_action: getMockPendingAction() }]
   }
 
   if (m === 'get' && url.endsWith('/chat/sessions')) {

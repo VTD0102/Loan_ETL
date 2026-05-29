@@ -17,9 +17,9 @@ const Modal = ({ open, onClose, title, children, maxWidth = 'max-w-md' }) => {
         onClick={onClose}
       />
       {/* Panel */}
-      <div className={`relative bg-white rounded-2xl shadow-xl w-full ${maxWidth} animate-slide-up z-10`}>
+      <div className={`relative flex max-h-[calc(100vh-2rem)] w-full ${maxWidth} flex-col overflow-hidden rounded-2xl bg-white shadow-xl animate-slide-up z-10`}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex flex-shrink-0 items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
             <button
               onClick={onClose}
@@ -31,7 +31,7 @@ const Modal = ({ open, onClose, title, children, maxWidth = 'max-w-md' }) => {
             </button>
           </div>
         )}
-        <div className="px-6 py-5">{children}</div>
+        <div className="overflow-y-auto px-6 py-5">{children}</div>
       </div>
     </div>
   )

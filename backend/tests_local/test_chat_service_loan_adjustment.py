@@ -164,6 +164,29 @@ def _pending_action(app_id):
     return action
 
 
+def _multi_pending_action(app_id):
+    action = _pending_action(app_id)
+    action["proposals"] = [
+        {
+            "loan_amount": "35000",
+            "term": 36,
+            "default_probability": 0.28,
+            "risk_level": "Medium",
+            "risk_score": 72,
+            "model_version": "test-model",
+        },
+        {
+            "loan_amount": "30000",
+            "term": 24,
+            "default_probability": 0.22,
+            "risk_level": "Low",
+            "risk_score": 78,
+            "model_version": "test-model",
+        },
+    ]
+    return action
+
+
 def _patch_common(rag_answer="Đề xuất kỳ hạn 36 tháng. Bạn có muốn nộp lại với phương án này không?"):
     originals = {
         "rag": chat_service._rag_invoke,
@@ -220,8 +243,8 @@ def test_adjustment_question_stores_pending_action_without_submitting():
             "risk_score": 72,
             "model_version": "test-model",
         },
-        "created_at": "2026-05-19T10:00:00",
-        "expires_at": "2026-05-19T10:30:00",
+        "created_at": "2099-05-19T10:00:00",
+        "expires_at": "2099-05-19T10:30:00",
     }
 
     try:
@@ -240,6 +263,10 @@ def test_adjustment_question_stores_pending_action_without_submitting():
     assert session.pending_action is not None
     assert session.pending_action["type"] == "loan_term_adjustment"
     assert session.pending_action["proposal"]["term"] == 36
+    assert result["pending_action"] is not None
+    assert result["pending_action"]["type"] == "loan_term_adjustment"
+    assert result["pending_action"]["proposal"]["loan_amount"] == "35000"
+    assert result["pending_action"]["proposal"]["term"] == 36
     assert len(rag_calls) == 1
     assert "Kết quả tool mô phỏng điều chỉnh khoản vay" in rag_calls[0]["context"]
     assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
@@ -366,14 +393,14 @@ def test_adjustment_tool_model_error_persists_assistant_error():
 
     assert raised is not None
     assert raised.status_code == 503
-    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert raised.detail == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert rag_calls == []
     assert session.pending_action is None
     user_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "user"]
     assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
     assert len(user_messages) == 1
     assert len(assistant_messages) == 1
-    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].content == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert assistant_messages[0].error is True
     assert db.committed >= 2
 
@@ -407,14 +434,14 @@ def test_adjustment_tool_unexpected_error_persists_assistant_error():
 
     assert raised is not None
     assert raised.status_code == 503
-    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert raised.detail == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert rag_calls == []
     assert session.pending_action is None
     user_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "user"]
     assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
     assert len(user_messages) == 1
     assert len(assistant_messages) == 1
-    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].content == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert assistant_messages[0].error is True
 
 
@@ -462,12 +489,12 @@ def test_adjustment_formatter_unexpected_error_persists_assistant_error():
 
     assert raised is not None
     assert raised.status_code == 503
-    assert raised.detail == chat_service._RAG_ERROR_MESSAGE
+    assert raised.detail == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert rag_calls == []
     assert session.pending_action is None
     assistant_messages = [m for m in db.added if isinstance(m, ChatMessage) and m.role == "assistant"]
     assert len(assistant_messages) == 1
-    assert assistant_messages[0].content == chat_service._RAG_ERROR_MESSAGE
+    assert assistant_messages[0].content == chat_service._LOAN_ADJUSTMENT_ERROR_MESSAGE
     assert assistant_messages[0].error is True
 
 
@@ -634,7 +661,7 @@ def test_affirmative_response_confirms_pending_action_and_clears_it():
     original_confirm = chat_service.application_service.confirm
     confirm_payloads = []
 
-    def fake_confirm(db, user_email, payload):
+    def fake_confirm(db, bureau_db, user_email, payload):
         confirm_payloads.append(payload)
         return {
             "application_id": str(uuid.uuid4()),
@@ -654,10 +681,48 @@ def test_affirmative_response_confirms_pending_action_and_clears_it():
         restore_common()
 
     assert "Đã nộp lại hồ sơ mới" in result["response"]
+    assert result["pending_action"] is None
     assert session.pending_action is None
     assert len(confirm_payloads) == 1
     assert confirm_payloads[0].loan_amount == Decimal("35000")
     assert confirm_payloads[0].term == 36
+    assert rag_calls == []
+
+
+def test_affirmative_response_can_confirm_selected_proposal_option():
+    user = SimpleNamespace(id=uuid.uuid4(), email="loan@example.com", username="Lan")
+    app_id = uuid.uuid4()
+    session = _session(user.id, pending_action=_multi_pending_action(app_id))
+    db = FakeDB(user, session=session, applications=[_source_app(app_id, user.id)])
+    rag_calls, restore_common = _patch_common()
+
+    original_confirm = chat_service.application_service.confirm
+    confirm_payloads = []
+
+    def fake_confirm(db, bureau_db, user_email, payload):
+        confirm_payloads.append(payload)
+        return {
+            "application_id": str(uuid.uuid4()),
+            "status": "PENDING_REVIEW",
+            "default_probability": 0.22,
+            "risk_level": "Low",
+            "risk_score": 78,
+            "suggested_amount": 30000,
+            "suggested_term": 24,
+        }
+
+    chat_service.application_service.confirm = fake_confirm
+    try:
+        result = chat_service.send(db, "loan@example.com", "Xác nhận phương án 2", session_id=session.id)
+    finally:
+        chat_service.application_service.confirm = original_confirm
+        restore_common()
+
+    assert "Đã nộp lại hồ sơ mới" in result["response"]
+    assert session.pending_action is None
+    assert len(confirm_payloads) == 1
+    assert confirm_payloads[0].loan_amount == Decimal("30000")
+    assert confirm_payloads[0].term == 24
     assert rag_calls == []
 
 
@@ -904,6 +969,7 @@ if __name__ == "__main__":
     test_easier_approval_term_faq_does_not_trigger_adjustment_tool()
     test_whitespace_rag_answer_does_not_store_pending_action()
     test_affirmative_response_confirms_pending_action_and_clears_it()
+    test_affirmative_response_can_confirm_selected_proposal_option()
     test_negative_response_clears_pending_action_without_confirming()
     test_negated_affirmative_does_not_confirm_pending_action()
     test_pending_action_token_question_uses_rag_not_confirm()
