@@ -23,6 +23,7 @@ import logging
 import random
 import string
 import uuid
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -75,6 +76,7 @@ def _build_consistent_cic(
     bad_debt: bool,
     overdue_range: tuple[float, float],
     dpd_range: tuple[int, int],
+    prolongation_range: tuple[int, int] = (0, 0),
     blacklist: bool = False,
     blacklist_reason: str | None = None,
 ) -> dict[str, Any]:
@@ -88,16 +90,21 @@ def _build_consistent_cic(
     loan_history = []
     total_outstanding = 0.0
     dpd = random.randint(*dpd_range)
+    total_prolongations = random.randint(*prolongation_range)
+    now = datetime.now()
 
     # Generate active loans
     for _ in range(num_active):
         amt = round(random.uniform(1000, 30000), 0)
         total_outstanding += amt
+        opened_at = now - timedelta(days=random.randint(30, 365 * 3))
         loan_history.append({
             "lender": random.choice(_LENDERS),
             "amount": amt,
             "status": "active",
             "dpd_max": random.randint(0, min(dpd, 30)) if not bad_debt else random.randint(10, dpd),
+            "opened_at": opened_at.isoformat(),
+            "closed_at": None,
         })
 
     # Generate closed/overdue loans
@@ -106,11 +113,17 @@ def _build_consistent_cic(
         status = "closed"
         if bad_debt and random.random() < 0.5:
             status = random.choice(["overdue", "bad_debt", "written_off"])
+            
+        opened_at = now - timedelta(days=random.randint(365, 365 * 5))
+        closed_at = opened_at + timedelta(days=random.randint(90, 365 * 2))
+        
         loan_history.append({
             "lender": random.choice(_LENDERS),
             "amount": amt,
             "status": status,
             "dpd_max": random.randint(0, dpd),
+            "opened_at": opened_at.isoformat(),
+            "closed_at": closed_at.isoformat() if status == "closed" else None,
         })
 
     total_outstanding = round(total_outstanding, 2)
@@ -131,6 +144,7 @@ def _build_consistent_cic(
     cic_score = random.randint(score_lo, score_hi)
 
     inquiries = random.randint(0, 3) + num_active + num_closed
+    cb_queries_30d = min(inquiries, random.randint(0, 3))
 
     return {
         "cic_score": cic_score,
@@ -140,6 +154,8 @@ def _build_consistent_cic(
         "total_overdue_amount": overdue,
         "max_dpd_12m": dpd,
         "num_credit_inquiries": inquiries,
+        "cb_queries_30d": cb_queries_30d,
+        "total_prolongations": total_prolongations,
         "bad_debt_flag": bad_debt,
         "blacklist_flag": blacklist,
         "blacklist_reason": blacklist_reason if blacklist else None,
@@ -198,6 +214,7 @@ def _generate_good_profile() -> dict[str, Any]:
         bad_debt=False,
         overdue_range=(0, 0),
         dpd_range=(0, 5),
+        prolongation_range=(0, 0),
     )
 
     return {
@@ -248,6 +265,7 @@ def _generate_risky_profile() -> dict[str, Any]:
         bad_debt=has_bad,
         overdue_range=(0, 1000),
         dpd_range=(5, 60),
+        prolongation_range=(0, 2),
     )
 
     return {
@@ -296,6 +314,7 @@ def _generate_defaulter_profile() -> dict[str, Any]:
         bad_debt=True,
         overdue_range=(500, 5000),
         dpd_range=(30, 180),
+        prolongation_range=(1, 5),
         blacklist=random.choices([True, False], weights=[10, 90])[0],
         blacklist_reason="Nợ xấu nhóm 5 kéo dài",
     )
@@ -345,6 +364,7 @@ def _generate_thin_file_profile() -> dict[str, Any]:
         bad_debt=False,
         overdue_range=(0, 0),
         dpd_range=(0, 0),
+        prolongation_range=(0, 0),
     )
     return {"_cic": cic}
 
@@ -444,6 +464,8 @@ def generate_batch(db: Session, bureau_db: Session, count: int = 10) -> dict[str
                 total_overdue_amount=cic_data.get("total_overdue_amount", 0),
                 max_dpd_12m=cic_data.get("max_dpd_12m", 0),
                 num_credit_inquiries=cic_data.get("num_credit_inquiries", 0),
+                cb_queries_30d=cic_data.get("cb_queries_30d", 0),
+                total_prolongations=cic_data.get("total_prolongations", 0),
                 bad_debt_flag=cic_data.get("bad_debt_flag", False),
                 blacklist_flag=cic_data.get("blacklist_flag", False),
                 blacklist_reason=cic_data.get("blacklist_reason"),
@@ -501,6 +523,8 @@ def generate_batch(db: Session, bureau_db: Session, count: int = 10) -> dict[str
 
                     profile["loan_amount"] = confirm_amt
                     profile["term"] = confirm_term
+                    if "application_id" in result:
+                        profile["application_id"] = result["application_id"]
                     confirm_payload = ApplicationConfirm(**profile)
                     application_service.confirm(db, bureau_db, email, confirm_payload)
                     stats["pending_review"] += 1

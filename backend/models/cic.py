@@ -37,6 +37,8 @@ class CICRecord(BureauBase):
     # ── Delinquency ────────────────────────────────────────────────────────
     max_dpd_12m: Mapped[int] = mapped_column(Integer, default=0)  # Max days past due in last 12 months
     num_credit_inquiries: Mapped[int] = mapped_column(Integer, default=0)
+    cb_queries_30d: Mapped[int] = mapped_column(Integer, default=0)  # Credit inquiries in last 30 days
+    total_prolongations: Mapped[int] = mapped_column(Integer, default=0)  # Loan extension/rollover count
 
     # ── Risk flags ─────────────────────────────────────────────────────────
     bad_debt_flag: Mapped[bool] = mapped_column(Boolean, default=False)
