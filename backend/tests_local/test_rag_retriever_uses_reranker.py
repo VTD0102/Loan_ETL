@@ -1,10 +1,20 @@
 """Integration tests for the RerankedRetriever wrapper + get_retriever pipeline."""
+import logging
 from types import SimpleNamespace
 
 from langchain_core.runnables import Runnable
 
 import rag.retriever as retriever_mod
 from rag.retriever import RerankedRetriever
+
+
+class CaptureHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.records = []
+
+    def emit(self, record):
+        self.records.append(record)
 
 
 def test_reranked_retriever_passthrough_when_reranker_is_none():
@@ -44,6 +54,9 @@ def test_reranked_retriever_uses_reranker_when_provided():
 
 def test_reranked_retriever_falls_back_on_rerank_failure():
     """If reranker raises, return raw candidates sliced to top_k."""
+    capture_handler = CaptureHandler()
+    retriever_mod.logger.addHandler(capture_handler)
+
     class FakeBase:
         def invoke(self, q):
             return [SimpleNamespace(page_content=str(i)) for i in range(5)]
@@ -52,10 +65,19 @@ def test_reranked_retriever_falls_back_on_rerank_failure():
         def rerank(self, query, docs, top_k):
             raise RuntimeError("model not loaded")
 
-    rr = RerankedRetriever(FakeBase(), reranker=FailingReranker(), top_k=3)
-    out = rr.invoke("q")
-    assert len(out) == 3
-    assert [d.page_content for d in out] == ["0", "1", "2"]
+    try:
+        rr = RerankedRetriever(FakeBase(), reranker=FailingReranker(), top_k=3)
+        out = rr.invoke("q")
+        assert len(out) == 3
+        assert [d.page_content for d in out] == ["0", "1", "2"]
+        fallback_logs = [
+            record for record in capture_handler.records
+            if "Reranker failed" in record.getMessage()
+        ]
+        assert fallback_logs, "expected reranker fallback to be logged"
+        assert fallback_logs[-1].exc_info is None, "expected no traceback for reranker fallback log"
+    finally:
+        retriever_mod.logger.removeHandler(capture_handler)
 
 
 class FakeSparseEmbed:
