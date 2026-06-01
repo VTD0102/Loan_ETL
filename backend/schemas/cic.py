@@ -18,6 +18,8 @@ class CICRecordRead(BaseModel):
     total_overdue_amount: Decimal = Decimal("0")
     max_dpd_12m: int = 0
     num_credit_inquiries: int = 0
+    cb_queries_30d: int = 0
+    total_prolongations: int = 0
     bad_debt_flag: bool = False
     blacklist_flag: bool = False
     blacklist_reason: Optional[str] = None

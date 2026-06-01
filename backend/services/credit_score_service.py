@@ -138,8 +138,9 @@ def _flag(obj, name: str, default=False) -> int:
 
 
 def _build_features(app, num_previous_loans: int, previous_default_rate: float,
-                    dti_p75: float) -> pd.DataFrame:
+                    dti_p75: float, bureau_features: dict | None = None) -> pd.DataFrame:
     """Build feature vector from application data — v2, no credit_score input."""
+    bf = bureau_features or {}
     mi   = float(app.monthly_income)
     la   = float(app.loan_amount)
     term = int(app.term)
@@ -177,21 +178,21 @@ def _build_features(app, num_previous_loans: int, previous_default_rate: float,
         "total_debt_to_income":     total_debt_income,
         # DPD features (from app or defaults)
         "max_dpd_24m":              _int(app, "max_credit_overdue_days", 0),
-        "avg_dpd_recent":           0.0,  # not available at inference
-        "num_installs_dpd10":       0,    # not available at inference
+        "avg_dpd_recent":           bf.get("avg_dpd_recent", 0.0),
+        "num_installs_dpd10":       bf.get("num_installs_dpd10", 0),
         # Bureau aggregates
         "num_bureau_records":       _int(app, "num_bureau_records", 0),
         "num_active_credit":        _int(app, "num_active_credit", 0),
         "total_overdue_amount":     total_overdue,
         "max_credit_overdue_days":  _int(app, "max_credit_overdue_days", 0),
         "has_bad_debt":             _flag(app, "has_bad_debt", False),
-        "total_prolongations":      0,    # not available at inference
+        "total_prolongations":      bf.get("total_prolongations", 0),
         # Previous application
         "num_previous_loans":       num_previous_loans,
         "previous_default_rate":    previous_default_rate,
-        # CB queries (not available at inference — use 0)
-        "cb_queries_30d":           0,
-        "num_cb_queries":           0,
+        # CB queries
+        "cb_queries_30d":           bf.get("cb_queries_30d", 0),
+        "num_cb_queries":           bf.get("num_cb_queries", 0),
         # Demographics
         "is_homeowner_flag":        homeowner_flag,
         "income_verifiable_flag":   income_verifiable,
@@ -244,15 +245,28 @@ def _previous_application_stats(app, db: Session) -> tuple[int, float]:
     return num_prev_loans, prev_default_rate
 
 
-def _score_application(app, db: Session) -> dict:
+def _score_application(app, db: Session, bureau_db: Session | None = None) -> dict:
+    from services.cic_service import lookup_by_cccd, derive_bureau_features
+    
     artifact = _load()
     pipeline = artifact["pipeline"]
     feat_cols = artifact["feature_cols"]
     dti_p75 = artifact.get("dti_p75", 0.5)
 
     num_prev_loans, prev_default_rate = _previous_application_stats(app, db)
+    
+    bureau_features = {}
+    if bureau_db and app.user_id:
+        user = _resolve_user(str(app.user_id), db)
+        if user.cccd:
+            try:
+                cic_record = lookup_by_cccd(bureau_db, user.cccd)
+                if cic_record:
+                    bureau_features = derive_bureau_features(cic_record)
+            except Exception:
+                pass  # graceful fallback
 
-    df = _build_features(app, num_prev_loans, prev_default_rate, dti_p75)
+    df = _build_features(app, num_prev_loans, prev_default_rate, dti_p75, bureau_features)
     df[NUMERIC_FEATURES]     = df[NUMERIC_FEATURES].fillna(0.0)
     df[CATEGORICAL_FEATURES] = df[CATEGORICAL_FEATURES].fillna("Other/Unknown")
 
@@ -295,7 +309,7 @@ def _score_application(app, db: Session) -> dict:
     }
 
 
-def get_credit_score(user_id: str, db: Session) -> dict:
+def get_credit_score(user_id: str, db: Session, bureau_db: Session | None = None) -> dict:
     user = _resolve_user(user_id, db)
     app = (
         db.query(LoanApplication)
@@ -306,7 +320,7 @@ def get_credit_score(user_id: str, db: Session) -> dict:
     )
     if app is None:
         raise ValueError(f"No submitted application found for user '{user_id}'")
-    return _score_application(app, db)
+    return _score_application(app, db, bureau_db)
 
 
 def get_credit_score_for_application(
@@ -314,6 +328,7 @@ def get_credit_score_for_application(
     db: Session,
     *,
     user_id: str | None = None,
+    bureau_db: Session | None = None,
 ) -> dict:
     app = db.query(LoanApplication).filter(LoanApplication.id == app_id).first()
     if app is None:
@@ -322,4 +337,4 @@ def get_credit_score_for_application(
         user = _resolve_user(user_id, db)
         if str(app.user_id) != str(user.id):
             raise PermissionError("Không có quyền truy cập điểm tín dụng của đơn này")
-    return _score_application(app, db)
+    return _score_application(app, db, bureau_db)
