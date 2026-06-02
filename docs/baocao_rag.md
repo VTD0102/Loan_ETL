@@ -32,13 +32,13 @@ Embedding là phép ánh xạ một đoạn văn bản thành một vector số 
 
 ### 5.2.3 Hybrid Search (Tìm kiếm lai)
 
-Tìm kiếm thuần ngữ nghĩa (dense vector) giỏi nắm bắt ý nghĩa nhưng đôi khi bỏ sót các **từ khóa chính xác** (mã trạng thái `AUTO_REJECTED`, con số `40%`, thuật ngữ `DTI`). Ngược lại, tìm kiếm từ khóa cổ điển **BM25** (sparse vector) bắt chính xác từ khóa nhưng mù ngữ nghĩa. **Hybrid Search** kết hợp cả hai: mỗi điểm dữ liệu trong Qdrant mang **hai vector có tên** — `dense` (embedding ngữ nghĩa) và `sparse` (BM25, model `Qdrant/bm25`) — và kết quả được hợp nhất. Hệ thống bật chế độ `RetrievalMode.HYBRID`; nếu thư viện BM25 không nạp được, nó tự hạ cấp an toàn về `RetrievalMode.DENSE` (xem `retriever.py`).
+Tìm kiếm thuần ngữ nghĩa (dense vector) giỏi nắm bắt ý nghĩa nhưng đôi khi bỏ sót các **từ khóa chính xác** (mã trạng thái `AUTO_REJECTED`, con số `40%`, thuật ngữ `DTI`). Ngược lại, tìm kiếm từ khóa cổ điển **BM25** (sparse vector) bắt chính xác từ khóa nhưng mù ngữ nghĩa. **Hybrid Search** kết hợp cả hai: mỗi điểm dữ liệu trong Qdrant mang **hai vector có tên**, `dense` (embedding ngữ nghĩa) và `sparse` (BM25, model `Qdrant/bm25`), và kết quả được hợp nhất. Hệ thống bật chế độ `RetrievalMode.HYBRID`; nếu thư viện BM25 không nạp được, nó tự hạ cấp an toàn về `RetrievalMode.DENSE` (xem `retriever.py`).
 
 ### 5.2.4 Reranking (Xếp hạng lại)
 
-Truy xuất hybrid trả về một tập **ứng viên rộng** (20 chunk) được xếp hạng bằng độ tương đồng vector — vốn chỉ là xấp xỉ. **Reranker** là một mô hình **cross-encoder**: thay vì mã hóa câu hỏi và tài liệu độc lập rồi so vector, nó đưa **cặp (câu hỏi, tài liệu) vào cùng một lần forward** để chấm điểm liên quan chính xác hơn nhiều. CreditIntel dùng `jinaai/jina-reranker-v2-base-multilingual` (đa ngôn ngữ, hỗ trợ tiếng Việt) để xếp hạng lại 20 ứng viên và giữ 12 chunk tốt nhất. Đây là sự đánh đổi **độ chính xác lấy độ trễ**: cross-encoder chạy trên CPU mất khoảng **3–10 giây** (warm cache), nên hệ thống cho phép tắt qua cấu hình để A/B.
+Truy xuất hybrid trả về một tập **ứng viên rộng** (20 chunk) được xếp hạng bằng độ tương đồng vector, vốn chỉ là xấp xỉ. **Reranker** là một mô hình **cross-encoder**: thay vì mã hóa câu hỏi và tài liệu độc lập rồi so vector, nó đưa **cặp (câu hỏi, tài liệu) vào cùng một lần forward** để chấm điểm liên quan chính xác hơn nhiều. CreditIntel dùng `jinaai/jina-reranker-v2-base-multilingual` (đa ngôn ngữ, hỗ trợ tiếng Việt) để xếp hạng lại 20 ứng viên và giữ 12 chunk tốt nhất. Đây là sự đánh đổi **độ chính xác lấy độ trễ**: cross-encoder chạy trên CPU mất khoảng **3–10 giây** (warm cache), nên hệ thống cho phép tắt qua cấu hình để A/B.
 
-### 5.2.5 Chunking — và bài toán Parent-Child
+### 5.2.5 Chunking và bài toán Parent-Child
 
 Cắt tài liệu là một đánh đổi kinh điển giữa độ chính xác truy xuất và độ giàu ngữ cảnh. Khi cắt thành các đoạn nhỏ, embedding trở nên đậm đặc về ngữ nghĩa nên truy xuất rất chính xác, nhưng bản thân đoạn lại thiếu ngữ cảnh khi đưa cho LLM. Ngược lại, khi cắt thành các đoạn lớn, đoạn văn giàu ngữ cảnh cho LLM nhưng embedding bị loãng, khiến việc truy xuất kém nhạy. Hai mục tiêu này kéo về hai hướng đối nghịch, và đó chính là bài toán mà kỹ thuật parent-child sinh ra để giải.
 
@@ -48,13 +48,13 @@ Cắt tài liệu là một đánh đổi kinh điển giữa độ chính xác 
 
 ## 5.3 Kiến trúc tổng quan
 
-Trợ lý RAG được tổ chức thành hai mặt phẳng rõ ràng: **mặt phẳng điều phối** (`services/chat_service.py` — quản lý phiên, rate-limit, bộ nhớ, công cụ, lưu transcript) và **mặt phẳng suy luận RAG** (`rag/chain.py` — pipeline 6 bước thuần túy, không chạm cơ sở dữ liệu). Sự tách bạch này giữ cho lõi RAG kiểm thử được độc lập, còn mọi phụ thuộc ORM/HTTP nằm ở tầng service.
+Trợ lý RAG được tổ chức thành hai mặt phẳng rõ ràng: **mặt phẳng điều phối** (`services/chat_service.py`, quản lý phiên, rate-limit, bộ nhớ, công cụ, lưu transcript) và **mặt phẳng suy luận RAG** (`rag/chain.py`, pipeline 6 bước thuần túy, không chạm cơ sở dữ liệu). Sự tách bạch này giữ cho lõi RAG kiểm thử được độc lập, còn mọi phụ thuộc ORM/HTTP nằm ở tầng service.
 
 ### Sơ đồ luồng tổng thể
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                     CREDITINTEL — RAG CHAT ARCHITECTURE                        │
+│                     CREDITINTEL, RAG CHAT ARCHITECTURE                        │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                                │
 │   Frontend (React)                                                             │
@@ -75,7 +75,7 @@ Trợ lý RAG được tổ chức thành hai mặt phẳng rõ ràng: **mặt p
 │                                         │              history, summary)        │
 │                                         ▼                                        │
 │        ┌──────────────────────────────────────────────────────────┐           │
-│        │              rag/chain.py  —  PIPELINE 6 BƯỚC             │           │
+│        │              rag/chain.py ,  PIPELINE 6 BƯỚC             │           │
 │        │  ① Guardrail vào   ② Router intent   ③ Rewrite+Retrieve    │           │
 │        │  ④ Personalize     ⑤ LLM call        ⑥ Guardrail ra        │           │
 │        └─────────┬──────────────────────────────────┬─────────────┘           │
@@ -168,17 +168,13 @@ Mọi tài nguyên đắt đỏ (kết nối LLM, embedding, vector store, reran
 
 Một đặc điểm kiến trúc quan trọng của CreditIntel là prompt cuối cùng được lắp ghép từ **ba nguồn tri thức độc lập**, mỗi nguồn trả lời một loại câu hỏi khác nhau. Việc tách bạch này được phản ánh trực tiếp trong template prompt (`prompts.py`) với các khối được phân cách rõ ràng.
 
-### 5.4.1 Knowledge Base — tri thức chính sách (tĩnh, dùng chung)
+### 5.4.1 Knowledge Base: tri thức chính sách (tĩnh, dùng chung)
 
-Đây là kho tri thức được vector hóa trong Qdrant, nguồn cho khối `TÀI LIỆU LIÊN QUAN`. Gồm:
-
-- `backend/rag/knowledge/policy.md` — Chính sách xét duyệt: phạm vi khoản vay ($500–$150,000; kỳ hạn 12/24/36/48/60 tháng), ba mức rủi ro, quy trình hai giai đoạn AI→Admin.
-- `backend/rag/knowledge/faq.md` — Câu hỏi thường gặp, nhóm theo chủ đề (mô hình AI, AUTO_REJECTED & CIC blacklist, DTI, quy trình…).
-- `docs/data_dictionary/*.md` (hiện chỉ có một tệp `kaggle_overview.md`; thư mục để ngỏ cho việc bổ sung thêm): từ điển đặc trưng, giúp trợ lý giải thích các thuật ngữ dữ liệu.
+Đây là kho tri thức được vector hóa trong Qdrant và là nguồn cho khối `TÀI LIỆU LIÊN QUAN` trong prompt. Kho hiện gồm ba tài liệu. Tệp `backend/rag/knowledge/policy.md` chứa chính sách xét duyệt, bao quát phạm vi khoản vay từ 500 tới 150.000 đô-la với các kỳ hạn 12, 24, 36, 48 và 60 tháng, ba mức rủi ro, cùng quy trình hai giai đoạn từ AI tới admin. Tệp `backend/rag/knowledge/faq.md` tập hợp các câu hỏi thường gặp được nhóm theo chủ đề như mô hình AI, trạng thái `AUTO_REJECTED` và blacklist CIC, chỉ số DTI hay quy trình xử lý đơn. Cuối cùng, thư mục `docs/data_dictionary/` (hiện chỉ có một tệp `kaggle_overview.md` và để ngỏ cho việc bổ sung) cung cấp từ điển đặc trưng, giúp trợ lý giải thích các thuật ngữ dữ liệu khi cần.
 
 Loader (`ingest.load_documents`) quét đệ quy hai thư mục `knowledge/` và `docs/data_dictionary/` theo glob `**/*.md`. Tri thức này **chung cho mọi khách hàng** và chỉ thay đổi khi ta sửa tài liệu rồi chạy lại ingest.
 
-### 5.4.2 User Context — hồ sơ cá nhân (động, theo từng khách hàng)
+### 5.4.2 User Context: hồ sơ cá nhân (động, theo từng khách hàng)
 
 Đây là nguồn làm nên tính "cá nhân hóa" và là **ưu tiên cao nhất** khi trả lời câu hỏi về đơn vay của chính khách hàng. Module `context_builder.py` lấy đơn vay **gần nhất** của user và dựng **bốn khối ngữ cảnh** (theo `docs/rag/rag_ml_context_requirements.md`):
 
@@ -189,11 +185,11 @@ Loader (`ingest.load_documents`) quét đệ quy hai thư mục `knowledge/` và
 | **Advisory context** | **Suy diễn tại chỗ:** so sánh số tiền/kỳ hạn vs đề xuất, dải DTI, dải điểm tín dụng, tối đa 4 yếu tố rủi ro, tối đa 4 điểm tích cực, danh sách khuyến nghị hành động | Tính toán từ form + ML |
 | **Data quality** | Số trường bị hệ thống mặc định (`imputed_features`) → mức tin cậy cao/trung bình/thấp + ghi chú giọng điệu | `imputed_features` |
 
-Điểm tinh tế là **khối Advisory được sinh bằng luật xác định (deterministic), không phải bằng LLM**. Ví dụ, DTI được phân dải qua bảng tra `_DTI_BANDS` (Tốt < 30%, Cần chú ý 30–43%, Rủi ro cao > 43%); yếu tố rủi ro/tích cực được suy ra bằng các điều kiện rõ ràng (`if dti > 0.43`, `if cs >= 740`…). Nhờ vậy, LLM nhận được **một bản phân tích đã chuẩn hóa** thay vì phải tự suy luận từ số thô — giảm mạnh nguy cơ tính sai hoặc bịa.
+Điểm tinh tế là **khối Advisory được sinh bằng luật xác định (deterministic), không phải bằng LLM**. Ví dụ, DTI được phân dải qua bảng tra `_DTI_BANDS` (Tốt < 30%, Cần chú ý 30–43%, Rủi ro cao > 43%); yếu tố rủi ro/tích cực được suy ra bằng các điều kiện rõ ràng (`if dti > 0.43`, `if cs >= 740`…). Nhờ vậy, LLM nhận được **một bản phân tích đã chuẩn hóa** thay vì phải tự suy luận từ số thô, giảm mạnh nguy cơ tính sai hoặc bịa.
 
 > **Quyết định thiết kế: vì sao tách Advisory thành luật cứng.** Nếu để LLM tự tính "DTI 45% là cao hay thấp", nó có thể trả lời thiếu nhất quán giữa các lượt. Bằng cách tính sẵn dải và yếu tố rủi ro ở tầng Python, hệ thống đảm bảo mọi câu trả lời đều dựa trên **cùng một bộ ngưỡng nghiệp vụ**, đồng thời cho phép kiểm thử khối context độc lập với LLM.
 
-### 5.4.3 Chat Memory — bộ nhớ hội thoại (động, theo phiên)
+### 5.4.3 Chat Memory: bộ nhớ hội thoại (động, theo phiên)
 
 Nguồn thứ ba là lịch sử hội thoại, cho khối `TÓM TẮT HỘI THOẠI TRƯỚC ĐÓ` và placeholder `chat_history`. Module `memory.py` triển khai chiến lược **cửa sổ trượt + đệm tóm tắt lười** (sliding window + lazy summary buffer), trình bày chi tiết ở mục 5.7.1.
 
@@ -205,7 +201,7 @@ Bảy biến được bơm vào `SYSTEM_TEMPLATE` (`prompts.py`): tên khách h�
 
 ## 5.5 Giai đoạn Ingest: Parent-Child Chunking
 
-Giai đoạn ingest (`rag/chunking.py` + `rag/ingest.py`) biến các file Markdown thành các điểm dữ liệu trong Qdrant. Toàn bộ quá trình **xác định (deterministic)**: không gọi LLM, không gọi embedding trong lúc cắt chunk — chỉ phân tích cấu trúc Markdown bằng regex. Điều này khiến kết quả chunk tái lập được và kiểm thử được.
+Giai đoạn ingest (`rag/chunking.py` + `rag/ingest.py`) biến các file Markdown thành các điểm dữ liệu trong Qdrant. Toàn bộ quá trình **xác định (deterministic)**: không gọi LLM, không gọi embedding trong lúc cắt chunk, chỉ phân tích cấu trúc Markdown bằng regex. Điều này khiến kết quả chunk tái lập được và kiểm thử được.
 
 ### 5.5.1 Cắt cấu trúc-aware thành Parent
 
@@ -217,11 +213,7 @@ CHILD_MAX_CHARS  = 700
 CHILD_OVERLAP_CHARS = 80
 ```
 
-Hàm `_split_markdown_into_parent_sections` cắt theo **cấu trúc tài liệu**, không cắt mù theo độ dài:
-
-- **Tài liệu FAQ** (`source_type == "faq"`): mỗi mục **`**Q: ...**`** trở thành một parent riêng — đúng một cặp hỏi-đáp là một đơn vị ngữ nghĩa trọn vẹn.
-- **Tài liệu thường:** ưu tiên cắt theo tiêu đề cấp 2 (`## H2`); phần mở đầu trước H2 đầu tiên được giữ làm một parent mang tên tài liệu. Nếu không có H2, lùi về cắt theo H1; nếu không có heading nào, cả tài liệu là một parent.
-- Parent nào vượt `PARENT_MAX_CHARS` được cắt tiếp bằng `_split_long_parent` (đóng gói theo block, **không overlap**).
+Hàm `_split_markdown_into_parent_sections` cắt theo cấu trúc tài liệu chứ không cắt mù theo độ dài, và cách cắt thay đổi tùy loại tài liệu. Với tài liệu FAQ (khi `source_type == "faq"`), mỗi mục hỏi-đáp đánh dấu bằng `**Q: ...**` trở thành một parent riêng, bởi đúng một cặp hỏi-đáp vốn đã là một đơn vị ngữ nghĩa trọn vẹn. Với tài liệu thường, thuật toán ưu tiên cắt theo tiêu đề cấp hai (`## H2`), giữ phần mở đầu trước H2 đầu tiên làm một parent mang tên tài liệu; nếu tài liệu không có H2 thì lùi về cắt theo H1, và nếu không có tiêu đề nào thì cả tài liệu được coi là một parent duy nhất. Trong mọi trường hợp, parent nào vượt quá ngưỡng `PARENT_MAX_CHARS` sẽ được cắt tiếp bằng `_split_long_parent` theo lối đóng gói từng block và không chồng lấn.
 
 Mỗi parent nhận một định danh ổn định:
 
@@ -253,7 +245,7 @@ client.create_collection(
 
 > **Lưu ý vận hành (bắt buộc khi nâng cấp):** vì chế độ hybrid yêu cầu **cả** vector `dense` lẫn `sparse` trên mọi điểm, mỗi khi đổi thuật toán chunk hoặc bật hybrid lần đầu, phải chạy lại `python -m rag.ingest --recreate` một lần để dựng lại collection. Collection cũ chỉ có vector dense sẽ lỗi khi truy vấn hybrid.
 
-CLI ingest hỗ trợ ba chế độ: `--dry-run` (liệt kê tài liệu + số chunk, không ghi), mặc định (upsert tăng dần — giữ dữ liệu cũ), và `--recreate` (xóa rồi dựng lại — phá hủy).
+CLI ingest hỗ trợ ba chế độ: `--dry-run` (liệt kê tài liệu + số chunk, không ghi), mặc định (upsert tăng dần, giữ dữ liệu cũ), và `--recreate` (xóa rồi dựng lại, phá hủy).
 
 ---
 
