@@ -162,6 +162,7 @@ class ApplicationEvaluateResponse(BaseModel):
     computed_dti: Optional[float] = None  # Auto-computed DTI ratio
     cic_summary: Optional[dict] = None    # CIC info summary for display
     existing_monthly_debt: Optional[float] = None  # For frontend reactive DTI recalc
+    fico_score: Optional[int] = None      # Scorecard LR 300–850, computed at submission
 
 
 class ApplicationSummary(BaseModel):

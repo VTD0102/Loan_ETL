@@ -43,6 +43,7 @@ def _application_payload(app: LoanApplication) -> dict:
         "default_probability": app.default_probability,
         "risk_level": app.risk_level,
         "risk_score": app.risk_score,
+        "fico_score": app.fico_score,
         "recommended_amount": app.recommended_amount,
         "recommended_term": app.recommended_term,
         "model_version": app.model_version,
