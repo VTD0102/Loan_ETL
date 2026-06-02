@@ -100,18 +100,14 @@ def enrich_from_cic(cic: CICRecord) -> CICEnrichmentResult:
 
 def derive_bureau_features(cic: CICRecord) -> dict:
     """
-    Derive ML-internal bureau features from CIC mock data so they vary across
-    applicants instead of falling through to artifact defaults at inference.
+    Derive ML-internal bureau features from CIC mock data.
 
-    Returns a dict of feature_name → value. Keys that cannot be derived from
-    the current CIC schema (e.g. `cb_queries_30d`, `total_prolongations`) are
-    omitted and will fall through to `feature_defaults` in `build_model_input`.
+    Returns a dict of feature_name → value consumed by both LightGBM
+    (build_model_input) and Scorecard (_score_application).
 
-    Approximation note: mock `loan_history` entries are `{lender, amount,
-    status, dpd_max}` with no `opened_at`/`closed_at`, so windowed metrics
-    (`avg_dpd_recent`, `max_dpd_24m`) collapse to "all loans in history".
-    Good enough to break the constant-default behavior; not a substitute
-    for retraining on data with matching distribution.
+    Window handling: entries with `opened_at`/`closed_at` use proper
+    3-month (avg_dpd_recent) and 24-month (max_dpd_24m) windows.
+    Entries without timestamps fall back to the full loan history.
     """
     out: dict = {}
 

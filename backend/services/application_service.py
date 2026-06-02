@@ -96,6 +96,17 @@ def _safe_monthly_installment(cic_record) -> float:
         return round(outstanding / _FALLBACK_TERM, 2)
     return 0.0
 
+def _compute_and_save_fico(app: LoanApplication, db: Session, bureau_db: Session | None) -> None:
+    """Chạy Scorecard LR, lưu fico_score vào app. Không raise — thất bại thì bỏ qua."""
+    try:
+        from services.credit_score_service import _score_application
+        result = _score_application(app, db, bureau_db)
+        app.fico_score = result["credit_score"]
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Scorecard skipped for app %s: %s", app.id, exc)
+
+
 def _get_user(db: Session, email: str) -> User:
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -207,6 +218,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
                 db.rollback()
                 raise HTTPException(400, "Bạn đã có đơn đang xử lý")
             db.refresh(new_app)
+            _compute_and_save_fico(new_app, db, bureau_db)
             return {
                 "status": "AUTO_REJECTED",
                 "application_id": str(new_app.id),
@@ -232,6 +244,9 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         bureau_features = cic_service.derive_bureau_features(cic_record)
         if bureau_features:
             cic_comparison["bureau_derived"] = bureau_features
+            # Use 24m DPD from loan_history (proper window) instead of CIC's 12m field.
+            if bureau_features.get("max_dpd_24m") is not None:
+                payload.max_credit_overdue_days = int(bureau_features["max_dpd_24m"])
         logger.info("CIC enrichment applied for %s", user.email)
 
     # ── Build CIC summary for frontend display ──
@@ -293,6 +308,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         db.rollback()
         raise HTTPException(400, "Bạn đã có đơn đang xử lý")
     db.refresh(new_app)
+    _compute_and_save_fico(new_app, db, bureau_db)
 
     return {
         "status":              app_status,
@@ -389,6 +405,8 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
             bureau_features = cic_service.derive_bureau_features(cic_record)
             if bureau_features:
                 cic_comparison["bureau_derived"] = bureau_features
+                if bureau_features.get("max_dpd_24m") is not None:
+                    payload.max_credit_overdue_days = int(bureau_features["max_dpd_24m"])
 
     payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
     payload.dti = None
@@ -448,6 +466,7 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
         logger.error(f"IntegrityError in confirm: {e.orig}")
         raise HTTPException(400, "Bạn đã có đơn đang xử lý")
     db.refresh(new_app)
+    _compute_and_save_fico(new_app, db, bureau_db)
 
     return {
         "application_id":      str(new_app.id),

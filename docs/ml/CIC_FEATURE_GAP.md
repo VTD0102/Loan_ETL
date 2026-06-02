@@ -107,9 +107,8 @@ Khách điền form
 | Trạng thái | Số feature | Ghi chú |
 |---|---|---|
 | ✅ Khớp trực tiếp | 6 | CIC có field tương đương, map 1-1 |
+| ✅ Đã kết nối sau fix | 5 | Trước đây hardcode/thiếu schema — đã sửa |
 | ⚠️ Xấp xỉ từ CIC | 1 | Dùng `max_dpd_12m` thay cho window 24m |
-| ❌ Hardcoded = 0 (CIC có nhưng không dùng) | 3 | Gap lớn hơn LightGBM |
-| ❌ Chưa có trong CIC | 2 | Schema CIC không có dữ liệu tương ứng |
 | 🔵 Không liên quan CIC | 18 | Từ form / tính nội bộ |
 
 ### 2.2 ✅ Features khớp trực tiếp với CIC
@@ -132,29 +131,23 @@ trước khi lưu vào DB.
 |---|---|---|---|
 | `max_dpd_24m` | `maxdpdlast24m_143P` — window 24 tháng | `app.max_credit_overdue_days` = `max_dpd_12m` (window 12m) | Undercount — bỏ sót sự kiện quá hạn từ tháng 13-24 |
 
-### 2.4 ❌ Hardcoded = 0 — CIC có dữ liệu nhưng Scorecard không dùng
+### 2.4 ✅ Features trước đây hardcode = 0 — đã fix
 
-Đây là gap **lớn hơn LightGBM**. `credit_score_service._build_features()` hardcode cứng
-3 features này về 0 thay vì gọi `cic_service.derive_bureau_features()`.
+`_build_features()` dùng `bf.get(..., default)` thay hardcode;
+`_score_application()` nhận `bureau_db` và gọi `derive_bureau_features()` trước khi build vector.
 
-| Feature model | Giá trị cứng | CIC có thể cung cấp | Ghi chú |
+| Feature model | Nguồn CIC | Trạng thái |
+|---|---|---|
+| `avg_dpd_recent` | `mean(loan_history[].dpd_max)` cửa sổ 3m | ✅ Đã kết nối |
+| `num_installs_dpd10` | `count(loan_history[].dpd_max > 10)` | ✅ Đã kết nối |
+| `num_cb_queries` | `num_credit_inquiries` (trực tiếp) | ✅ Đã kết nối |
+
+### 2.5 ✅ Features trước đây thiếu trong CIC schema — đã bổ sung
+
+| Feature model | Nguồn training (Home Credit) | Ý nghĩa | Trạng thái |
 |---|---|---|---|
-| `avg_dpd_recent` | `0.0` | `mean(loan_history[].dpd_max)` | LightGBM đã dùng — Scorecard bỏ qua |
-| `num_installs_dpd10` | `0` | `count(loan_history[].dpd_max > 10)` | LightGBM đã dùng — Scorecard bỏ qua |
-| `num_cb_queries` | `0` | `num_credit_inquiries` (trực tiếp) | LightGBM đã dùng — Scorecard **bỏ qua hoàn toàn** |
-
-> **Tác động:** Scorecard luôn tính điểm như thể khách hàng không có kỳ quá hạn gần đây
-> và không có query tín dụng nào — ngay cả khi CIC nói khác. Điểm FICO bị inflate
-> cho các khách hàng có lịch sử DPD xấu.
-
-### 2.5 ❌ Features chưa có trong CIC — hardcoded = 0
-
-Giống LightGBM, hai feature này CIC chưa có column tương ứng.
-
-| Feature model | Nguồn training (Home Credit) | Ý nghĩa | Giá trị hiện tại |
-|---|---|---|---|
-| `total_prolongations` | `prolongationcount_599L` | Số lần xin gia hạn khoản vay | `0` (hardcoded) |
-| `cb_queries_30d` | `days30_165L` | Số query tín dụng 30 ngày qua | `0` (hardcoded) |
+| `total_prolongations` | `prolongationcount_599L` | Số lần xin gia hạn khoản vay | ✅ Cột có trong `models/cic.py`, `derive_bureau_features()` đọc |
+| `cb_queries_30d` | `days30_165L` | Số query tín dụng 30 ngày qua | ✅ Cột có trong `models/cic.py`, `derive_bureau_features()` đọc |
 
 ### 2.6 🔵 Features không liên quan CIC
 
@@ -212,17 +205,17 @@ Khách điền form → application_service → LoanApplication lưu DB
 
 ### Kết luận
 
-- **LightGBM v4** tận dụng CIC tốt hơn Scorecard nhờ gọi `cic_service.derive_bureau_features()`.
-- **Scorecard LR** hardcode `avg_dpd_recent`, `num_installs_dpd10`, `num_cb_queries` = 0 dù CIC có thể cung cấp — điểm FICO bị inflate cho khách hàng xấu.
-- Cả hai thiếu `total_prolongations` và `cb_queries_30d` do CIC chưa có cột tương ứng.
+- **LightGBM v4** và **Scorecard LR** đều tận dụng đầy đủ dữ liệu CIC có sẵn sau khi các fix được áp dụng.
+- Cả hai model dùng cùng `derive_bureau_features()` — kết quả nhất quán giữa quyết định phê duyệt (LightGBM) và điểm FICO (Scorecard).
+- Sai lệch window thời gian nhỏ còn lại: `max_dpd_24m` dùng `max_dpd_12m` từ CIC — acceptable tradeoff vì window 24m không có trong schema CIC.
 
-### Ưu tiên fix
+### Trạng thái fix
 
-| Ưu tiên | Việc cần làm | Ảnh hưởng | Cần retrain? |
+| Ưu tiên | Việc làm | Trạng thái | Chi tiết |
 |---|---|---|---|
-| 🔴 Cao | Scorecard: gọi `derive_bureau_features()` thay vì hardcode 0 | Điểm FICO chính xác hơn cho khách hàng có DPD | Không |
-| 🟡 Trung bình | Thêm `cb_queries_30d` + `total_prolongations` vào CIC schema | Cả hai model có thêm signal | Không (dùng default=0 nếu chưa có data) |
-| 🟢 Thấp | Thêm `opened_at`/`closed_at` vào `loan_history` JSON entries | Xóa sai lệch window thời gian cho `avg_dpd_recent`, `max_dpd_24m` | Không |
+| 🔴 Cao | Scorecard: gọi `derive_bureau_features()` thay vì hardcode 0 | ✅ Hoàn thành | `_score_application()` nhận `bureau_db`, gọi `lookup_by_cccd()` + `derive_bureau_features()`; `_build_features()` dùng `bf.get()` thay hardcode |
+| 🟡 Trung bình | Thêm `cb_queries_30d` + `total_prolongations` vào CIC schema | ✅ Hoàn thành | Cả hai cột có trong `models/cic.py`; `derive_bureau_features()` đọc và trả về; `synthetic_service.py` sinh giá trị realistic |
+| 🟢 Thấp | Thêm `opened_at`/`closed_at` vào `loan_history` entries | ✅ Hoàn thành | `synthetic_service.py` sinh timestamps; `derive_bureau_features()` dùng cửa sổ 3m/24m khi có timestamps, fallback toàn lịch sử cho record cũ |
 
 ---
 
@@ -345,7 +338,7 @@ def _score_application(app, db: Session) -> dict:
 
 ---
 
-*Cập nhật lần cuối: 2026-05-27*
+*Cập nhật lần cuối: 2026-06-02*
 *Tham chiếu: `backend/services/cic_service.py`, `backend/services/credit_score_service.py`,
 `backend/models/cic.py`, `machinelearning/ml/retrain_customer_model.py`,
 `machinelearning/ml/train_scorecard.py`, `machinelearning/database/transform_silver_hcv2.sql`*

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getAdminApplicationById, getAdminApplicationCreditScore, disburseApplication } from '../../../services/admin'
+import { getAdminApplicationById, disburseApplication } from '../../../services/admin'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import MLResultsDisplay from '../../../components/admin/MLResultsDisplay'
@@ -74,7 +74,6 @@ const AdminApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app,     setApp]     = useState(null)
-  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [disbursing, setDisbursing] = useState(false)
@@ -86,12 +85,6 @@ const AdminApplicationDetailPage = () => {
     try {
       const res = await getAdminApplicationById(id)
       setApp(res.data)
-      try {
-        const scoreRes = await getAdminApplicationCreditScore(id)
-        setScorecard(scoreRes.data)
-      } catch {
-        setScorecard(null)
-      }
     } catch (err) {
       setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
     } finally {
@@ -139,36 +132,52 @@ const AdminApplicationDetailPage = () => {
     { label: 'Username', value: app.user_username || '—' },
   ]
 
-  const EDUCATION_LABEL = { 1: 'Tiểu học', 2: 'THCS', 3: 'THPT', 4: 'Cao đẳng / ĐH', 5: 'Sau đại học' }
+  const EDUCATION_LABEL = { 1: 'Dưới THPT', 2: 'THPT', 3: 'Cao đẳng', 4: 'Đại học', 5: 'Sau đại học' }
+  const OCCUPATION_LABEL = {
+    EMPLOYED: 'Nhân viên hưởng lương',
+    PRIVATE_SECTOR_EMPLOYEE: 'Nhân viên khu vực tư nhân',
+    SALARIED_GOVT: 'Công chức / nhà nước',
+    SELFEMPLOYED: 'Tự kinh doanh',
+    RETIRED_PENSIONER: 'Hưu trí',
+    OTHER: 'Khác / chưa xác định',
+  }
 
-  const loanInfo = [
-    { label: 'Số tiền vay',         value: formatCurrency(app.loan_amount) },
-    { label: 'Kỳ hạn',             value: `${app.term} tháng` },
-    { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income) },
-    { label: 'DTI',                 value: app.dti != null ? `${(Number(app.dti) * 100).toFixed(1)}%` : '—' },
-    { label: 'Tình trạng việc làm', value: app.employment_status },
-    { label: 'Loại thu nhập',      value: app.occupation_type ?? '—' },
-    { label: 'Năm kinh nghiệm',    value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
-    { label: 'Tình trạng nhà',     value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
-    { label: 'Mục đích vay',       value: app.listing_category },
+  // Nhóm 1 — Thông tin tài chính (khớp thứ tự form)
+  const financialInfo = [
+    { label: 'Thu nhập hàng tháng (USD)', value: formatCurrency(app.monthly_income) },
+    { label: 'Số tiền muốn vay (USD)',    value: formatCurrency(app.loan_amount) },
+    { label: 'Kỳ hạn vay',               value: `${app.term} tháng` },
+    { label: 'Mục đích vay',             value: app.listing_category },
+    { label: 'Có nhà riêng không?',      value: app.is_homeowner ? 'Có' : 'Không' },
+    { label: 'DTI (tỷ lệ nợ/thu nhập)', value: app.dti != null ? `${(Number(app.dti) * 100).toFixed(1)}%` : '—' },
   ]
 
-  const demographicInfo = [
-    { label: 'Tuổi',               value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
-    { label: 'Trình độ học vấn',   value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
-    { label: 'Tình trạng hôn nhân',value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Độc thân') : '—' },
+  // Nhóm 2 — Thông tin cá nhân (khớp thứ tự form)
+  const personalInfo = [
+    { label: 'Tình trạng việc làm',         value: app.employment_status },
+    { label: 'Loại thu nhập',               value: OCCUPATION_LABEL[app.occupation_type] ?? app.occupation_type ?? '—' },
+    { label: 'Số năm kinh nghiệm làm việc', value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
+    { label: 'Tuổi',                        value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
+    { label: 'Trình độ học vấn',            value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
+    { label: 'Tình trạng hôn nhân',         value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Chưa kết hôn') : '—' },
+    { label: 'Thu nhập xác minh',           value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
   ]
 
+  const snap = app.feature_snapshot ?? {}
   const bureauInfo = [
-    { label: 'Số hồ sơ tín dụng',  value: app.num_bureau_records ?? '—' },
-    { label: 'Tín dụng đang hoạt động', value: app.num_active_credit ?? '—' },
-    { label: 'Tổng dư nợ CIC',     value: app.feature_snapshot?.cic_outstanding_debt != null ? formatCurrency(app.feature_snapshot.cic_outstanding_debt) : '—' },
-    { label: 'Nghĩa vụ nợ hàng tháng', value: app.feature_snapshot?.cic_monthly_installment != null ? formatCurrency(app.feature_snapshot.cic_monthly_installment) : '—' },
-    { label: 'Tổng nợ quá hạn',    value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
-    { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
-    { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
-    { label: 'Thu nhập xác minh',  value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
-    { label: 'Danh sách đen',      value: app.feature_snapshot?.cic_blacklisted != null ? (app.feature_snapshot.cic_blacklisted ? 'Có' : 'Không') : '—' },
+    { label: 'Số hồ sơ tín dụng',            value: app.num_bureau_records ?? '—' },
+    { label: 'Tín dụng đang hoạt động',       value: app.num_active_credit ?? '—' },
+    { label: 'Tổng dư nợ CIC',               value: snap.cic_outstanding_debt != null ? formatCurrency(snap.cic_outstanding_debt) : '—' },
+    { label: 'Nghĩa vụ nợ hàng tháng',       value: snap.cic_monthly_installment != null ? formatCurrency(snap.cic_monthly_installment) : '—' },
+    { label: 'Tổng nợ quá hạn',              value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
+    { label: 'Số ngày quá hạn tối đa (24m)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
+    { label: 'DPD trung bình gần đây',        value: snap.avg_dpd_recent != null ? snap.avg_dpd_recent.toFixed(1) + ' ngày' : '—' },
+    { label: 'Kỳ quá hạn >10 ngày',          value: snap.num_installs_dpd10 ?? '—' },
+    { label: 'Số tra cứu tín dụng',           value: snap.num_cb_queries ?? '—' },
+    { label: 'Tra cứu trong 30 ngày',         value: snap.cb_queries_30d ?? '—' },
+    { label: 'Số lần gia hạn khoản vay',      value: snap.total_prolongations ?? '—' },
+    { label: 'Nợ xấu',                       value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
+    { label: 'Danh sách đen',                value: snap.cic_blacklisted != null ? (snap.cic_blacklisted ? 'Có' : 'Không') : '—' },
   ]
   
   const isCicApplied = app.feature_snapshot?.cic_applied
@@ -222,14 +231,14 @@ const AdminApplicationDetailPage = () => {
             )}
           </SectionCard>
 
-          {/* 2. Thông tin đơn vay */}
-          <SectionCard title="Thông tin đơn vay">
-            <InfoGrid items={loanInfo} />
+          {/* 2. Thông tin tài chính */}
+          <SectionCard title="Thông tin tài chính">
+            <InfoGrid items={financialInfo} />
           </SectionCard>
 
-          {/* 3. Nhân khẩu học */}
-          <SectionCard title="Nhân khẩu học">
-            <InfoGrid items={demographicInfo} />
+          {/* 3. Thông tin cá nhân */}
+          <SectionCard title="Thông tin cá nhân">
+            <InfoGrid items={personalInfo} />
           </SectionCard>
 
           {/* 4. Lịch sử tín dụng / CIC */}
@@ -278,9 +287,9 @@ const AdminApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {scorecard && (
+          {app.fico_score && (
             <SectionCard title="Điểm tín dụng scorecard">
-              <CreditScorePanel scorecard={scorecard} />
+              <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}
 
