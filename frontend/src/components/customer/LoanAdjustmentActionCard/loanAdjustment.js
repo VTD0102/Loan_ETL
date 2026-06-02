@@ -9,6 +9,13 @@ const toFiniteNumber = (value) => {
   return Number.isFinite(numberValue) ? numberValue : null
 }
 
+const parseIsoTimestampMs = (value) => {
+  if (!value || typeof value !== 'string') return Number.NaN
+  const trimmed = value.trim()
+  const hasTimezone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(trimmed)
+  return new Date(hasTimezone ? trimmed : `${trimmed}Z`).getTime()
+}
+
 const normalizeProposal = (proposal) => {
   if (!proposal || typeof proposal !== 'object') return null
 
@@ -27,10 +34,31 @@ const normalizeProposal = (proposal) => {
     defaultProbability,
     riskLevel: String(proposal.risk_level || '').toUpperCase(),
     riskScore,
+    adjustmentStrategy: proposal.adjustment_strategy || null,
   }
 }
 
-const buildProposalViewModel = (proposal, index = 0) => {
+const buildChangeLabel = (proposal, current) => {
+  const currentAmount = current?.loanAmount
+  const currentTerm = current?.term
+  const strategy = proposal.adjustmentStrategy
+
+  if (strategy === 'extend_term' || (currentTerm && proposal.term > currentTerm && proposal.loanAmount === currentAmount)) {
+    return currentTerm
+      ? `Tăng kỳ hạn từ ${currentTerm} lên ${proposal.term} tháng`
+      : 'Tăng kỳ hạn trả nợ'
+  }
+
+  if (strategy === 'reduce_amount' || (currentAmount && proposal.loanAmount < currentAmount)) {
+    return currentAmount
+      ? `Giảm số tiền vay từ ${formatCurrency(currentAmount)} còn ${formatCurrency(proposal.loanAmount)}`
+      : 'Giảm số tiền vay'
+  }
+
+  return 'Điều chỉnh khoản vay'
+}
+
+const buildProposalViewModel = (proposal, index = 0, current = null) => {
   const riskMeta = RISK_META[proposal.riskLevel]
   return {
     ...proposal,
@@ -43,6 +71,7 @@ const buildProposalViewModel = (proposal, index = 0) => {
     riskClassName: riskMeta
       ? `${riskMeta.bg} ${riskMeta.text} ${riskMeta.border}`
       : 'bg-gray-50 text-gray-700 border-gray-200',
+    changeLabel: buildChangeLabel(proposal, current),
   }
 }
 
@@ -53,6 +82,12 @@ export const normalizeLoanAdjustmentAction = (action) => {
 
   const primary = normalizeProposal(action.proposal)
   if (!primary) return null
+  const currentLoanAmount = toFiniteNumber(action.current_loan_amount)
+  const currentTerm = toFiniteNumber(action.current_term)
+  const current = {
+    loanAmount: currentLoanAmount,
+    term: currentTerm,
+  }
   const proposals = Array.isArray(action.proposals)
     ? action.proposals.map(normalizeProposal).filter(Boolean)
     : []
@@ -65,8 +100,12 @@ export const normalizeLoanAdjustmentAction = (action) => {
     defaultProbability: primary.defaultProbability,
     riskLevel: primary.riskLevel,
     riskScore: primary.riskScore,
+    adjustmentStrategy: primary.adjustmentStrategy,
+    currentLoanAmount,
+    currentTerm,
     expiresAt: action.expires_at || null,
     options,
+    current,
   }
 }
 
@@ -74,9 +113,7 @@ export const buildLoanAdjustmentViewModel = (action, now = new Date()) => {
   const normalized = normalizeLoanAdjustmentAction(action)
   if (!normalized) return null
 
-  const expiresAtMs = normalized.expiresAt
-    ? new Date(normalized.expiresAt).getTime()
-    : Number.NaN
+  const expiresAtMs = parseIsoTimestampMs(normalized.expiresAt)
   const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime()
   const hasValidExpiry = Number.isFinite(expiresAtMs) && Number.isFinite(nowMs)
   const minutesRemaining = hasValidExpiry
@@ -84,7 +121,13 @@ export const buildLoanAdjustmentViewModel = (action, now = new Date()) => {
     : null
   const expired = minutesRemaining !== null && minutesRemaining <= 0
   const riskMeta = RISK_META[normalized.riskLevel]
-  const options = normalized.options.map(buildProposalViewModel)
+  const current = {
+    loanAmount: normalized.currentLoanAmount,
+    term: normalized.currentTerm,
+  }
+  const options = normalized.options.map((proposal, index) =>
+    buildProposalViewModel(proposal, index, current)
+  )
 
   return {
     ...normalized,
@@ -95,6 +138,7 @@ export const buildLoanAdjustmentViewModel = (action, now = new Date()) => {
     riskClassName: riskMeta
       ? `${riskMeta.bg} ${riskMeta.text} ${riskMeta.border}`
       : 'bg-gray-50 text-gray-700 border-gray-200',
+    changeLabel: buildChangeLabel(normalized, current),
     expiresInLabel: !hasValidExpiry
       ? EMPTY_LABEL
       : expired

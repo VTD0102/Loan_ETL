@@ -15,6 +15,7 @@ from services.model_feature_builder import fetch_previous_applications, infer_ex
 SUPPORTED_TERMS = (12, 24, 36, 48, 60)
 AUTO_REVIEW_THRESHOLD = 0.4
 PENDING_ACTION_TTL_MINUTES = 30
+_MIN_LOAN_AMOUNT = 500
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class LoanAdjustmentProposal:
     risk_level: str
     risk_score: int
     model_version: str | None = None
+    adjustment_strategy: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,20 +70,23 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
 
     artifact = ml_service._load()
     previous = fetch_previous_applications(db, user_id)
-    passing: list[tuple[tuple[int, float, int, int], LoanAdjustmentProposal]] = []
     best_observed: LoanAdjustmentProposal | None = None
+    observed: list[tuple[tuple[float, int, Decimal], LoanAdjustmentProposal]] = []
 
-    for amount_index, amount in enumerate(_candidate_amounts(app)):
-        for term in SUPPORTED_TERMS:
+    for strategy, candidates in _candidate_stages(app):
+        passing: list[tuple[tuple[Any, ...], LoanAdjustmentProposal]] = []
+
+        for amount, term in candidates:
             payload = application_to_confirm_payload(app, loan_amount=amount, term=term)
             prediction = ml_service.predict(payload, db=db, user_id=user_id)
-            proposal = _proposal_from_prediction(payload, prediction)
+            proposal = _proposal_from_prediction(payload, prediction, strategy=strategy)
 
             if (
                 best_observed is None
                 or proposal.default_probability < best_observed.default_probability
             ):
                 best_observed = proposal
+            observed.append((_fallback_rank(proposal), proposal))
 
             if proposal.default_probability > AUTO_REVIEW_THRESHOLD:
                 continue
@@ -95,18 +100,24 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
             except ValueError:
                 continue
 
-            term_distance = abs(int(term) - int(app.term))
-            # Product choice: keep the original requested amount when possible;
-            # only reduce amount if no original-amount candidate passes.
-            rank = (
-                amount_index,
-                proposal.default_probability,
-                term_distance,
-                int(term),
-            )
-            passing.append((rank, proposal))
+            passing.append((_passing_rank(strategy, app, proposal), proposal))
 
-    if not passing:
+        if passing:
+            passing.sort(key=lambda item: item[0])
+            proposal_options = [proposal for _, proposal in passing[:3]]
+            return LoanAdjustmentResult(
+                status="proposal",
+                source_application_id=str(app.id),
+                current_loan_amount=app.loan_amount,
+                current_term=app.term,
+                current_default_probability=_float_or_none(app.default_probability),
+                proposal=proposal_options[0],
+                best_observed=best_observed,
+                message=_proposal_message(strategy),
+                proposals=proposal_options,
+            )
+
+    if not observed:
         return LoanAdjustmentResult(
             status="no_passing_option",
             source_application_id=str(app.id),
@@ -118,18 +129,33 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
             message="No safe adjustment candidate was found.",
         )
 
-    passing.sort(key=lambda item: item[0])
-    proposal_options = [proposal for _, proposal in passing[:3]]
+    # Fallback: show the best changed form candidates, but never return the
+    # unchanged form that was just rejected.
+    observed.sort(key=lambda item: item[0])
+    fallback_options = [proposal for _, proposal in observed[:3]]
+    if fallback_options:
+        return LoanAdjustmentResult(
+            status="fallback_proposal",
+            source_application_id=str(app.id),
+            current_loan_amount=app.loan_amount,
+            current_term=app.term,
+            current_default_probability=_float_or_none(app.default_probability),
+            proposal=fallback_options[0],
+            best_observed=best_observed,
+            message="Không tìm được khoản vay nào dưới ngưỡng tự động duyệt. "
+                    "Các phương án dưới đây là form khác tốt nhất hiện có nhưng vẫn cần cải thiện thêm.",
+            proposals=fallback_options,
+        )
+
     return LoanAdjustmentResult(
-        status="proposal",
+        status="no_passing_option",
         source_application_id=str(app.id),
         current_loan_amount=app.loan_amount,
         current_term=app.term,
         current_default_probability=_float_or_none(app.default_probability),
-        proposal=proposal_options[0],
+        proposal=None,
         best_observed=best_observed,
-        message="A lower-risk loan adjustment is available.",
-        proposals=proposal_options,
+        message="No safe adjustment candidate was found.",
     )
 
 
@@ -196,7 +222,7 @@ def build_pending_action(
     result: LoanAdjustmentResult,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    created_at = now or datetime.utcnow()
+    created_at = _as_utc(now or datetime.now(timezone.utc))
     expires_at = created_at + timedelta(minutes=PENDING_ACTION_TTL_MINUTES)
     proposal = result.proposal
     if proposal is None:
@@ -205,6 +231,8 @@ def build_pending_action(
         "type": "loan_term_adjustment",
         "status": "pending_confirmation",
         "source_application_id": result.source_application_id,
+        "current_loan_amount": str(result.current_loan_amount) if result.current_loan_amount is not None else None,
+        "current_term": result.current_term,
         "created_at": created_at.isoformat(),
         "expires_at": expires_at.isoformat(),
         "proposal": {
@@ -214,6 +242,7 @@ def build_pending_action(
             "risk_level": proposal.risk_level,
             "risk_score": proposal.risk_score,
             "model_version": proposal.model_version,
+            "adjustment_strategy": proposal.adjustment_strategy,
         },
         "proposals": [
             _proposal_to_action_payload(option)
@@ -249,7 +278,8 @@ def format_result_for_rag(result: LoanAdjustmentResult) -> str:
     proposals = result.proposals or [result.proposal]
     option_lines = [
         (
-            f"Phương án {index}: số tiền {proposal.loan_amount}, "
+            f"Phương án {index} ({_strategy_text(proposal.adjustment_strategy)}): "
+            f"số tiền {proposal.loan_amount}, "
             f"kỳ hạn {proposal.term} tháng, "
             f"xác suất vỡ nợ {proposal.default_probability:.2%}, "
             f"mức rủi ro {proposal.risk_level}."
@@ -267,6 +297,7 @@ def _proposal_to_action_payload(proposal: LoanAdjustmentProposal) -> dict[str, A
         "risk_level": proposal.risk_level,
         "risk_score": proposal.risk_score,
         "model_version": proposal.model_version,
+        "adjustment_strategy": proposal.adjustment_strategy,
     }
 
 
@@ -283,18 +314,94 @@ def _latest_auto_rejected_application(db: Any, user_id: Any) -> LoanApplication 
 
 
 def _candidate_amounts(app: Any) -> list[Decimal]:
-    amounts = [_to_decimal(app.loan_amount)]
+    original = _to_decimal(app.loan_amount)
+    amounts = [original]
     recommended = getattr(app, "recommended_amount", None)
     if recommended is not None:
         recommended_amount = _to_decimal(recommended)
-        if recommended_amount > 0 and recommended_amount != amounts[0]:
+        if recommended_amount > 0 and recommended_amount != original:
             amounts.append(recommended_amount)
+    # Add reduced amounts: 75%, 50%, 25% of original
+    for fraction in (Decimal("0.75"), Decimal("0.50"), Decimal("0.25")):
+        reduced = (original * fraction).quantize(Decimal("1"))
+        if reduced >= _MIN_LOAN_AMOUNT and reduced not in amounts:
+            amounts.append(reduced)
+    # Always include minimum loan amount as last resort
+    min_amount = _to_decimal(_MIN_LOAN_AMOUNT)
+    if min_amount not in amounts:
+        amounts.append(min_amount)
     return amounts
+
+
+def _candidate_stages(app: Any) -> list[tuple[str, list[tuple[Decimal, int]]]]:
+    original_amount = _to_decimal(app.loan_amount)
+    current_term = int(app.term)
+    max_term = max(SUPPORTED_TERMS)
+    stages: list[tuple[str, list[tuple[Decimal, int]]]] = []
+
+    higher_terms = [term for term in SUPPORTED_TERMS if term > current_term]
+    if higher_terms:
+        stages.append(("extend_term", [(original_amount, term) for term in higher_terms]))
+
+    reduced_amounts = [
+        amount for amount in _candidate_amounts(app)
+        if amount < original_amount
+    ]
+    if reduced_amounts:
+        stages.append(("reduce_amount", [(amount, max_term) for amount in reduced_amounts]))
+
+    return stages
+
+
+def _passing_rank(
+    strategy: str,
+    app: Any,
+    proposal: LoanAdjustmentProposal,
+) -> tuple[Any, ...]:
+    original_amount = _to_decimal(app.loan_amount)
+    current_term = int(app.term)
+    if strategy == "reduce_amount":
+        reduction = original_amount - proposal.loan_amount
+        return (reduction, proposal.default_probability, -proposal.loan_amount)
+    return (
+        proposal.term - current_term,
+        proposal.default_probability,
+        proposal.term,
+    )
+
+
+def _fallback_rank(proposal: LoanAdjustmentProposal) -> tuple[float, int, Decimal]:
+    return (
+        proposal.default_probability,
+        -proposal.term,
+        -proposal.loan_amount,
+    )
+
+
+def _proposal_message(strategy: str) -> str:
+    if strategy == "reduce_amount":
+        return (
+            "Đã thử đến kỳ hạn tối đa 60 tháng. "
+            "Có thể nộp form khác bằng cách giảm số tiền vay."
+        )
+    return (
+        "Có thể nộp form khác bằng cách giữ nguyên số tiền vay "
+        "và tăng kỳ hạn trả nợ."
+    )
+
+
+def _strategy_text(strategy: str | None) -> str:
+    if strategy == "reduce_amount":
+        return "giảm số tiền vay"
+    if strategy == "extend_term":
+        return "tăng kỳ hạn"
+    return "điều chỉnh khoản vay"
 
 
 def _proposal_from_prediction(
     payload: ApplicationConfirm,
     prediction: dict[str, Any],
+    strategy: str | None = None,
 ) -> LoanAdjustmentProposal:
     return LoanAdjustmentProposal(
         loan_amount=_to_decimal(payload.loan_amount),
@@ -303,6 +410,7 @@ def _proposal_from_prediction(
         risk_level=prediction.get("risk_level") or "",
         risk_score=int(prediction.get("risk_score") or 0),
         model_version=prediction.get("model_version"),
+        adjustment_strategy=strategy,
     )
 
 
@@ -314,6 +422,12 @@ def _float_or_none(value: Any) -> float | None:
 
 def _is_timezone_aware(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() is not None
+
+
+def _as_utc(value: datetime) -> datetime:
+    if _is_timezone_aware(value):
+        return value.astimezone(timezone.utc)
+    return value.replace(tzinfo=timezone.utc)
 
 
 def _to_decimal(value: Any) -> Decimal:

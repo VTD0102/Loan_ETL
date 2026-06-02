@@ -1,4 +1,5 @@
 import logging
+import time
 from threading import Lock
 
 from langchain_openai import OpenAIEmbeddings
@@ -95,6 +96,69 @@ class RerankedRetriever:
 
     def get_relevant_documents(self, query):
         return self.invoke(query)
+
+
+class SelfHealingHybridRetriever:
+    """A hybrid retriever wrapper that acts as a placeholder when Qdrant is offline.
+    It periodically retries to establish a connection to Qdrant in the background,
+    enabling self-healing once the Qdrant service is started.
+    """
+    def __init__(self, embeddings, sparse_embeddings):
+        self.embeddings = embeddings
+        self.sparse_embeddings = sparse_embeddings
+        self.real_retriever = None
+        self.last_attempt_time = time.time()  # Start cooldown from initialization
+        self.cooldown = 60.0  # seconds
+
+    def _try_init_real_retriever(self) -> bool:
+        now = time.time()
+        if now - self.last_attempt_time < self.cooldown:
+            return False
+
+        self.last_attempt_time = now
+        try:
+            logger.info("Attempting to reconnect to Qdrant...")
+            client = QdrantClient(
+                url=QDRANT_URL,
+                api_key=QDRANT_API_KEY,
+                timeout=settings.rag_qdrant_timeout_seconds,
+            )
+            # Fetch collections to verify connectivity
+            client.get_collections()
+
+            vectorstore = QdrantVectorStore(
+                client=client,
+                collection_name=QDRANT_COLLECTION,
+                embedding=self.embeddings,
+                sparse_embedding=self.sparse_embeddings,
+                retrieval_mode=RetrievalMode.HYBRID,
+                vector_name="dense",
+                sparse_vector_name="sparse",
+            )
+            self.real_retriever = vectorstore.as_retriever(search_kwargs={"k": RERANKER_CANDIDATE_K})
+            logger.info("Successfully reconnected to Qdrant and initialized vector store.")
+            return True
+        except Exception as exc:
+            logger.debug("Qdrant reconnection attempt failed: %s", exc)
+            return False
+
+    def invoke(self, query, *args, **kwargs):
+        if self.real_retriever is None:
+            self._try_init_real_retriever()
+
+        if self.real_retriever is not None:
+            try:
+                if hasattr(self.real_retriever, "invoke"):
+                    return self.real_retriever.invoke(query, *args, **kwargs)
+                return self.real_retriever.get_relevant_documents(query, *args, **kwargs)
+            except Exception as exc:
+                logger.warning("Qdrant retrieval failed during call: %s. Resetting retriever.", exc)
+                self.real_retriever = None
+
+        return []
+
+    def get_relevant_documents(self, query, *args, **kwargs):
+        return self.invoke(query, *args, **kwargs)
 
 
 _retriever_lock = Lock()
