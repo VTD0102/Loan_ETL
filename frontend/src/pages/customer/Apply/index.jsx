@@ -218,11 +218,10 @@ const ApplyPage = () => {
         message: `Xác nhận phương án ${selectedIndex + 1}`,
         session_id: rejectedAdvisor.sessionId,
       })
-      setRejectedAdvisor((prev) => ({
-        ...prev,
-        pendingAction: res.data?.pending_action || null,
-        submittedMessage: res.data?.response || 'Đã nộp lại hồ sơ mới.',
-      }))
+      toast.success(res.data?.response || 'Đã nộp lại hồ sơ mới.')
+      setModal(null)
+      setRejectedAdvisor(createEmptyRejectedAdvisor())
+      navigate('/dashboard')
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Không thể nộp lại phương án. Vui lòng thử lại.')
     } finally {
