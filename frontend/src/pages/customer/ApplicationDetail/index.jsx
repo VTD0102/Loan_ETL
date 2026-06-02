@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getApplicationById, getApplicationCreditScore } from '../../../services/applications'
+import { getApplicationById } from '../../../services/applications'
 import { getMyCIC } from '../../../services/cic'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
@@ -215,7 +215,6 @@ const ApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app, setApp]       = useState(null)
-  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [contractOpen, setContractOpen] = useState(false)
@@ -227,12 +226,6 @@ const ApplicationDetailPage = () => {
       try {
         const res = await getApplicationById(id)
         setApp(res.data)
-        try {
-          const scoreRes = await getApplicationCreditScore(id)
-          setScorecard(scoreRes.data)
-        } catch {
-          setScorecard(null)
-        }
       } catch (err) {
         setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
       } finally {
@@ -349,9 +342,9 @@ const ApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {scorecard && (
+          {app.fico_score && (
             <SectionCard title="Điểm tín dụng scorecard">
-              <CreditScorePanel scorecard={scorecard} />
+              <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}
 

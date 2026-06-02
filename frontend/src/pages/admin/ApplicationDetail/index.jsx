@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getAdminApplicationById, getAdminApplicationCreditScore, disburseApplication } from '../../../services/admin'
+import { getAdminApplicationById, disburseApplication } from '../../../services/admin'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
 import MLResultsDisplay from '../../../components/admin/MLResultsDisplay'
@@ -74,7 +74,6 @@ const AdminApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app,     setApp]     = useState(null)
-  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [disbursing, setDisbursing] = useState(false)
@@ -86,12 +85,6 @@ const AdminApplicationDetailPage = () => {
     try {
       const res = await getAdminApplicationById(id)
       setApp(res.data)
-      try {
-        const scoreRes = await getAdminApplicationCreditScore(id)
-        setScorecard(scoreRes.data)
-      } catch {
-        setScorecard(null)
-      }
     } catch (err) {
       setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
     } finally {
@@ -278,9 +271,9 @@ const AdminApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {scorecard && (
+          {app.fico_score && (
             <SectionCard title="Điểm tín dụng scorecard">
-              <CreditScorePanel scorecard={scorecard} />
+              <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}
 
