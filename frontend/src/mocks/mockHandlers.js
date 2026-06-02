@@ -52,6 +52,8 @@ const createMockPendingAction = () => ({
   type: 'loan_term_adjustment',
   status: 'pending_confirmation',
   source_application_id: 'mock-auto-rejected-application',
+  current_loan_amount: '12000',
+  current_term: 12,
   created_at: new Date().toISOString(),
   expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   proposal: {
@@ -61,6 +63,7 @@ const createMockPendingAction = () => ({
     risk_level: 'LOW',
     risk_score: 28,
     model_version: 'mock-model',
+    adjustment_strategy: 'extend_term',
   },
   proposals: [
     {
@@ -70,22 +73,25 @@ const createMockPendingAction = () => ({
       risk_level: 'LOW',
       risk_score: 28,
       model_version: 'mock-model',
+      adjustment_strategy: 'extend_term',
     },
     {
-      loan_amount: '10000',
-      term: 24,
+      loan_amount: '12000',
+      term: 48,
       default_probability: 0.31,
       risk_level: 'MEDIUM',
       risk_score: 31,
       model_version: 'mock-model',
+      adjustment_strategy: 'extend_term',
     },
     {
-      loan_amount: '8000',
-      term: 12,
+      loan_amount: '9000',
+      term: 60,
       default_probability: 0.37,
       risk_level: 'MEDIUM',
       risk_score: 37,
       model_version: 'mock-model',
+      adjustment_strategy: 'reduce_amount',
     },
   ],
 })
@@ -329,7 +335,7 @@ export const mockHandlers = async (config) => {
       pendingAction = null
     } else if (wantsAdjustment) {
       pendingAction = createMockPendingAction()
-      reply = 'Mình đã tìm được 3 khoản vay phù hợp. Chọn một phương án bên dưới, sau đó bấm đồng ý để mình nộp lại hồ sơ mới.'
+      reply = 'Mình đã tìm được các form vay khác: ưu tiên tăng kỳ hạn lên 36 hoặc 48 tháng, nếu cần thì giảm số tiền vay và dùng kỳ hạn 60 tháng. Chọn một phương án bên dưới để áp dụng vào form hoặc xác nhận nộp lại.'
     }
 
     saveMockPendingAction(pendingAction)

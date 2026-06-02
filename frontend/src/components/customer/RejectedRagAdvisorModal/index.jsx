@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import Modal from '../../common/Modal'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { buildLoanAdjustmentViewModel } from '../LoanAdjustmentActionCard/loanAdjustment'
+import AlternativeFormPanel from './AlternativeFormPanel'
 
 const percentLabel = (value) => `${((Number(value) || 0) * 100).toFixed(1)}%`
 
@@ -128,6 +129,7 @@ const RejectedRagAdvisorModal = ({
   onClose,
   onConfirm,
   onCancel,
+  onSubmitAnother,
 }) => {
   const model = buildLoanAdjustmentViewModel(pendingAction)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -142,7 +144,9 @@ const RejectedRagAdvisorModal = ({
   const dti = Number(evaluation?.computed_dti || 0)
   const probabilityPercent = Math.min(100, Math.max(0, probability * 100))
   const dtiPercent = Math.min(100, Math.max(0, dti * 100))
-  const canSubmit = Boolean(selectedOption) && !model?.expired && !submitting && !submittedMessage
+  const selectedIsHighRisk = Number(selectedOption?.defaultProbability || 0) > 0.4
+  const allOptionsHighRisk = options.length > 0 && options.every((option) => Number(option.defaultProbability || 0) > 0.4)
+  const canSubmit = Boolean(selectedOption) && !selectedIsHighRisk && !model?.expired && !submitting && !submittedMessage
 
   return (
     <Modal open={open} onClose={onClose} title="AI đánh giá hồ sơ" maxWidth="max-w-5xl">
@@ -192,14 +196,14 @@ const RejectedRagAdvisorModal = ({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-gray-950">
-                {options.length === 1 && selectedOption?.defaultProbability > 0.4
-                  ? 'Phương án tối ưu (cần duyệt thủ công)'
-                  : '3 khoản vay phù hợp'}
+                {allOptionsHighRisk
+                  ? 'Form khác tốt nhất hiện tại'
+                  : 'Các form vay phù hợp'}
               </h3>
               <p className="mt-1 text-sm text-gray-500">
-                {options.length === 1 && selectedOption?.defaultProbability > 0.4
-                  ? 'Không tìm thấy gói vay nào tự động duyệt. Đây là phương án tốt nhất hiện tại.'
-                  : 'Chọn một phương án. Khi bạn đồng ý, RAG sẽ nộp lại hồ sơ mới từ đơn bị từ chối.'}
+                {allOptionsHighRisk
+                  ? 'RAG đã thử điều chỉnh kỳ hạn và số tiền vay, nhưng các phương án này vẫn chưa đủ điều kiện tự động duyệt.'
+                  : 'Chọn một form khác. RAG ưu tiên tăng kỳ hạn, sau đó giảm số tiền vay nếu đã tới kỳ hạn tối đa.'}
               </p>
             </div>
             {model && (
@@ -264,13 +268,14 @@ const RejectedRagAdvisorModal = ({
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold text-gray-950">Phương án {option.optionNumber}</p>
+                          <p className="text-sm font-semibold text-gray-950">Form {option.optionNumber}</p>
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${option.riskClassName}`}>
                             {option.riskLabel}
                           </span>
                         </div>
                         <p className="mt-4 text-2xl font-bold text-gray-950">{option.amountLabel}</p>
                         <p className="mt-1 text-sm text-gray-500">{option.termLabel}</p>
+                        <p className="mt-2 min-h-10 text-xs leading-5 text-gray-600">{option.changeLabel}</p>
                         <div className="my-4 h-px bg-gray-200" />
                         <p className="text-xs font-medium uppercase text-gray-400">Xác suất vỡ nợ</p>
                         <p className="mt-1 text-base font-bold text-primary-700">{option.defaultProbabilityLabel}</p>
@@ -286,29 +291,41 @@ const RejectedRagAdvisorModal = ({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <div>
-                    <span className="font-bold">Cảnh báo rủi ro:</span> Phương án đề xuất này có xác suất vỡ nợ là <span className="font-bold text-red-600">{percentLabel(selectedOption.defaultProbability)}</span> (vượt ngưỡng tự động duyệt 40.0%). Hồ sơ sẽ cần quản trị viên duyệt thủ công nếu khách hàng quyết định nộp lại.
+                    <span className="font-bold">Cảnh báo rủi ro:</span> Phương án đề xuất này có xác suất vỡ nợ là <span className="font-bold text-red-600">{percentLabel(selectedOption.defaultProbability)}</span> (vượt ngưỡng tự động duyệt 40.0%). Hãy áp dụng vào form để chỉnh tiếp hoặc cải thiện hồ sơ trước khi nộp lại.
                   </div>
                 </div>
+              )}
+
+              {!submittedMessage && (
+                <AlternativeFormPanel
+                  selectedOption={selectedOption}
+                  submitting={submitting}
+                  onCreateAlternative={() => onSubmitAnother?.(selectedIndex)}
+                />
               )}
             </>
           )}
 
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <button type="button" onClick={onCancel || onClose} disabled={submitting} className="btn-outline flex-1">
-              {submittedMessage ? 'Đóng' : 'Hủy'}
+          <div className={`mt-5 grid gap-2 ${submittedMessage ? 'sm:grid-cols-1' : 'sm:grid-cols-[1fr_2fr]'}`}>
+            <button type="button" onClick={onCancel || onClose} disabled={submitting} className="btn-outline">
+              {submittedMessage ? 'Đóng' : 'Hủy đề xuất'}
             </button>
             {!submittedMessage && (
               <button
                 type="button"
                 onClick={() => onConfirm?.(selectedIndex)}
                 disabled={!canSubmit}
-                className="btn-primary flex-[2]"
+                className={selectedIsHighRisk
+                  ? 'btn border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:ring-amber-500'
+                  : 'btn-primary'}
               >
                 {submitting && <LoadingSpinner size="sm" className="mr-2" />}
                 {submitting
                   ? 'Đang nộp lại...'
                   : selectedOption
-                    ? `Đồng ý nộp lại phương án ${selectedOption.optionNumber}`
+                    ? selectedIsHighRisk
+                      ? `Form ${selectedOption.optionNumber} chưa đủ điều kiện`
+                      : `Nộp form ${selectedOption.optionNumber}`
                     : 'Chưa có phương án phù hợp'}
               </button>
             )}
@@ -320,4 +337,3 @@ const RejectedRagAdvisorModal = ({
 }
 
 export default RejectedRagAdvisorModal
-

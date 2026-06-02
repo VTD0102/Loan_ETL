@@ -51,6 +51,14 @@ const DTI_STYLES = {
   danger:  { text: 'text-danger-600',  bar: 'bg-danger-500' },
 }
 
+const createEmptyRejectedAdvisor = () => ({
+  sessionId: null,
+  pendingAction: null,
+  ragResponse: '',
+  submitting: false,
+  submittedMessage: '',
+})
+
 // ── Helper components ──────────────────────────────────────────────────────
 const FieldRow = ({ label, hint, error, children }) => (
   <div className="space-y-1.5">
@@ -111,15 +119,10 @@ const SectionIcon = ({ title }) => {
 // ── Main Apply page ────────────────────────────────────────────────────────
 const ApplyPage = () => {
   const navigate  = useNavigate()
+  const formRef = useRef(null)
   const [loading, setLoading]         = useState(false)
   const [modal, setModal]             = useState(null)  // { type: 'rejected'|'success', data }
-  const [rejectedAdvisor, setRejectedAdvisor] = useState({
-    sessionId: null,
-    pendingAction: null,
-    ragResponse: '',
-    submitting: false,
-    submittedMessage: '',
-  })
+  const [rejectedAdvisor, setRejectedAdvisor] = useState(createEmptyRejectedAdvisor)
   const [cicData, setCicData]         = useState(null)     // { found, record }
   const [cicLoading, setCicLoading]   = useState(true)
 
@@ -138,7 +141,7 @@ const ApplyPage = () => {
     fetchCIC()
   }, [])
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, setFocus, setValue, formState: { errors } } = useForm({
     defaultValues: {
       term: 36,
       employment_status: 'Employed',
@@ -173,13 +176,7 @@ const ApplyPage = () => {
       const result = res.data
 
       if (result.status === 'AUTO_REJECTED') {
-        let advisorState = {
-          sessionId: null,
-          pendingAction: null,
-          ragResponse: '',
-          submitting: false,
-          submittedMessage: '',
-        }
+        let advisorState = createEmptyRejectedAdvisor()
         try {
           const chatRes = await sendChatMessage({
             message: 'Đề xuất 3 khoản vay phù hợp cho hồ sơ bị từ chối',
@@ -244,12 +241,34 @@ const ApplyPage = () => {
       }
     }
     setModal(null)
-    setRejectedAdvisor({
-      sessionId: null,
-      pendingAction: null,
-      ragResponse: '',
-      submitting: false,
-      submittedMessage: '',
+    setRejectedAdvisor(createEmptyRejectedAdvisor())
+  }
+
+  const handleRejectedAdvisorSubmitAnother = async (selectedIndex = 0) => {
+    const proposals = rejectedAdvisor.pendingAction?.proposals
+    const selectedProposal = Array.isArray(proposals)
+      ? proposals[selectedIndex] || rejectedAdvisor.pendingAction?.proposal
+      : rejectedAdvisor.pendingAction?.proposal
+
+    if (selectedProposal?.loan_amount) {
+      setValue('loan_amount', Number(selectedProposal.loan_amount), {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      })
+    }
+    if (selectedProposal?.term) {
+      setValue('term', String(selectedProposal.term), {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      })
+    }
+
+    await handleRejectedAdvisorClose()
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setFocus('loan_amount')
     })
   }
 
@@ -284,7 +303,7 @@ const ApplyPage = () => {
         </div>
 
         <div className="card overflow-hidden">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-7 p-6 sm:p-8" noValidate>
+          <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-7 p-6 sm:p-8" noValidate>
 
             {/* ── Section 1: Tài chính ─────────────────────────── */}
             <SectionTitle title="Thông tin tài chính" />
@@ -473,6 +492,7 @@ const ApplyPage = () => {
         onClose={handleRejectedAdvisorClose}
         onCancel={handleRejectedAdvisorClose}
         onConfirm={handleRejectedAdvisorConfirm}
+        onSubmitAnother={handleRejectedAdvisorSubmitAnother}
       />
 
       {/* ── Modal: SUCCESS ───────────────────────────────────── */}
