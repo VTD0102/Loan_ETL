@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import Modal from '../../common/Modal'
 import LoadingSpinner from '../../common/LoadingSpinner'
 import { buildLoanAdjustmentViewModel } from '../LoanAdjustmentActionCard/loanAdjustment'
+import { getScoreBand } from '../../common/CreditScorePanel'
 
 const percentLabel = (value) => `${((Number(value) || 0) * 100).toFixed(1)}%`
 
@@ -180,6 +181,32 @@ const RejectedRagAdvisorModal = ({
                 <div className="h-2 rounded-full bg-danger-500" style={{ width: `${dtiPercent}%` }} />
               </div>
             </div>
+
+            {evaluation?.fico_score && (() => {
+              const score = evaluation.fico_score
+              const band  = getScoreBand(score)
+              const BAND_STYLE = {
+                Excellent: { color: '#15803d', bg: 'bg-green-50',  label: 'Xuất sắc' },
+                Good:      { color: '#1d4ed8', bg: 'bg-blue-50',   label: 'Tốt' },
+                Fair:      { color: '#b45309', bg: 'bg-amber-50',  label: 'Trung bình' },
+                Poor:      { color: '#b91c1c', bg: 'bg-red-50',    label: 'Yếu' },
+              }
+              const s = BAND_STYLE[band] || BAND_STYLE.Poor
+              const pct = Math.min(100, Math.max(0, ((score - 300) / 550) * 100))
+              return (
+                <div className={`rounded-lg ${s.bg} p-3`}>
+                  <p className="text-xs text-gray-500 mb-1">Điểm tín dụng scorecard</p>
+                  <div className="flex items-end gap-1.5">
+                    <span className="text-2xl font-bold" style={{ color: s.color }}>{score}</span>
+                    <span className="text-xs text-gray-400 mb-0.5">/ 850</span>
+                  </div>
+                  <div className="mt-2 h-1.5 rounded-full bg-white/70 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: s.color }} />
+                  </div>
+                  <p className="mt-1 text-xs font-semibold" style={{ color: s.color }}>{s.label}</p>
+                </div>
+              )
+            })()}
 
             <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-600">
               RAG giữ nguyên hồ sơ gốc và chỉ mô phỏng lại <strong>số tiền vay</strong> cùng <strong>kỳ hạn</strong>.

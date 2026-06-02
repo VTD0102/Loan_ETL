@@ -326,6 +326,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         "computed_dti":        computed_dti,
         "cic_summary":         cic_summary,
         "existing_monthly_debt": existing_monthly_debt,
+        "fico_score":          new_app.fico_score,
     }
 
 
