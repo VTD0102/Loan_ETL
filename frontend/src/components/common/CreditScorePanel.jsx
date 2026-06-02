@@ -23,7 +23,7 @@ const CreditScorePanel = ({ score }) => {
   const pct  = clamp(((s - 300) / 550) * 100, 0, 100)
 
   return (
-    <div className={`${meta.bg} rounded-xl p-5 max-w-sm`}>
+    <div className={`${meta.bg} rounded-xl p-5 w-full`}>
       <p className="text-xs text-gray-500 mb-1">Điểm tín dụng scorecard</p>
       <div className="flex items-end gap-2">
         <p className={`text-4xl font-bold ${meta.text}`}>{s}</p>
