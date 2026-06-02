@@ -6,11 +6,7 @@
 
 Sau khi mô hình học máy đưa ra xác suất vỡ nợ và phân loại rủi ro (Chương IV), khách hàng vẫn đối diện một khoảng cách nhận thức: con số `P(default) = 0.30` hay trạng thái `AUTO_REJECTED` tự thân không giải thích được **vì sao** hồ sơ bị đánh giá như vậy, và **làm gì** để cải thiện. CreditIntel giải quyết khoảng cách này bằng một **trợ lý hội thoại** đặt trên kiến trúc **RAG (Retrieval-Augmented Generation)**.
 
-RAG là kỹ thuật ghép một mô hình ngôn ngữ lớn (LLM) với một kho tri thức bên ngoài: thay vì để LLM trả lời hoàn toàn dựa trên tham số huấn luyện sẵn có (dễ "bịa" — hallucination), hệ thống **truy xuất** các đoạn tài liệu liên quan rồi **nạp** chúng vào prompt như bằng chứng để LLM căn cứ vào đó mà sinh câu trả lời. Với một sản phẩm tài chính, đây không phải lựa chọn tùy nghi mà là yêu cầu bắt buộc, vì ba lý do:
-
-1. **Tính trung thực và truy nguồn (Grounding & Citation):** Mọi phát ngôn về chính sách (hạn mức, ngưỡng rủi ro, quy trình xét duyệt) phải bắt nguồn từ tài liệu chính thức `policy.md` / `faq.md`, và phải trích rõ nguồn — không được để LLM tự "sáng tác" chính sách.
-2. **Cá nhân hóa theo hồ sơ thật:** Trợ lý phải trả lời dựa trên **đúng** đơn vay của khách hàng đang đăng nhập (số tiền, DTI, điểm tín dụng, kết quả ML), chứ không phải lời khuyên tài chính chung chung.
-3. **An toàn và ranh giới:** Trợ lý tuyệt đối không được hứa duyệt vay, không được rò rỉ dữ liệu khách hàng khác hay cấu trúc nội bộ, và phải từ chối lịch sự các câu hỏi ngoài phạm vi.
+RAG là kỹ thuật ghép một mô hình ngôn ngữ lớn (LLM) với một kho tri thức bên ngoài: thay vì để LLM trả lời hoàn toàn dựa trên tham số huấn luyện sẵn có, vốn dễ sinh ra hiện tượng "bịa" thông tin (hallucination), hệ thống truy xuất các đoạn tài liệu liên quan rồi nạp chúng vào prompt như bằng chứng để LLM căn cứ vào đó mà sinh câu trả lời. Với một sản phẩm tài chính, đây không phải một lựa chọn tùy nghi mà là yêu cầu bắt buộc, xuất phát từ ba lý do gắn bó chặt với nhau. Lý do đầu tiên là tính trung thực và truy nguồn (grounding và citation): mọi phát ngôn về chính sách, từ hạn mức tới ngưỡng rủi ro hay quy trình xét duyệt, đều phải bắt nguồn từ tài liệu chính thức `policy.md` và `faq.md` cùng trích dẫn rõ nguồn, tuyệt đối không để LLM tự sáng tác chính sách. Lý do thứ hai là cá nhân hóa theo hồ sơ thật: trợ lý phải trả lời dựa trên đúng đơn vay của khách hàng đang đăng nhập với số tiền, DTI, điểm tín dụng và kết quả ML cụ thể, chứ không phải đưa ra lời khuyên tài chính chung chung. Lý do thứ ba là an toàn và ranh giới: trợ lý không bao giờ được hứa duyệt vay, không được rò rỉ dữ liệu của khách hàng khác hay cấu trúc nội bộ của hệ thống, và phải từ chối một cách lịch sự những câu hỏi nằm ngoài phạm vi.
 
 Khác với một chatbot FAQ thông thường, trợ lý CreditIntel là một **RAG có trạng thái, có công cụ (tool-augmented) và có ý thức bảo mật**: nó nhớ hội thoại, hiểu ý định người dùng, có thể tự mô phỏng phương án nộp lại đơn vay, và được bao bọc bởi hai lớp guardrail vào/ra. Toàn bộ mã nguồn nằm trong gói `backend/rag/` (pipeline) và `backend/services/chat_service.py` (điều phối).
 
@@ -44,10 +40,7 @@ Truy xuất hybrid trả về một tập **ứng viên rộng** (20 chunk) đư
 
 ### 5.2.5 Chunking — và bài toán Parent-Child
 
-Cắt tài liệu là một đánh đổi kinh điển:
-
-- **Chunk nhỏ** → embedding "đậm đặc" ngữ nghĩa, truy xuất chính xác, nhưng **thiếu ngữ cảnh** khi đưa cho LLM.
-- **Chunk lớn** → giàu ngữ cảnh cho LLM, nhưng embedding bị "loãng", truy xuất kém nhạy.
+Cắt tài liệu là một đánh đổi kinh điển giữa độ chính xác truy xuất và độ giàu ngữ cảnh. Khi cắt thành các đoạn nhỏ, embedding trở nên đậm đặc về ngữ nghĩa nên truy xuất rất chính xác, nhưng bản thân đoạn lại thiếu ngữ cảnh khi đưa cho LLM. Ngược lại, khi cắt thành các đoạn lớn, đoạn văn giàu ngữ cảnh cho LLM nhưng embedding bị loãng, khiến việc truy xuất kém nhạy. Hai mục tiêu này kéo về hai hướng đối nghịch, và đó chính là bài toán mà kỹ thuật parent-child sinh ra để giải.
 
 **Parent-Child Chunking** hóa giải mâu thuẫn này: tài liệu được cắt thành các đoạn lớn (**parent**) giàu ngữ cảnh, rồi mỗi parent lại cắt tiếp thành các đoạn nhỏ (**child**). Hệ thống **đánh chỉ mục và tìm kiếm trên child** (chính xác), nhưng **trả về parent** cho LLM (đầy đủ ngữ cảnh). Đây là kỹ thuật trung tâm của giai đoạn ingest, trình bày chi tiết ở mục 5.5.
 
