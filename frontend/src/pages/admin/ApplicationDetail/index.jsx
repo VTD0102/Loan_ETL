@@ -160,18 +160,24 @@ const AdminApplicationDetailPage = () => {
     { label: 'Tuổi',                        value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
     { label: 'Trình độ học vấn',            value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
     { label: 'Tình trạng hôn nhân',         value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Chưa kết hôn') : '—' },
+    { label: 'Thu nhập xác minh',           value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
   ]
 
+  const snap = app.feature_snapshot ?? {}
   const bureauInfo = [
-    { label: 'Số hồ sơ tín dụng',  value: app.num_bureau_records ?? '—' },
-    { label: 'Tín dụng đang hoạt động', value: app.num_active_credit ?? '—' },
-    { label: 'Tổng dư nợ CIC',     value: app.feature_snapshot?.cic_outstanding_debt != null ? formatCurrency(app.feature_snapshot.cic_outstanding_debt) : '—' },
-    { label: 'Nghĩa vụ nợ hàng tháng', value: app.feature_snapshot?.cic_monthly_installment != null ? formatCurrency(app.feature_snapshot.cic_monthly_installment) : '—' },
-    { label: 'Tổng nợ quá hạn',    value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
-    { label: 'Số ngày quá hạn (max)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
-    { label: 'Nợ xấu',             value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
-    { label: 'Thu nhập xác minh',  value: app.income_verifiable_flag != null ? (app.income_verifiable_flag ? 'Có' : 'Không') : '—' },
-    { label: 'Danh sách đen',      value: app.feature_snapshot?.cic_blacklisted != null ? (app.feature_snapshot.cic_blacklisted ? 'Có' : 'Không') : '—' },
+    { label: 'Số hồ sơ tín dụng',            value: app.num_bureau_records ?? '—' },
+    { label: 'Tín dụng đang hoạt động',       value: app.num_active_credit ?? '—' },
+    { label: 'Tổng dư nợ CIC',               value: snap.cic_outstanding_debt != null ? formatCurrency(snap.cic_outstanding_debt) : '—' },
+    { label: 'Nghĩa vụ nợ hàng tháng',       value: snap.cic_monthly_installment != null ? formatCurrency(snap.cic_monthly_installment) : '—' },
+    { label: 'Tổng nợ quá hạn',              value: app.total_overdue_amount != null ? formatCurrency(app.total_overdue_amount) : '—' },
+    { label: 'Số ngày quá hạn tối đa (24m)', value: app.max_credit_overdue_days != null ? `${app.max_credit_overdue_days} ngày` : '—' },
+    { label: 'DPD trung bình gần đây',        value: snap.avg_dpd_recent != null ? snap.avg_dpd_recent.toFixed(1) + ' ngày' : '—' },
+    { label: 'Kỳ quá hạn >10 ngày',          value: snap.num_installs_dpd10 ?? '—' },
+    { label: 'Số tra cứu tín dụng',           value: snap.num_cb_queries ?? '—' },
+    { label: 'Tra cứu trong 30 ngày',         value: snap.cb_queries_30d ?? '—' },
+    { label: 'Số lần gia hạn khoản vay',      value: snap.total_prolongations ?? '—' },
+    { label: 'Nợ xấu',                       value: app.has_bad_debt != null ? (app.has_bad_debt ? 'Có' : 'Không') : '—' },
+    { label: 'Danh sách đen',                value: snap.cic_blacklisted != null ? (snap.cic_blacklisted ? 'Có' : 'Không') : '—' },
   ]
   
   const isCicApplied = app.feature_snapshot?.cic_applied

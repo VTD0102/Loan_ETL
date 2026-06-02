@@ -244,6 +244,9 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         bureau_features = cic_service.derive_bureau_features(cic_record)
         if bureau_features:
             cic_comparison["bureau_derived"] = bureau_features
+            # Use 24m DPD from loan_history (proper window) instead of CIC's 12m field.
+            if bureau_features.get("max_dpd_24m") is not None:
+                payload.max_credit_overdue_days = int(bureau_features["max_dpd_24m"])
         logger.info("CIC enrichment applied for %s", user.email)
 
     # ── Build CIC summary for frontend display ──
@@ -402,6 +405,8 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
             bureau_features = cic_service.derive_bureau_features(cic_record)
             if bureau_features:
                 cic_comparison["bureau_derived"] = bureau_features
+                if bureau_features.get("max_dpd_24m") is not None:
+                    payload.max_credit_overdue_days = int(bureau_features["max_dpd_24m"])
 
     payload.cic_monthly_installment = Decimal(str(existing_monthly_debt))
     payload.dti = None
