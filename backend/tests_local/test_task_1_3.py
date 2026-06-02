@@ -8,12 +8,18 @@ try:
     resp = client.get("/health")
     print("Health response:", resp.status_code, resp.text)
     
+    import random
+    cccd = f"079099{random.randint(100000, 999999)}"
     # 1. Register
     print("\n--- Registering User ---")
     resp = client.post("/auth/register", json={
         "email": "user13@gmail.com",
         "username": "user13",
-        "password": "123"
+        "password": "123",
+        "cccd": cccd,
+        "full_name": "User Thirteen",
+        "phone": "0901234567",
+        "address": "123 Test St"
     })
     print(resp.status_code, resp.text)
     if resp.status_code not in (201, 400): exit(1)
