@@ -54,6 +54,7 @@ class LoanApplication(Base):
     default_probability: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
     risk_level: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     risk_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    fico_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Scorecard LR, 300–850
     recommended_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
     recommended_term: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     model_version: Mapped[Optional[str]] = mapped_column(String, nullable=True)

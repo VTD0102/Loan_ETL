@@ -85,11 +85,12 @@ class RerankedRetriever:
         _rerank_call_count += 1
         try:
             return self.reranker.rerank(query, candidates, self.top_k)
-        except Exception:
+        except Exception as exc:
             _rerank_fallback_count += 1
-            logger.exception(
-                "Reranker failed (fallback %d/%d), returning raw candidates",
+            logger.warning(
+                "Reranker failed (fallback %d/%d), returning raw candidates: %s",
                 _rerank_fallback_count, _rerank_call_count,
+                exc,
             )
             return candidates[: self.top_k]
 
@@ -176,33 +177,43 @@ def get_retriever():
                     timeout=settings.rag_embedding_timeout_seconds,
                     max_retries=settings.rag_embedding_max_retries,
                 )
-                sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
-
+                retrieval_mode = RetrievalMode.HYBRID
+                sparse_embeddings = None
                 try:
-                    client = QdrantClient(
-                        url=QDRANT_URL,
-                        api_key=QDRANT_API_KEY,
-                        timeout=settings.rag_qdrant_timeout_seconds,
-                    )
-                    vectorstore = QdrantVectorStore(
-                        client=client,
-                        collection_name=QDRANT_COLLECTION,
-                        embedding=embeddings,
-                        sparse_embedding=sparse_embeddings,
-                        retrieval_mode=RetrievalMode.HYBRID,
-                        vector_name="dense",
-                        sparse_vector_name="sparse",
-                    )
-                    hybrid = vectorstore.as_retriever(search_kwargs={"k": RERANKER_CANDIDATE_K})
+                    sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
                 except Exception as exc:
+                    retrieval_mode = RetrievalMode.DENSE
                     logger.warning(
-                        "Could not connect to Qdrant at %s (%s). Falling back to resilient dummy retriever. "
-                        "Troubleshooting: Did you forget to start Qdrant via Docker? "
-                        "(Command: docker run -p 6333:6333 -p 6334:6334 -v qdrant_storage:/qdrant/storage qdrant/qdrant)",
-                        QDRANT_URL, exc
+                        "Sparse BM25 embeddings unavailable; falling back to dense retrieval: %s",
+                        exc,
                     )
-                    hybrid = SelfHealingHybridRetriever(embeddings, sparse_embeddings)
-
-                reranked = RerankedRetriever(hybrid, reranker=get_reranker(), top_k=RERANKER_TOP_K)
+                client = QdrantClient(
+                    url=QDRANT_URL,
+                    api_key=QDRANT_API_KEY,
+                    timeout=settings.rag_qdrant_timeout_seconds,
+                )
+                vectorstore_kwargs = {
+                    "client": client,
+                    "collection_name": QDRANT_COLLECTION,
+                    "embedding": embeddings,
+                    "retrieval_mode": retrieval_mode,
+                    "vector_name": "dense",
+                }
+                if sparse_embeddings is not None:
+                    vectorstore_kwargs.update(
+                        {
+                            "sparse_embedding": sparse_embeddings,
+                            "sparse_vector_name": "sparse",
+                        }
+                    )
+                vectorstore = QdrantVectorStore(**vectorstore_kwargs)
+                base_retriever = vectorstore.as_retriever(
+                    search_kwargs={"k": RERANKER_CANDIDATE_K}
+                )
+                reranked = RerankedRetriever(
+                    base_retriever,
+                    reranker=get_reranker(),
+                    top_k=RERANKER_TOP_K,
+                )
                 _retriever = ParentDocumentRetriever(reranked, max_parent_docs=TOP_K)
     return _retriever

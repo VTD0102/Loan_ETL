@@ -121,6 +121,7 @@ class ApplicationRead(BaseModel):
     default_probability: Optional[Decimal] = None
     risk_level: Optional[str] = None
     risk_score: Optional[int] = None
+    fico_score: Optional[int] = None
     recommended_amount: Optional[Decimal] = None
     recommended_term: Optional[int] = None
     model_version: Optional[str] = None

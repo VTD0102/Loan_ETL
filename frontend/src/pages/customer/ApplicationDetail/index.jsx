@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getApplicationById, getApplicationCreditScore } from '../../../services/applications'
+import { getApplicationById } from '../../../services/applications'
 import { getMyCIC } from '../../../services/cic'
 import { StatusBadge, RiskBadge } from '../../../components/common/Badge'
 import ApplicationTimeline from '../../../components/customer/ApplicationTimeline'
@@ -215,7 +215,6 @@ const ApplicationDetailPage = () => {
   const { id }   = useParams()
   const navigate = useNavigate()
   const [app, setApp]       = useState(null)
-  const [scorecard, setScorecard] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(null)
   const [contractOpen, setContractOpen] = useState(false)
@@ -227,12 +226,6 @@ const ApplicationDetailPage = () => {
       try {
         const res = await getApplicationById(id)
         setApp(res.data)
-        try {
-          const scoreRes = await getApplicationCreditScore(id)
-          setScorecard(scoreRes.data)
-        } catch {
-          setScorecard(null)
-        }
       } catch (err) {
         setError(err.response?.status === 404 ? 'Không tìm thấy đơn vay.' : 'Không thể tải dữ liệu.')
       } finally {
@@ -274,13 +267,34 @@ const ApplicationDetailPage = () => {
 
   const isCicApplied = app.feature_snapshot?.cic_applied
 
-  const loanInfo = [
-    { label: 'Số tiền vay',          value: formatCurrency(app.loan_amount)    },
-    { label: 'Kỳ hạn',              value: `${app.term} tháng`                 },
-    { label: 'Thu nhập hàng tháng', value: formatCurrency(app.monthly_income)  },
-    { label: 'Tình trạng nhà',      value: app.is_homeowner ? 'Có nhà' : 'Không có nhà' },
-    { label: 'Việc làm',            value: app.employment_status               },
-    { label: 'Mục đích vay',        value: app.listing_category                },
+  const EDUCATION_LABEL = { 1: 'Dưới THPT', 2: 'THPT', 3: 'Cao đẳng', 4: 'Đại học', 5: 'Sau đại học' }
+  const OCCUPATION_LABEL = {
+    EMPLOYED: 'Nhân viên hưởng lương',
+    PRIVATE_SECTOR_EMPLOYEE: 'Nhân viên khu vực tư nhân',
+    SALARIED_GOVT: 'Công chức / nhà nước',
+    SELFEMPLOYED: 'Tự kinh doanh',
+    RETIRED_PENSIONER: 'Hưu trí',
+    OTHER: 'Khác / chưa xác định',
+  }
+
+  // Nhóm 1 — Thông tin tài chính (khớp thứ tự form)
+  const financialInfo = [
+    { label: 'Thu nhập hàng tháng (USD)', value: formatCurrency(app.monthly_income) },
+    { label: 'Số tiền muốn vay (USD)',    value: formatCurrency(app.loan_amount) },
+    { label: 'Kỳ hạn vay',               value: `${app.term} tháng` },
+    { label: 'Mục đích vay',             value: app.listing_category },
+    { label: 'Có nhà riêng không?',      value: app.is_homeowner ? 'Có' : 'Không' },
+    { label: 'DTI (tỷ lệ nợ/thu nhập)', value: app.dti != null ? `${(Number(app.dti) * 100).toFixed(1)}%` : '—' },
+  ]
+
+  // Nhóm 2 — Thông tin cá nhân (khớp thứ tự form)
+  const personalInfo = [
+    { label: 'Tình trạng việc làm',        value: app.employment_status },
+    { label: 'Loại thu nhập',              value: OCCUPATION_LABEL[app.occupation_type] ?? app.occupation_type ?? '—' },
+    { label: 'Số năm kinh nghiệm làm việc', value: app.years_employed != null ? `${Math.floor(app.years_employed)} năm` : '—' },
+    { label: 'Tuổi',                       value: app.age_years != null ? `${app.age_years} tuổi` : '—' },
+    { label: 'Trình độ học vấn',           value: EDUCATION_LABEL[app.education_ordinal] ?? '—' },
+    { label: 'Tình trạng hôn nhân',        value: app.is_married_flag != null ? (app.is_married_flag ? 'Đã kết hôn' : 'Chưa kết hôn') : '—' },
   ]
 
   return (
@@ -349,15 +363,20 @@ const ApplicationDetailPage = () => {
             </SectionCard>
           )}
 
-          {scorecard && (
+          {app.fico_score && (
             <SectionCard title="Điểm tín dụng scorecard">
-              <CreditScorePanel scorecard={scorecard} />
+              <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}
 
-          {/* Loan Info */}
-          <SectionCard title="Thông tin đơn vay">
-            <InfoGrid items={loanInfo} />
+          {/* Nhóm 1 — Thông tin tài chính */}
+          <SectionCard title="Thông tin tài chính">
+            <InfoGrid items={financialInfo} />
+          </SectionCard>
+
+          {/* Nhóm 2 — Thông tin cá nhân */}
+          <SectionCard title="Thông tin cá nhân">
+            <InfoGrid items={personalInfo} />
           </SectionCard>
 
           {/* CIC Section */}

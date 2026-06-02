@@ -13,6 +13,11 @@ class FakeSparse:
         _captured["sparse"] = {"model_name": model_name}
 
 
+class FailingSparse:
+    def __init__(self, model_name):
+        raise RuntimeError("sparse model download failed")
+
+
 class FakeQdrantClient:
     def __init__(self, **kwargs):
         pass
@@ -30,6 +35,8 @@ class FakeVectorStore(Runnable):
 
 
 def test_retriever_uses_hybrid_mode_with_fastembed_sparse():
+    _captured["vectorstore"] = None
+    _captured["sparse"] = None
     retriever_mod._retriever = None
     original_vs = retriever_mod.QdrantVectorStore
     original_client = retriever_mod.QdrantClient
@@ -61,6 +68,35 @@ def test_retriever_uses_hybrid_mode_with_fastembed_sparse():
     assert _captured["sparse"]["model_name"] == settings.rag_bm25_model
 
 
+def test_retriever_falls_back_to_dense_when_sparse_model_fails():
+    _captured["vectorstore"] = None
+    _captured["sparse"] = None
+    retriever_mod._retriever = None
+    original_vs = retriever_mod.QdrantVectorStore
+    original_client = retriever_mod.QdrantClient
+    original_sparse = retriever_mod.FastEmbedSparse
+    original_embeddings = retriever_mod.OpenAIEmbeddings
+    retriever_mod.QdrantVectorStore = FakeVectorStore
+    retriever_mod.QdrantClient = FakeQdrantClient
+    retriever_mod.FastEmbedSparse = FailingSparse
+    retriever_mod.OpenAIEmbeddings = lambda **kw: object()
+    try:
+        retriever_mod.get_retriever()
+    finally:
+        retriever_mod.QdrantVectorStore = original_vs
+        retriever_mod.QdrantClient = original_client
+        retriever_mod.FastEmbedSparse = original_sparse
+        retriever_mod.OpenAIEmbeddings = original_embeddings
+        retriever_mod._retriever = None
+
+    vs_kwargs = _captured["vectorstore"]
+    assert vs_kwargs is not None, "QdrantVectorStore was not instantiated"
+    assert "sparse_embedding" not in vs_kwargs
+    assert getattr(vs_kwargs["retrieval_mode"], "name", str(vs_kwargs["retrieval_mode"])) == "DENSE"
+    assert vs_kwargs.get("vector_name") == "dense"
+
+
 if __name__ == "__main__":
     test_retriever_uses_hybrid_mode_with_fastembed_sparse()
+    test_retriever_falls_back_to_dense_when_sparse_model_fails()
     print("rag retriever hybrid config tests passed")

@@ -99,8 +99,8 @@ def invoke(
 
         try:
             documents = _retrieve_documents(retrieval_query)
-        except RetrievalError:
-            logger.exception("Retrieval failed, continuing without docs")
+        except RetrievalError as exc:
+            logger.warning("Retrieval failed, continuing without docs: %s", exc)
             documents = []
         except RAGTimeoutError:
             logger.warning("Retrieval timed out, continuing without docs")

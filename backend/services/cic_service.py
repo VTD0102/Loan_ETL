@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 from typing import Optional
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -60,6 +61,8 @@ def create_bureau_profile_if_missing(bureau_db: Session, cccd: str, full_name: s
         total_overdue_amount=cic_data.get("total_overdue_amount", 0),
         max_dpd_12m=cic_data.get("max_dpd_12m", 0),
         num_credit_inquiries=cic_data.get("num_credit_inquiries", 0),
+        cb_queries_30d=cic_data.get("cb_queries_30d", 0),
+        total_prolongations=cic_data.get("total_prolongations", 0),
         bad_debt_flag=cic_data.get("bad_debt_flag", False),
         blacklist_flag=cic_data.get("blacklist_flag", False),
         blacklist_reason=cic_data.get("blacklist_reason"),
@@ -97,18 +100,14 @@ def enrich_from_cic(cic: CICRecord) -> CICEnrichmentResult:
 
 def derive_bureau_features(cic: CICRecord) -> dict:
     """
-    Derive ML-internal bureau features from CIC mock data so they vary across
-    applicants instead of falling through to artifact defaults at inference.
+    Derive ML-internal bureau features from CIC mock data.
 
-    Returns a dict of feature_name → value. Keys that cannot be derived from
-    the current CIC schema (e.g. `cb_queries_30d`, `total_prolongations`) are
-    omitted and will fall through to `feature_defaults` in `build_model_input`.
+    Returns a dict of feature_name → value consumed by both LightGBM
+    (build_model_input) and Scorecard (_score_application).
 
-    Approximation note: mock `loan_history` entries are `{lender, amount,
-    status, dpd_max}` with no `opened_at`/`closed_at`, so windowed metrics
-    (`avg_dpd_recent`, `max_dpd_24m`) collapse to "all loans in history".
-    Good enough to break the constant-default behavior; not a substitute
-    for retraining on data with matching distribution.
+    Window handling: entries with `opened_at`/`closed_at` use proper
+    3-month (avg_dpd_recent) and 24-month (max_dpd_24m) windows.
+    Entries without timestamps fall back to the full loan history.
     """
     out: dict = {}
 
@@ -116,16 +115,69 @@ def derive_bureau_features(cic: CICRecord) -> dict:
     if cic.num_credit_inquiries is not None:
         out["num_cb_queries"] = int(cic.num_credit_inquiries)
 
+    if cic.cb_queries_30d is not None:
+        out["cb_queries_30d"] = int(cic.cb_queries_30d)
+
+    if cic.total_prolongations is not None:
+        out["total_prolongations"] = int(cic.total_prolongations)
+
     history = cic.loan_history or []
     if not history:
         return out
 
-    dpds = [int(loan.get("dpd_max") or 0) for loan in history]
+    now = datetime.now()
+    
+    # 3-month window for avg_dpd_recent
+    cutoff_3m = now - timedelta(days=90)
+    dpds_3m = []
+    
+    # 24-month window for max_dpd_24m
+    cutoff_24m = now - timedelta(days=365 * 2)
+    dpds_24m = []
+    
+    # All dpds for num_installs_dpd10
+    all_dpds = []
 
-    if dpds:
-        out["avg_dpd_recent"] = sum(dpds) / len(dpds)
-        out["max_dpd_24m"] = max(dpds)
-        out["num_installs_dpd10"] = sum(1 for d in dpds if d > 10)
+    for loan in history:
+        dpd = int(loan.get("dpd_max") or 0)
+        all_dpds.append(dpd)
+        
+        opened_at_str = loan.get("opened_at")
+        closed_at_str = loan.get("closed_at")
+        
+        if opened_at_str:
+            try:
+                opened_at = datetime.fromisoformat(opened_at_str)
+                closed_at = datetime.fromisoformat(closed_at_str) if closed_at_str else now
+                
+                if opened_at >= cutoff_24m or closed_at >= cutoff_24m:
+                    dpds_24m.append(dpd)
+                
+                # Active in last 3 months
+                if opened_at >= cutoff_3m or closed_at >= cutoff_3m:
+                    dpds_3m.append(dpd)
+            except ValueError:
+                # Fallback if unparseable
+                dpds_24m.append(dpd)
+                dpds_3m.append(dpd)
+        else:
+            # Fallback for old records without timestamps
+            dpds_24m.append(dpd)
+            dpds_3m.append(dpd)
+
+    # Use 3m window if available, else fallback to all
+    if dpds_3m:
+        out["avg_dpd_recent"] = sum(dpds_3m) / len(dpds_3m)
+    elif all_dpds:
+        out["avg_dpd_recent"] = sum(all_dpds) / len(all_dpds)
+
+    if dpds_24m:
+        out["max_dpd_24m"] = max(dpds_24m)
+    elif all_dpds:
+        out["max_dpd_24m"] = max(all_dpds)
+
+    if all_dpds:
+        out["num_installs_dpd10"] = sum(1 for d in all_dpds if d > 10)
 
     overdue_amounts = [
         float(loan.get("amount") or 0)
