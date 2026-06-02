@@ -191,9 +191,15 @@ const RejectedRagAdvisorModal = ({
         <section className="min-w-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="text-base font-semibold text-gray-950">3 khoản vay phù hợp</h3>
+              <h3 className="text-base font-semibold text-gray-950">
+                {options.length === 1 && selectedOption?.defaultProbability > 0.4
+                  ? 'Phương án tối ưu (cần duyệt thủ công)'
+                  : '3 khoản vay phù hợp'}
+              </h3>
               <p className="mt-1 text-sm text-gray-500">
-                Chọn một phương án. Khi bạn đồng ý, RAG sẽ nộp lại hồ sơ mới từ đơn bị từ chối.
+                {options.length === 1 && selectedOption?.defaultProbability > 0.4
+                  ? 'Không tìm thấy gói vay nào tự động duyệt. Đây là phương án tốt nhất hiện tại.'
+                  : 'Chọn một phương án. Khi bạn đồng ý, RAG sẽ nộp lại hồ sơ mới từ đơn bị từ chối.'}
               </p>
             </div>
             {model && (
@@ -271,6 +277,17 @@ const RejectedRagAdvisorModal = ({
                       </button>
                     )
                   })}
+                </div>
+              )}
+
+              {selectedOption && selectedOption.defaultProbability > 0.4 && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
+                  <svg className="w-5 h-5 flex-shrink-0 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div>
+                    <span className="font-bold">Cảnh báo rủi ro:</span> Phương án đề xuất này có xác suất vỡ nợ là <span className="font-bold text-red-600">{percentLabel(selectedOption.defaultProbability)}</span> (vượt ngưỡng tự động duyệt 40.0%). Hồ sơ sẽ cần quản trị viên duyệt thủ công nếu khách hàng quyết định nộp lại.
+                  </div>
                 </div>
               )}
             </>

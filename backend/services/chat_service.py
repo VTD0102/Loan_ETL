@@ -667,7 +667,6 @@ def _is_loan_adjustment_request(message: str) -> bool:
         and (has_direct_action or has_term_question or has_adjustment_wording)
     ) or (
         has_resubmit
-        and (has_help_action or has_personal_action)
     )
 
 
@@ -700,7 +699,16 @@ def _format_loan_adjustment_context(
             f"- Mức rủi ro: {best.risk_level}",
         ])
     
-    if result.proposal is not None:
+    if result.proposal is not None and result.status == "fallback_proposal":
+        lines.append(
+            "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống KHÔNG tìm được khoản vay nào dưới ngưỡng tự động duyệt (40%). "
+            "Phương án trên là TỐT NHẤT hiện có nhưng vẫn có rủi ro cao và cần admin xét duyệt thủ công. "
+            "Hãy trình bày phương án cho khách hàng, CẢNH BÁO rõ rằng xác suất vỡ nợ vẫn trên ngưỡng an toàn, "
+            "và hồ sơ sẽ cần admin duyệt thủ công (không tự động duyệt). "
+            "Hướng dẫn họ nhắn 'Đồng ý', 'Xác nhận' để nộp lại; nhắn 'Hủy' để bỏ qua. "
+            "Cũng gợi ý khách hàng cải thiện hồ sơ (tăng thu nhập, giảm nợ CIC) trước khi nộp lại."
+        )
+    elif result.proposal is not None:
         lines.append(
             "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống vừa thiết lập các phương án nộp lại đang chờ xác nhận. "
             "Bạn CÓ THỂ nộp lại khoản vay đã chọn thay khách hàng. Hãy thông báo 3 phương án đề xuất ở trên cho khách hàng "

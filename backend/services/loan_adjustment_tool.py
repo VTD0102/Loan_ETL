@@ -15,6 +15,7 @@ from services.model_feature_builder import fetch_previous_applications, infer_ex
 SUPPORTED_TERMS = (12, 24, 36, 48, 60)
 AUTO_REVIEW_THRESHOLD = 0.4
 PENDING_ACTION_TTL_MINUTES = 30
+_MIN_LOAN_AMOUNT = 500
 
 
 @dataclass(frozen=True)
@@ -96,10 +97,10 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
                 continue
 
             term_distance = abs(int(term) - int(app.term))
-            # Product choice: keep the original requested amount when possible;
-            # only reduce amount if no original-amount candidate passes.
+            # Priority: extend term first (keep original amount), reduce amount second.
+            is_reduced_amount = 0 if amount == _to_decimal(app.loan_amount) else 1
             rank = (
-                amount_index,
+                is_reduced_amount,
                 proposal.default_probability,
                 term_distance,
                 int(term),
@@ -107,6 +108,21 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
             passing.append((rank, proposal))
 
     if not passing:
+        # Fallback: suggest the best observed option even if it exceeds auto-review threshold.
+        # This ensures we always suggest SOMETHING instead of "no option available".
+        if best_observed is not None:
+            return LoanAdjustmentResult(
+                status="fallback_proposal",
+                source_application_id=str(app.id),
+                current_loan_amount=app.loan_amount,
+                current_term=app.term,
+                current_default_probability=_float_or_none(app.default_probability),
+                proposal=best_observed,
+                best_observed=best_observed,
+                message="Không tìm được khoản vay nào dưới ngưỡng tự động duyệt. "
+                        "Đây là phương án tốt nhất hiện có (vẫn cần admin xét duyệt thủ công).",
+                proposals=[best_observed],
+            )
         return LoanAdjustmentResult(
             status="no_passing_option",
             source_application_id=str(app.id),
@@ -119,7 +135,7 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
         )
 
     passing.sort(key=lambda item: item[0])
-    proposal_options = [proposal for _, proposal in passing[:3]]
+    proposal_options = _diversify_proposals(passing, app)
     return LoanAdjustmentResult(
         status="proposal",
         source_application_id=str(app.id),
@@ -270,6 +286,51 @@ def _proposal_to_action_payload(proposal: LoanAdjustmentProposal) -> dict[str, A
     }
 
 
+def _diversify_proposals(
+    passing: list[tuple[tuple, LoanAdjustmentProposal]],
+    app: Any,
+) -> list[LoanAdjustmentProposal]:
+    """Select up to 3 diverse proposals: prioritize term-extend, then amount-reduce, then best overall."""
+    if len(passing) <= 3:
+        return [proposal for _, proposal in passing]
+
+    original_amount = _to_decimal(app.loan_amount)
+    result: list[LoanAdjustmentProposal] = []
+    used_indices: set[int] = set()
+
+    # Slot 1: Best option keeping original amount (extend term strategy)
+    for i, (rank, proposal) in enumerate(passing):
+        if proposal.loan_amount == original_amount:
+            result.append(proposal)
+            used_indices.add(i)
+            break
+
+    # Slot 2: Best option with reduced amount (different strategy)
+    for i, (rank, proposal) in enumerate(passing):
+        if i not in used_indices and proposal.loan_amount != original_amount:
+            result.append(proposal)
+            used_indices.add(i)
+            break
+
+    # Slot 3: Best overall not yet selected (lowest probability)
+    for i, (rank, proposal) in enumerate(passing):
+        if i not in used_indices:
+            result.append(proposal)
+            used_indices.add(i)
+            break
+
+    # If we couldn't fill all 3 slots with diverse options, fill from top
+    if len(result) < 3:
+        for i, (rank, proposal) in enumerate(passing):
+            if i not in used_indices:
+                result.append(proposal)
+                used_indices.add(i)
+                if len(result) >= 3:
+                    break
+
+    return result
+
+
 def _latest_auto_rejected_application(db: Any, user_id: Any) -> LoanApplication | None:
     return (
         db.query(LoanApplication)
@@ -283,12 +344,22 @@ def _latest_auto_rejected_application(db: Any, user_id: Any) -> LoanApplication 
 
 
 def _candidate_amounts(app: Any) -> list[Decimal]:
-    amounts = [_to_decimal(app.loan_amount)]
+    original = _to_decimal(app.loan_amount)
+    amounts = [original]
     recommended = getattr(app, "recommended_amount", None)
     if recommended is not None:
         recommended_amount = _to_decimal(recommended)
-        if recommended_amount > 0 and recommended_amount != amounts[0]:
+        if recommended_amount > 0 and recommended_amount != original:
             amounts.append(recommended_amount)
+    # Add reduced amounts: 75%, 50%, 25% of original
+    for fraction in (Decimal("0.75"), Decimal("0.50"), Decimal("0.25")):
+        reduced = (original * fraction).quantize(Decimal("1"))
+        if reduced >= _MIN_LOAN_AMOUNT and reduced not in amounts:
+            amounts.append(reduced)
+    # Always include minimum loan amount as last resort
+    min_amount = _to_decimal(_MIN_LOAN_AMOUNT)
+    if min_amount not in amounts:
+        amounts.append(min_amount)
     return amounts
 
 

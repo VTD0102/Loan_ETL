@@ -13,7 +13,11 @@ try:
     resp = client.post("/auth/register", json={
         "email": "user13@gmail.com",
         "username": "user13",
-        "password": "123"
+        "password": "123",
+        "full_name": "User Thirteen",
+        "phone": "0987654321",
+        "cccd": "123456789012",
+        "address": "Hanoi, Vietnam"
     })
     print(resp.status_code, resp.text)
     if resp.status_code not in (201, 400): exit(1)
