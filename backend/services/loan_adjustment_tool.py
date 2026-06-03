@@ -27,6 +27,7 @@ class LoanAdjustmentProposal:
     risk_score: int
     model_version: str | None = None
     adjustment_strategy: str | None = None
+    rationale: str | None = None
 
 
 @dataclass(frozen=True)
@@ -276,16 +277,18 @@ def format_result_for_rag(result: LoanAdjustmentResult) -> str:
         return result.message
 
     proposals = result.proposals or [result.proposal]
-    option_lines = [
-        (
+    option_lines = []
+    for index, proposal in enumerate(proposals, start=1):
+        line = (
             f"Phương án {index} ({_strategy_text(proposal.adjustment_strategy)}): "
             f"số tiền {proposal.loan_amount}, "
             f"kỳ hạn {proposal.term} tháng, "
             f"xác suất vỡ nợ {proposal.default_probability:.2%}, "
             f"mức rủi ro {proposal.risk_level}."
         )
-        for index, proposal in enumerate(proposals, start=1)
-    ]
+        if proposal.rationale:
+            line += f" Lý do đề xuất: {proposal.rationale}"
+        option_lines.append(line)
     return f"{result.message}\n" + "\n".join(option_lines)
 
 
@@ -395,6 +398,8 @@ def _strategy_text(strategy: str | None) -> str:
         return "giảm số tiền vay"
     if strategy == "extend_term":
         return "tăng kỳ hạn"
+    if strategy == "both":
+        return "điều chỉnh số tiền và kỳ hạn"
     return "điều chỉnh khoản vay"
 
 
@@ -402,6 +407,7 @@ def _proposal_from_prediction(
     payload: ApplicationConfirm,
     prediction: dict[str, Any],
     strategy: str | None = None,
+    rationale: str | None = None,
 ) -> LoanAdjustmentProposal:
     return LoanAdjustmentProposal(
         loan_amount=_to_decimal(payload.loan_amount),
@@ -411,6 +417,7 @@ def _proposal_from_prediction(
         risk_score=int(prediction.get("risk_score") or 0),
         model_version=prediction.get("model_version"),
         adjustment_strategy=strategy,
+        rationale=rationale,
     )
 
 

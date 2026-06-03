@@ -579,6 +579,33 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
     assert payload.is_married_flag is False
 
 
+def test_format_result_includes_rationale_when_present():
+    proposal = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("30000"),
+        term=36,
+        default_probability=0.30,
+        risk_level="Medium",
+        risk_score=70,
+        model_version="test-model",
+        adjustment_strategy="reduce_amount",
+        rationale="DTI cao nên giảm số tiền",
+    )
+    result = tool.LoanAdjustmentResult(
+        status="proposal",
+        source_application_id="x",
+        current_loan_amount=Decimal("50000"),
+        current_term=12,
+        current_default_probability=0.55,
+        proposal=proposal,
+        best_observed=None,
+        message="msg",
+        proposals=[proposal],
+    )
+    text = tool.format_result_for_rag(result)
+    assert "DTI cao nên giảm số tiền" in text
+    assert "giảm số tiền vay" in text
+
+
 if __name__ == "__main__":
     test_tool_selects_passing_term_at_original_amount()
     test_pending_action_contains_three_proposal_options()
@@ -598,4 +625,5 @@ if __name__ == "__main__":
     test_build_pending_action_requires_proposal()
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()
     test_application_to_confirm_payload_defaults_legacy_nullable_fields()
+    test_format_result_includes_rationale_when_present()
     print("loan adjustment tool tests passed")
