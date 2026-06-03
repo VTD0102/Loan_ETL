@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     rag_reranker_candidate_k: int = 20
     rag_reranker_top_k: int = 12
 
+    # RAG loan adjustment reasoner (soft-propose / hard-verify)
+    rag_loan_reasoner_enabled: bool = True
+
     # RAG memory (V1: window + summary buffer)
     rag_memory_window_token_budget: int = 2000
     rag_memory_summary_max_tokens: int = 500
