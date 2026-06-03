@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "backend"))
 
 import services.loan_adjustment_tool as tool
+import services.loan_adjustment_reasoner as reasoner
 
 
 def _criterion_field(criterion):
@@ -102,12 +103,13 @@ def _rejected_app(**overrides):
     return SimpleNamespace(**data)
 
 
-def _patch_tool(predictions, validation_failures=None):
+def _patch_tool(predictions, validation_failures=None, llm_candidates=None):
     validation_failures = set(validation_failures or [])
     original_predict = tool.ml_service.predict
     original_load = tool.ml_service._load
     original_fetch_previous = tool.fetch_previous_applications
     original_validate = tool.validate_confirmed_values
+    original_propose = reasoner.propose_candidates
 
     def fake_predict(payload, db=None, user_id=None):
         prob = predictions.get((Decimal(str(payload.loan_amount)), int(payload.term)), 0.99)
@@ -129,12 +131,14 @@ def _patch_tool(predictions, validation_failures=None):
     tool.ml_service._load = lambda: {"thresholds": {"low": 0.2, "high": 0.4}}
     tool.fetch_previous_applications = lambda db, user_id: []
     tool.validate_confirmed_values = fake_validate
+    reasoner.propose_candidates = lambda summary: list(llm_candidates or [])
 
     def restore():
         tool.ml_service.predict = original_predict
         tool.ml_service._load = original_load
         tool.fetch_previous_applications = original_fetch_previous
         tool.validate_confirmed_values = original_validate
+        reasoner.propose_candidates = original_propose
 
     return restore
 
@@ -636,6 +640,57 @@ def test_format_result_includes_rationale_when_present():
     assert "giảm số tiền vay" in text
 
 
+def test_llm_candidate_can_win_top1_when_smaller_change_and_safe():
+    # Đơn gốc 50000/term12. Lưới (extend_term) có 50000/36 = 0.30 (magnitude 2.0).
+    # LLM đề xuất 45000/12 = 0.35 (magnitude 0.1) -> thay đổi nhỏ hơn nhiều -> top1.
+    app = _rejected_app(recommended_amount=None, loan_amount=Decimal("50000"), term=12)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 24): 0.45,
+        (Decimal("50000"), 36): 0.30,
+        (Decimal("50000"), 48): 0.34,
+        (Decimal("50000"), 60): 0.38,
+        (Decimal("45000"), 12): 0.35,
+    }
+    llm = [reasoner.Candidate(amount=Decimal("45000"), term=12,
+                              strategy="reduce_amount", rationale="DTI cao")]
+    restore = _patch_tool(predictions, llm_candidates=llm)
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert result.proposal.loan_amount == Decimal("45000")
+    assert result.proposal.term == 12
+    assert result.proposal.rationale == "DTI cao"
+
+
+def test_empty_llm_matches_grid_only_passing_set():
+    # LLM trả [] -> kết quả phải đúng tập passing của lưới cứng.
+    app = _rejected_app(recommended_amount=None, loan_amount=Decimal("50000"), term=12)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 24): 0.45,
+        (Decimal("50000"), 36): 0.32,
+        (Decimal("50000"), 48): 0.34,
+        (Decimal("50000"), 60): 0.38,
+    }
+    restore = _patch_tool(predictions, llm_candidates=[])
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert {(p.loan_amount, p.term) for p in result.proposals} == {
+        (Decimal("50000"), 36),
+        (Decimal("50000"), 48),
+        (Decimal("50000"), 60),
+    }
+    assert result.proposal.term == 36  # thay đổi ít nhất (kỳ hạn tăng ít nhất)
+
+
 if __name__ == "__main__":
     test_tool_selects_passing_term_at_original_amount()
     test_pending_action_contains_three_proposal_options()
@@ -658,4 +713,6 @@ if __name__ == "__main__":
     test_format_result_includes_rationale_when_present()
     test_change_magnitude_amount_and_term()
     test_unified_rank_prefers_smaller_change()
+    test_llm_candidate_can_win_top1_when_smaller_change_and_safe()
+    test_empty_llm_matches_grid_only_passing_set()
     print("loan adjustment tool tests passed")

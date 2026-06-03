@@ -11,6 +11,8 @@ from schemas.application import ApplicationConfirm
 from services import ml_service
 from services.loan_suggestion_service import validate_confirmed_values
 from services.model_feature_builder import fetch_previous_applications, infer_existing_monthly_debt
+from core.config import settings
+from services import loan_adjustment_reasoner as reasoner
 
 SUPPORTED_TERMS = (12, 24, 36, 48, 60)
 AUTO_REVIEW_THRESHOLD = 0.4
@@ -71,52 +73,62 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
 
     artifact = ml_service._load()
     previous = fetch_previous_applications(db, user_id)
+
+    existing_debt = infer_existing_monthly_debt(
+        app.monthly_income, app.loan_amount, app.term, app.dti or Decimal("0")
+    )
+    llm_candidates: list[reasoner.Candidate] = []
+    if settings.rag_loan_reasoner_enabled:
+        summary = reasoner.build_risk_summary(app, previous, existing_debt)
+        llm_candidates = reasoner.propose_candidates(summary)
+    grid_candidates = _grid_candidates(app)
+    candidates = reasoner.merge_candidates(
+        llm_candidates,
+        grid_candidates,
+        original_amount=app.loan_amount,
+        current_term=app.term,
+    )
+
     best_observed: LoanAdjustmentProposal | None = None
     observed: list[tuple[tuple[float, int, Decimal], LoanAdjustmentProposal]] = []
+    passing: list[tuple[tuple[Any, ...], LoanAdjustmentProposal]] = []
 
-    for strategy, candidates in _candidate_stages(app):
-        passing: list[tuple[tuple[Any, ...], LoanAdjustmentProposal]] = []
+    for cand in candidates:
+        payload = application_to_confirm_payload(app, loan_amount=cand.amount, term=cand.term)
+        prediction = ml_service.predict(payload, db=db, user_id=user_id)
+        proposal = _proposal_from_prediction(
+            payload, prediction, strategy=cand.strategy, rationale=cand.rationale
+        )
 
-        for amount, term in candidates:
-            payload = application_to_confirm_payload(app, loan_amount=amount, term=term)
-            prediction = ml_service.predict(payload, db=db, user_id=user_id)
-            proposal = _proposal_from_prediction(payload, prediction, strategy=strategy)
+        if best_observed is None or proposal.default_probability < best_observed.default_probability:
+            best_observed = proposal
+        observed.append((_fallback_rank(proposal), proposal))
 
-            if (
-                best_observed is None
-                or proposal.default_probability < best_observed.default_probability
-            ):
-                best_observed = proposal
-            observed.append((_fallback_rank(proposal), proposal))
+        if proposal.default_probability > AUTO_REVIEW_THRESHOLD:
+            continue
 
-            if proposal.default_probability > AUTO_REVIEW_THRESHOLD:
-                continue
+        try:
+            validate_confirmed_values(payload, artifact, previous_applications=previous)
+        except ValueError:
+            continue
 
-            try:
-                validate_confirmed_values(
-                    payload,
-                    artifact,
-                    previous_applications=previous,
-                )
-            except ValueError:
-                continue
+        passing.append((_unified_rank(app, proposal), proposal))
 
-            passing.append((_passing_rank(strategy, app, proposal), proposal))
-
-        if passing:
-            passing.sort(key=lambda item: item[0])
-            proposal_options = [proposal for _, proposal in passing[:3]]
-            return LoanAdjustmentResult(
-                status="proposal",
-                source_application_id=str(app.id),
-                current_loan_amount=app.loan_amount,
-                current_term=app.term,
-                current_default_probability=_float_or_none(app.default_probability),
-                proposal=proposal_options[0],
-                best_observed=best_observed,
-                message=_proposal_message(strategy),
-                proposals=proposal_options,
-            )
+    if passing:
+        passing.sort(key=lambda item: item[0])
+        proposal_options = [proposal for _, proposal in passing[:3]]
+        top = proposal_options[0]
+        return LoanAdjustmentResult(
+            status="proposal",
+            source_application_id=str(app.id),
+            current_loan_amount=app.loan_amount,
+            current_term=app.term,
+            current_default_probability=_float_or_none(app.default_probability),
+            proposal=top,
+            best_observed=best_observed,
+            message=_proposal_message(top.adjustment_strategy),
+            proposals=proposal_options,
+        )
 
     if not observed:
         return LoanAdjustmentResult(
@@ -130,8 +142,7 @@ def find_best_reapplication_option(db: Any, user_id: Any) -> LoanAdjustmentResul
             message="No safe adjustment candidate was found.",
         )
 
-    # Fallback: show the best changed form candidates, but never return the
-    # unchanged form that was just rejected.
+    # Fallback: hiển thị các form đã đổi tốt nhất, không bao giờ trả form gốc đã bị từ chối.
     observed.sort(key=lambda item: item[0])
     fallback_options = [proposal for _, proposal in observed[:3]]
     if fallback_options:
@@ -336,6 +347,19 @@ def _candidate_amounts(app: Any) -> list[Decimal]:
     return amounts
 
 
+def _grid_candidates(app: Any) -> list[reasoner.Candidate]:
+    """Làm phẳng các stage lưới cứng thành danh sách Candidate (không rationale)."""
+    out: list[reasoner.Candidate] = []
+    for strategy, pairs in _candidate_stages(app):
+        for amount, term in pairs:
+            out.append(
+                reasoner.Candidate(
+                    amount=_to_decimal(amount), term=int(term), strategy=strategy, rationale=None
+                )
+            )
+    return out
+
+
 def _candidate_stages(app: Any) -> list[tuple[str, list[tuple[Decimal, int]]]]:
     original_amount = _to_decimal(app.loan_amount)
     current_term = int(app.term)
@@ -406,12 +430,11 @@ def _fallback_rank(proposal: LoanAdjustmentProposal) -> tuple[float, int, Decima
     )
 
 
-def _proposal_message(strategy: str) -> str:
+def _proposal_message(strategy: str | None) -> str:
     if strategy == "reduce_amount":
-        return (
-            "Đã thử đến kỳ hạn tối đa 60 tháng. "
-            "Có thể nộp form khác bằng cách giảm số tiền vay."
-        )
+        return "Có thể nộp form khác bằng cách giảm số tiền vay."
+    if strategy == "both":
+        return "Có thể nộp form khác bằng cách điều chỉnh cả số tiền vay và kỳ hạn."
     return (
         "Có thể nộp form khác bằng cách giữ nguyên số tiền vay "
         "và tăng kỳ hạn trả nợ."
