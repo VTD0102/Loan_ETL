@@ -1,7 +1,12 @@
 # Thiết kế: Luật mềm cho công cụ điều chỉnh khoản vay (soft-propose / hard-verify)
 
 Ngày: 2026-06-03
-Trạng thái: Đã duyệt thiết kế, chờ viết kế hoạch triển khai (writing-plans)
+Trạng thái: Đã triển khai (2026-06-03)
+
+> Khoá rank liên-strategy đã chốt khi triển khai: **ưu tiên thay đổi ít nhất so với
+> đơn gốc** — `_change_magnitude` = tỉ lệ giảm tiền cộng tỉ lệ tăng kỳ hạn (chuẩn hoá),
+> với `default_probability` là tiêu chí phụ. Lựa chọn này giữ đúng triết lý UX hiện tại
+> (đưa cho khách phương án gần nhất với cái họ xin mà vẫn an toàn) và không phá test hồi quy.
 
 ## Bối cảnh
 
