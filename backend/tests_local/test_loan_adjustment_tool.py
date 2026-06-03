@@ -579,6 +579,36 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
     assert payload.is_married_flag is False
 
 
+def test_change_magnitude_amount_and_term():
+    app = _rejected_app(loan_amount=Decimal("50000"), term=12)
+    # giảm 50% số tiền, cùng kỳ hạn -> 0.5
+    p_reduce = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("25000"), term=12, default_probability=0.3,
+        risk_level="Medium", risk_score=70,
+    )
+    assert tool._change_magnitude(app, p_reduce) == 0.5
+    # giữ tiền, tăng kỳ hạn 12 -> 36 = (36-12)/12 = 2.0
+    p_extend = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("50000"), term=36, default_probability=0.3,
+        risk_level="Medium", risk_score=70,
+    )
+    assert tool._change_magnitude(app, p_extend) == 2.0
+
+
+def test_unified_rank_prefers_smaller_change():
+    app = _rejected_app(loan_amount=Decimal("50000"), term=12)
+    small = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("45000"), term=12, default_probability=0.39,
+        risk_level="Medium", risk_score=61,
+    )  # magnitude 0.1
+    big_but_safer = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("10000"), term=12, default_probability=0.10,
+        risk_level="Low", risk_score=90,
+    )  # magnitude 0.8
+    ranked = sorted([big_but_safer, small], key=lambda p: tool._unified_rank(app, p))
+    assert ranked[0] is small  # thay đổi ít nhất thắng dù prob cao hơn
+
+
 def test_format_result_includes_rationale_when_present():
     proposal = tool.LoanAdjustmentProposal(
         loan_amount=Decimal("30000"),
@@ -626,4 +656,6 @@ if __name__ == "__main__":
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()
     test_application_to_confirm_payload_defaults_legacy_nullable_fields()
     test_format_result_includes_rationale_when_present()
+    test_change_magnitude_amount_and_term()
+    test_unified_rank_prefers_smaller_change()
     print("loan adjustment tool tests passed")

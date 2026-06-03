@@ -373,6 +373,31 @@ def _passing_rank(
     )
 
 
+def _change_magnitude(app: Any, proposal: LoanAdjustmentProposal) -> float:
+    """Tổng tỉ lệ thay đổi so với đơn gốc (giảm tiền + tăng kỳ hạn). Nhỏ = gần gốc."""
+    original_amount = _to_decimal(app.loan_amount)
+    current_term = int(app.term)
+    amount_change = 0.0
+    if original_amount > 0:
+        reduction = max(original_amount - proposal.loan_amount, Decimal("0"))
+        amount_change = float(reduction) / float(original_amount)
+    term_change = 0.0
+    if current_term > 0:
+        term_change = max(proposal.term - current_term, 0) / current_term
+    return round(amount_change + term_change, 6)
+
+
+def _unified_rank(app: Any, proposal: LoanAdjustmentProposal) -> tuple[Any, ...]:
+    """Khoá sort liên-strategy: ưu tiên thay đổi ít nhất, rồi prob thấp, rồi số tiền
+    lớn hơn, rồi kỳ hạn ngắn hơn."""
+    return (
+        _change_magnitude(app, proposal),
+        proposal.default_probability,
+        -proposal.loan_amount,
+        proposal.term,
+    )
+
+
 def _fallback_rank(proposal: LoanAdjustmentProposal) -> tuple[float, int, Decimal]:
     return (
         proposal.default_probability,
