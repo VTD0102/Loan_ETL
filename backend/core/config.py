@@ -5,6 +5,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(__file__).parents[1] / ".env"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _build_postgres_url(
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
 
     # RAG retrieval (V1: hybrid BM25 + vector)
     rag_bm25_model: str = "Qdrant/bm25"
+    rag_fastembed_cache_path: str = str(PROJECT_ROOT / ".cache" / "fastembed")
 
     # RAG retrieval Stage 2 (reranker)
     rag_reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"

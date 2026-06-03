@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from rag.config import RERANKER_MODEL
+from rag.config import FASTEMBED_CACHE_DIR, RERANKER_MODEL
 logger = logging.getLogger(__name__)
 
 _singleton: "Reranker | None" = None
@@ -18,14 +18,22 @@ _singleton: "Reranker | None" = None
 class Reranker:
     """Score (query, candidate_text) pairs; return docs sorted desc, top_k."""
 
-    def __init__(self, model_name: str = RERANKER_MODEL):
+    def __init__(
+        self,
+        model_name: str = RERANKER_MODEL,
+        cache_dir: str = FASTEMBED_CACHE_DIR,
+    ):
         self._model_name = model_name
+        self._cache_dir = cache_dir
         self._encoder = None  # lazy
 
     def _ensure_loaded(self):
         if self._encoder is None:
             from fastembed.rerank.cross_encoder import TextCrossEncoder
-            self._encoder = TextCrossEncoder(model_name=self._model_name)
+            self._encoder = TextCrossEncoder(
+                model_name=self._model_name,
+                cache_dir=self._cache_dir,
+            )
         return self._encoder
 
     def rerank(self, query: str, docs: list, top_k: int) -> list:

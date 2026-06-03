@@ -9,6 +9,7 @@ from qdrant_client import QdrantClient
 from rag.chunking import expand_child_documents_to_parents
 from rag.config import (
     BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    FASTEMBED_CACHE_DIR,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
     RERANKER_CANDIDATE_K, RERANKER_TOP_K, TOP_K,
 )
@@ -180,7 +181,10 @@ def get_retriever():
                 retrieval_mode = RetrievalMode.HYBRID
                 sparse_embeddings = None
                 try:
-                    sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
+                    sparse_embeddings = FastEmbedSparse(
+                        model_name=BM25_SPARSE_MODEL,
+                        cache_dir=FASTEMBED_CACHE_DIR,
+                    )
                 except Exception as exc:
                     retrieval_mode = RetrievalMode.DENSE
                     logger.warning(
