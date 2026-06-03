@@ -64,3 +64,49 @@ def build_risk_summary(
         "supported_terms": list(SUPPORTED_TERMS),
         "min_loan_amount": MIN_LOAN_AMOUNT,
     }
+
+
+def _clean_amount(value: Any, original_amount: Decimal) -> Decimal | None:
+    try:
+        amount = Decimal(str(value)).quantize(Decimal("1"))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if amount < MIN_LOAN_AMOUNT:
+        amount = Decimal(MIN_LOAN_AMOUNT)
+    if amount > original_amount:
+        return None  # không bao giờ tăng khoản vay để giảm rủi ro
+    return amount
+
+
+def merge_candidates(
+    llm_candidates: list[Candidate],
+    grid_candidates: list[Candidate],
+    *,
+    original_amount: Any,
+    current_term: Any,
+) -> list[Candidate]:
+    """Gộp ứng viên LLM (ưu tiên) với lưới cứng, làm sạch và khử trùng."""
+    original_amount = Decimal(str(original_amount))
+    current_term = int(current_term)
+    seen: set[tuple[Decimal, int]] = set()
+    cleaned: list[Candidate] = []
+    for cand in [*llm_candidates, *grid_candidates]:
+        amount = _clean_amount(cand.amount, original_amount)
+        if amount is None:
+            continue
+        try:
+            term = int(cand.term)
+        except (TypeError, ValueError):
+            continue
+        if term not in SUPPORTED_TERMS or term < current_term:
+            continue
+        if amount == original_amount and term == current_term:
+            continue  # form không đổi (đã bị từ chối)
+        key = (amount, term)
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(
+            Candidate(amount=amount, term=term, strategy=cand.strategy, rationale=cand.rationale)
+        )
+    return cleaned

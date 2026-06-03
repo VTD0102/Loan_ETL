@@ -40,6 +40,52 @@ def test_build_risk_summary_extracts_fields():
     assert summary["min_loan_amount"] == 500
 
 
+def _C(amount, term, strategy="both", rationale=None):
+    return reasoner.Candidate(
+        amount=Decimal(str(amount)), term=term, strategy=strategy, rationale=rationale
+    )
+
+
+def test_merge_dedupes_and_keeps_llm_rationale_first():
+    llm = [_C(30000, 36, "reduce_amount", "DTI cao")]
+    grid = [_C(30000, 36, "reduce_amount", None), _C(50000, 24, "extend_term", None)]
+    merged = reasoner.merge_candidates(
+        llm, grid, original_amount=Decimal("50000"), current_term=12
+    )
+    keys = [(c.amount, c.term) for c in merged]
+    assert (Decimal("30000"), 36) in keys
+    assert (Decimal("50000"), 24) in keys
+    assert len(keys) == len(set(keys))  # không trùng
+    rationale = next(c.rationale for c in merged if (c.amount, c.term) == (Decimal("30000"), 36))
+    assert rationale == "DTI cao"
+
+
+def test_merge_rejects_invalid_candidates():
+    cands = [
+        _C(60000, 36),   # amount > original -> bỏ
+        _C(50000, 6),    # term không hợp lệ -> bỏ
+        _C(50000, 12),   # form không đổi -> bỏ
+        _C(50000, 8, "extend_term"),  # term < current (8<12) và không hợp lệ -> bỏ
+        _C(100, 24),     # amount < min -> kẹp lên 500
+    ]
+    merged = reasoner.merge_candidates(
+        cands, [], original_amount=Decimal("50000"), current_term=12
+    )
+    keys = [(c.amount, c.term) for c in merged]
+    assert keys == [(Decimal("500"), 24)]
+
+
+def test_merge_drops_term_below_current():
+    cands = [_C(40000, 12, "reduce_amount")]  # term == current, amount < original -> hợp lệ
+    merged = reasoner.merge_candidates(
+        cands, [], original_amount=Decimal("50000"), current_term=12
+    )
+    assert [(c.amount, c.term) for c in merged] == [(Decimal("40000"), 12)]
+
+
 if __name__ == "__main__":
     test_build_risk_summary_extracts_fields()
+    test_merge_dedupes_and_keeps_llm_rationale_first()
+    test_merge_rejects_invalid_candidates()
+    test_merge_drops_term_below_current()
     print("loan adjustment reasoner tests passed")
