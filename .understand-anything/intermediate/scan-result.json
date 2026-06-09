@@ -1,0 +1,2095 @@
+{
+  "scriptCompleted": true,
+  "name": "CreditIntel",
+  "description": "Full-stack loan management and risk assessment system: FastAPI backend, React frontend, PostgreSQL, LightGBM risk model + LR scorecard, LangChain RAG chatbot (Qdrant + OpenRouter), ETL pipeline on DuckDB over Home Credit dataset.",
+  "rawDescription": "Loan management and risk assessment system",
+  "languages": [
+    "python",
+    "javascript",
+    "sql",
+    "markdown",
+    "json"
+  ],
+  "frameworks": [
+    "FastAPI",
+    "React",
+    "LightGBM",
+    "LangChain",
+    "DuckDB",
+    "Vite",
+    "Tailwind"
+  ],
+  "files": [
+    {
+      "path": ".gitattributes",
+      "language": "unknown",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".superpowers/brainstorm/1756452-1779307235/state/server-stopped",
+      "language": "unknown",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".understand-anything/.understandignore",
+      "language": "unknown",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "AGENTS.md",
+      "language": "markdown",
+      "sizeLines": 78,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/.env.example",
+      "language": "config",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": "backend/api/__init__.py",
+      "language": "python",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/dependencies.py",
+      "language": "python",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/__init__.py",
+      "language": "python",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/admin.py",
+      "language": "python",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/applications.py",
+      "language": "python",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/auth.py",
+      "language": "python",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/chat.py",
+      "language": "python",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/cic.py",
+      "language": "python",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/api/routers/credit_score.py",
+      "language": "python",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/BACKEND_API_SPEC.md",
+      "language": "markdown",
+      "sizeLines": 160,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/core/__init__.py",
+      "language": "python",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/core/config.py",
+      "language": "python",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/core/scoring.py",
+      "language": "python",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/core/security.py",
+      "language": "python",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/db/__init__.py",
+      "language": "python",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/db/init_app.sql",
+      "language": "sql",
+      "sizeLines": 105,
+      "fileCategory": "data"
+    },
+    {
+      "path": "backend/db/session.py",
+      "language": "python",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/init_db.py",
+      "language": "python",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/main.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/__init__.py",
+      "language": "python",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/application.py",
+      "language": "python",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/base.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/chat.py",
+      "language": "python",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/cic.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/personal_info.py",
+      "language": "python",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/models/user.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/pyrightconfig.json",
+      "language": "json",
+      "sizeLines": 14,
+      "fileCategory": "config"
+    },
+    {
+      "path": "backend/qdrant_db/collection/creditintel-kb/storage.sqlite",
+      "language": "sqlite",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/qdrant_db/meta.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "backend/rag/__init__.py",
+      "language": "python",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/chain.py",
+      "language": "python",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/chunking.py",
+      "language": "python",
+      "sizeLines": 274,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/config.py",
+      "language": "python",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/context_builder.py",
+      "language": "python",
+      "sizeLines": 375,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/eval_dataset.py",
+      "language": "python",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/eval_metrics.py",
+      "language": "python",
+      "sizeLines": 331,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/eval_runner.py",
+      "language": "python",
+      "sizeLines": 166,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/exceptions.py",
+      "language": "python",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/guardrails.py",
+      "language": "python",
+      "sizeLines": 218,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/ingest.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/knowledge/faq.md",
+      "language": "markdown",
+      "sizeLines": 302,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/rag/knowledge/policy.md",
+      "language": "markdown",
+      "sizeLines": 293,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/rag/memory.py",
+      "language": "python",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/personalizer.py",
+      "language": "python",
+      "sizeLines": 174,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/prompts.py",
+      "language": "python",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/query_rewriter.py",
+      "language": "python",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/reranker.py",
+      "language": "python",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/retriever.py",
+      "language": "python",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/rag/router.py",
+      "language": "python",
+      "sizeLines": 214,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/README.md",
+      "language": "markdown",
+      "sizeLines": 137,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/requirements-rag.txt",
+      "language": "txt",
+      "sizeLines": 9,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/requirements.txt",
+      "language": "txt",
+      "sizeLines": 34,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "backend/schemas/__init__.py",
+      "language": "python",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/application.py",
+      "language": "python",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/chat.py",
+      "language": "python",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/cic.py",
+      "language": "python",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/credit_score.py",
+      "language": "python",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/personal_info.py",
+      "language": "python",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/schemas/user.py",
+      "language": "python",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/scripts/add_cic_installment_column.py",
+      "language": "python",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/scripts/backfill_fico.py",
+      "language": "python",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/scripts/check_cic.py",
+      "language": "python",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/scripts/reset_databases.py",
+      "language": "python",
+      "sizeLines": 25,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/scripts/seed_synthetic.py",
+      "language": "python",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/__init__.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/admin_service.py",
+      "language": "python",
+      "sizeLines": 379,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/application_service.py",
+      "language": "python",
+      "sizeLines": 540,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/auth_service.py",
+      "language": "python",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/chat_service.py",
+      "language": "python",
+      "sizeLines": 748,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/cic_service.py",
+      "language": "python",
+      "sizeLines": 223,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/credit_score_service.py",
+      "language": "python",
+      "sizeLines": 340,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/document_service.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/loan_adjustment_reasoner.py",
+      "language": "python",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/loan_adjustment_tool.py",
+      "language": "python",
+      "sizeLines": 489,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/loan_suggestion_service.py",
+      "language": "python",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/ml_service.py",
+      "language": "python",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/model_feature_builder.py",
+      "language": "python",
+      "sizeLines": 299,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/services/synthetic_service.py",
+      "language": "python",
+      "sizeLines": 562,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/test_sa.py",
+      "language": "python",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/rag_benchmark_metrics.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/spam_rate_limit.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_application_terms.py",
+      "language": "python",
+      "sizeLines": 68,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_backend_config.py",
+      "language": "python",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_legacy_application_payload.py",
+      "language": "python",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_pending_action_schema.py",
+      "language": "python",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_service_atomic_save.py",
+      "language": "python",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_service_excludes_current_user_message.py",
+      "language": "python",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_service_loan_adjustment.py",
+      "language": "python",
+      "sizeLines": 982,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_chat_service_uses_memory.py",
+      "language": "python",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_cic_bureau_derivation.py",
+      "language": "python",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_context_builder_credit_score.py",
+      "language": "python",
+      "sizeLines": 86,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_credit_score_contract.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_db.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_guardrails.py",
+      "language": "python",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_loan_adjustment_reasoner.py",
+      "language": "python",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_loan_adjustment_tool.py",
+      "language": "python",
+      "sizeLines": 718,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_loan_reasoner_config.py",
+      "language": "python",
+      "sizeLines": 18,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_loan_suggestion_minimize_burden.py",
+      "language": "python",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_excludes_error_rows.py",
+      "language": "python",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_long_conversation_summarizes.py",
+      "language": "python",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_short_conversation_no_summary.py",
+      "language": "python",
+      "sizeLines": 81,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_skips_summarize_if_already_covered.py",
+      "language": "python",
+      "sizeLines": 98,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_summarize_failure_graceful.py",
+      "language": "python",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_memory_token_estimation.py",
+      "language": "python",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_ml_service_contract.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_ml.py",
+      "language": "python",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_model_feature_builder.py",
+      "language": "python",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_auto_flows.py",
+      "language": "python",
+      "sizeLines": 225,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_benchmark_metrics.py",
+      "language": "python",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_benchmark.py",
+      "language": "python",
+      "sizeLines": 209,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_chain_format_documents.py",
+      "language": "python",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_chain_import.py",
+      "language": "python",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_chain_query_rewrite.py",
+      "language": "python",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_chain_retriever_fallback.py",
+      "language": "python",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_chunking_semantic.py",
+      "language": "python",
+      "sizeLines": 221,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_eval_dataset.py",
+      "language": "python",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_eval_diff.py",
+      "language": "python",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_eval_metrics.py",
+      "language": "python",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_eval_runner.py",
+      "language": "python",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_evaluation_notebook.py",
+      "language": "python",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_exceptions.py",
+      "language": "python",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_ingest_cli.py",
+      "language": "python",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_ingest_hybrid_writes_sparse.py",
+      "language": "python",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_ingest_semantic_chunks.py",
+      "language": "python",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_parent_retriever.py",
+      "language": "python",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_personalization_no_db.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_qdrant_config.py",
+      "language": "python",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_query_rewriter.py",
+      "language": "python",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_rerank_fallback_counter.py",
+      "language": "python",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_reranker.py",
+      "language": "python",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_retriever_hybrid_config.py",
+      "language": "python",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_retriever_uses_reranker.py",
+      "language": "python",
+      "sizeLines": 207,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_routing_guardrail_personalized.py",
+      "language": "python",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_rag_timeout_config.py",
+      "language": "python",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_register_cic.py",
+      "language": "python",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_router.py",
+      "language": "python",
+      "sizeLines": 120,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_10.py",
+      "language": "python",
+      "sizeLines": 48,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_11.py",
+      "language": "python",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_3.py",
+      "language": "python",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_4.py",
+      "language": "python",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_5.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_6.py",
+      "language": "python",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_7.py",
+      "language": "python",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_8.py",
+      "language": "python",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "backend/tests_local/test_task_1_9.py",
+      "language": "python",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "CLAUDE.md",
+      "language": "markdown",
+      "sizeLines": 196,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/baocao_chuong3.md",
+      "language": "markdown",
+      "sizeLines": 570,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/baocao_rag.md",
+      "language": "markdown",
+      "sizeLines": 411,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/changelog_full_cic_integration.md",
+      "language": "markdown",
+      "sizeLines": 158,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/data_dictionary/feature_definitions.csv",
+      "language": "csv",
+      "sizeLines": 466,
+      "fileCategory": "data"
+    },
+    {
+      "path": "docs/data_dictionary/kaggle_overview.md",
+      "language": "markdown",
+      "sizeLines": 7,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/Loan_ETL_rutgon_v2.docx",
+      "language": "docx",
+      "sizeLines": 69715,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/migration_v2_summary.md",
+      "language": "markdown",
+      "sizeLines": 176,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml_md/eda_views_export.txt",
+      "language": "txt",
+      "sizeLines": 31,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/2026-05-12-credit-score.md",
+      "language": "markdown",
+      "sizeLines": 1152,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/CIC_FEATURE_GAP.md",
+      "language": "markdown",
+      "sizeLines": 344,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/Loan_ETL_backup.docx",
+      "language": "docx",
+      "sizeLines": 13065,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/ml/Loan_ETL_fix.docx",
+      "language": "docx",
+      "sizeLines": 12145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/ml/ML_FEATURES.md",
+      "language": "markdown",
+      "sizeLines": 453,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/model_features_vi.md",
+      "language": "markdown",
+      "sizeLines": 97,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/scorecard_calculation_detail.md",
+      "language": "markdown",
+      "sizeLines": 316,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/SCORECARD_FEATURES.md",
+      "language": "markdown",
+      "sizeLines": 427,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/scorecard_model.docx",
+      "language": "docx",
+      "sizeLines": 191,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/ml/scorecard_training_detail.md",
+      "language": "markdown",
+      "sizeLines": 249,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ml/shap_explainability.md",
+      "language": "markdown",
+      "sizeLines": 209,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/ADMIN_GUIDE.md",
+      "language": "markdown",
+      "sizeLines": 111,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/data_etl_ml_flow.md",
+      "language": "markdown",
+      "sizeLines": 470,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/MODULES_AND_FILES.md",
+      "language": "markdown",
+      "sizeLines": 123,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/overall.md",
+      "language": "markdown",
+      "sizeLines": 479,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/PROJECT_OVERVIEW.md",
+      "language": "markdown",
+      "sizeLines": 110,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/PROJECT_STRUCTURE_CURRENT.md",
+      "language": "markdown",
+      "sizeLines": 108,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/rag_report_outline.md",
+      "language": "markdown",
+      "sizeLines": 477,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/rag_report_sections_4_5.md",
+      "language": "markdown",
+      "sizeLines": 610,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/overall/rag_report.md",
+      "language": "markdown",
+      "sizeLines": 604,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/rag/RAG_chatbot_plan.md",
+      "language": "markdown",
+      "sizeLines": 415,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/rag/rag_ml_context_requirements.md",
+      "language": "markdown",
+      "sizeLines": 279,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/rag/rag_system_overview.md",
+      "language": "markdown",
+      "sizeLines": 482,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-18-rag-kb-chunking-v1.md",
+      "language": "markdown",
+      "sizeLines": 927,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-18-rag-memory-v1.md",
+      "language": "markdown",
+      "sizeLines": 1752,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-18-rag-resilience-fixes.md",
+      "language": "markdown",
+      "sizeLines": 1748,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-backend-quality-hardening.md",
+      "language": "markdown",
+      "sizeLines": 596,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-code-review.md",
+      "language": "markdown",
+      "sizeLines": 324,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-eval-and-memory-polish.md",
+      "language": "markdown",
+      "sizeLines": 462,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-eval-framework-v1.md",
+      "language": "markdown",
+      "sizeLines": 1500,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-kb-chunking-v1.1-fixes.md",
+      "language": "markdown",
+      "sizeLines": 571,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-loan-adjustment-tool.md",
+      "language": "markdown",
+      "sizeLines": 1553,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-retrieval-hybrid-v1.md",
+      "language": "markdown",
+      "sizeLines": 793,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-retrieval-rerank-v1.1-follow-up.md",
+      "language": "markdown",
+      "sizeLines": 577,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-19-rag-retrieval-rerank-v1.md",
+      "language": "markdown",
+      "sizeLines": 869,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-05-20-rag-query-rewriting.md",
+      "language": "markdown",
+      "sizeLines": 824,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-06-03-loan-adjustment-soft-rule.md",
+      "language": "markdown",
+      "sizeLines": 1166,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-18-rag-kb-chunking-v1-design.md",
+      "language": "markdown",
+      "sizeLines": 281,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-18-rag-memory-v1-design.md",
+      "language": "markdown",
+      "sizeLines": 290,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-18-rag-memory-v1.1-fixes-design.md",
+      "language": "markdown",
+      "sizeLines": 109,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-18-rag-resilience-fixes-design.md",
+      "language": "markdown",
+      "sizeLines": 402,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-eval-and-memory-polish-design.md",
+      "language": "markdown",
+      "sizeLines": 251,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-eval-framework-v1-design.md",
+      "language": "markdown",
+      "sizeLines": 361,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-kb-chunking-v1.1-fixes-design.md",
+      "language": "markdown",
+      "sizeLines": 177,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-loan-adjustment-tool-design.md",
+      "language": "markdown",
+      "sizeLines": 178,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-retrieval-hybrid-v1-design.md",
+      "language": "markdown",
+      "sizeLines": 248,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-retrieval-rerank-v1-design.md",
+      "language": "markdown",
+      "sizeLines": 430,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-19-rag-retrieval-rerank-v1.1-follow-up-design.md",
+      "language": "markdown",
+      "sizeLines": 128,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-05-20-rag-query-rewriting-design.md",
+      "language": "markdown",
+      "sizeLines": 172,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-06-03-loan-adjustment-soft-rule-design.md",
+      "language": "markdown",
+      "sizeLines": 187,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "export_eda_views.py",
+      "language": "python",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/.env.mock",
+      "language": "config",
+      "sizeLines": 2,
+      "fileCategory": "config"
+    },
+    {
+      "path": "frontend/CUSTOMER.md",
+      "language": "markdown",
+      "sizeLines": 396,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/index.html",
+      "language": "html",
+      "sizeLines": 16,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/package.json",
+      "language": "json",
+      "sizeLines": 33,
+      "fileCategory": "config"
+    },
+    {
+      "path": "frontend/postcss.config.js",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/public/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/README.md",
+      "language": "markdown",
+      "sizeLines": 217,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/RULES.md",
+      "language": "markdown",
+      "sizeLines": 534,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "frontend/src/App.jsx",
+      "language": "javascript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/AdminLayout/index.jsx",
+      "language": "javascript",
+      "sizeLines": 211,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/ApplicationsTable/index.jsx",
+      "language": "javascript",
+      "sizeLines": 162,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/ApplicationTable/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/ApproveRejectButtons/index.jsx",
+      "language": "javascript",
+      "sizeLines": 131,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/FilterBar/index.jsx",
+      "language": "javascript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/MLResultsDisplay/index.jsx",
+      "language": "javascript",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/ReviewModal/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/RiskChart/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/StatsCard/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/admin/SummaryCard/index.jsx",
+      "language": "javascript",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/common/Badge/index.jsx",
+      "language": "javascript",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/common/CreditScorePanel.jsx",
+      "language": "javascript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/common/LoadingSpinner/index.jsx",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/common/Modal/index.jsx",
+      "language": "javascript",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/common/Navbar/index.jsx",
+      "language": "javascript",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/ApplicationCard/index.jsx",
+      "language": "javascript",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/ApplicationTimeline/index.jsx",
+      "language": "javascript",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/ChatMessage/index.jsx",
+      "language": "javascript",
+      "sizeLines": 178,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/CustomerLayout/index.jsx",
+      "language": "javascript",
+      "sizeLines": 211,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/LoanAdjustmentActionCard/index.jsx",
+      "language": "javascript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/LoanAdjustmentActionCard/loanAdjustment.js",
+      "language": "javascript",
+      "sizeLines": 150,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/LoanAdjustmentActionCard/loanAdjustment.test.mjs",
+      "language": "javascript",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/LoanStatusCard/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/RejectedRagAdvisorModal/AlternativeFormPanel.jsx",
+      "language": "javascript",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/RejectedRagAdvisorModal/index.jsx",
+      "language": "javascript",
+      "sizeLines": 366,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/customer/RiskGauge/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/components/ProtectedRoute.jsx",
+      "language": "javascript",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/hooks/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/index.css",
+      "language": "css",
+      "sizeLines": 69,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "frontend/src/main.jsx",
+      "language": "javascript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/mocks/mockData.js",
+      "language": "javascript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/mocks/mockHandlers.js",
+      "language": "javascript",
+      "sizeLines": 465,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/ApplicationDetail/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/ApplicationDetail/index.jsx",
+      "language": "javascript",
+      "sizeLines": 383,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/ApplicationList/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/ApplicationList/index.jsx",
+      "language": "javascript",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/Dashboard/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/Dashboard/index.jsx",
+      "language": "javascript",
+      "sizeLines": 517,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/PendingList/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/PendingList/index.jsx",
+      "language": "javascript",
+      "sizeLines": 75,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/PersonalInfoView/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/PersonalInfoView/index.jsx",
+      "language": "javascript",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/admin/Profile/index.jsx",
+      "language": "javascript",
+      "sizeLines": 292,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/ApplicationDetail/index.jsx",
+      "language": "javascript",
+      "sizeLines": 499,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Apply/index.jsx",
+      "language": "javascript",
+      "sizeLines": 540,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Chat/index.jsx",
+      "language": "javascript",
+      "sizeLines": 373,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Dashboard/index.jsx",
+      "language": "javascript",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Dashboard/selectLatestApplication.js",
+      "language": "javascript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Dashboard/selectLatestApplication.test.mjs",
+      "language": "javascript",
+      "sizeLines": 15,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/History/index.jsx",
+      "language": "javascript",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Landing/index.jsx",
+      "language": "javascript",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Login/index.jsx",
+      "language": "javascript",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/Register/index.jsx",
+      "language": "javascript",
+      "sizeLines": 191,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/pages/customer/SubmitInfo/index.jsx",
+      "language": "javascript",
+      "sizeLines": 307,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/admin.js",
+      "language": "javascript",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/api.js",
+      "language": "javascript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/applications.js",
+      "language": "javascript",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/auth.js",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/chat.js",
+      "language": "javascript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/services/cic.js",
+      "language": "javascript",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/store/authStore.js",
+      "language": "javascript",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/utils/format.js",
+      "language": "javascript",
+      "sizeLines": 49,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/src/utils/format.test.mjs",
+      "language": "javascript",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/tailwind.config.js",
+      "language": "javascript",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/test_mock.js",
+      "language": "javascript",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "frontend/vite.config.js",
+      "language": "javascript",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/config/etl_db.env",
+      "language": "config",
+      "sizeLines": 2,
+      "fileCategory": "config"
+    },
+    {
+      "path": "machinelearning/database/transform_gold_hcv2.sql",
+      "language": "sql",
+      "sizeLines": 217,
+      "fileCategory": "data"
+    },
+    {
+      "path": "machinelearning/database/transform_gold_homecredit.sql",
+      "language": "sql",
+      "sizeLines": 262,
+      "fileCategory": "data"
+    },
+    {
+      "path": "machinelearning/database/transform_silver_hcv2.sql",
+      "language": "sql",
+      "sizeLines": 272,
+      "fileCategory": "data"
+    },
+    {
+      "path": "machinelearning/database/transform_silver_homecredit.sql",
+      "language": "sql",
+      "sizeLines": 183,
+      "fileCategory": "data"
+    },
+    {
+      "path": "machinelearning/etl/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/etl/etl_gold.py",
+      "language": "python",
+      "sizeLines": 57,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/etl/etl_silver.py",
+      "language": "python",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/etl/load_bronze.py",
+      "language": "python",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/etl/pipeline.py",
+      "language": "python",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/check_customer_model_contract.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/models/customer_risk_model.pkl",
+      "language": "pkl",
+      "sizeLines": 15389,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/models/oof_stage1.csv",
+      "language": "csv",
+      "sizeLines": 300361,
+      "fileCategory": "data"
+    },
+    {
+      "path": "machinelearning/ml/models/scorecard_model.pkl",
+      "language": "pkl",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/retrain_customer_model.py",
+      "language": "python",
+      "sizeLines": 267,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/tests/test_customer_model_contract.py",
+      "language": "python",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/tests/test_db_connection.py",
+      "language": "python",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/train_scorecard.py",
+      "language": "python",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/ml/validate_data.py",
+      "language": "python",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/notebooks/home_credit_eda.ipynb",
+      "language": "ipynb",
+      "sizeLines": 1338,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/requirements.txt",
+      "language": "txt",
+      "sizeLines": 21,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "machinelearning/utils/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "machinelearning/utils/db_connection.py",
+      "language": "python",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pyrightconfig.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/11_benchmark_rag.md",
+      "language": "markdown",
+      "sizeLines": 356,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "RAG_eval/rag_benchmark_dataset.json",
+      "language": "json",
+      "sizeLines": 249,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_benchmark_results.json",
+      "language": "json",
+      "sizeLines": 497,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_baseline_pre_hybrid.json",
+      "language": "json",
+      "sizeLines": 1856,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_dataset.json",
+      "language": "json",
+      "sizeLines": 641,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_2026-06-02_temp0_vs_may22_temp0.json",
+      "language": "json",
+      "sizeLines": 421,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_2026-06-02_vs_may22.json",
+      "language": "json",
+      "sizeLines": 422,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_current_vs_stage2.json",
+      "language": "json",
+      "sizeLines": 416,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_hybrid.json",
+      "language": "json",
+      "sizeLines": 422,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_no_rewrite_vs_current.json",
+      "language": "json",
+      "sizeLines": 414,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_rerank_temp0.json",
+      "language": "json",
+      "sizeLines": 420,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_rerank_v11_k16_top12.json",
+      "language": "json",
+      "sizeLines": 419,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_rerank_v11_k20_top16.json",
+      "language": "json",
+      "sizeLines": 420,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_diff_rerank_v11_k24_top12.json",
+      "language": "json",
+      "sizeLines": 420,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_2026-06-02_current.json",
+      "language": "json",
+      "sizeLines": 2634,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_2026-06-02_temp0.json",
+      "language": "json",
+      "sizeLines": 2632,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_current_pipeline_temp0.json",
+      "language": "json",
+      "sizeLines": 2628,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_hybrid_temp0.json",
+      "language": "json",
+      "sizeLines": 2628,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_hybrid.json",
+      "language": "json",
+      "sizeLines": 2629,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_no_rewrite_temp0.json",
+      "language": "json",
+      "sizeLines": 2628,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_rerank_temp0.json",
+      "language": "json",
+      "sizeLines": 2625,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_rerank_v11_k16_top12.json",
+      "language": "json",
+      "sizeLines": 2626,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_rerank_v11_k20_top16.json",
+      "language": "json",
+      "sizeLines": 2630,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_eval_results_rerank_v11_k24_top12.json",
+      "language": "json",
+      "sizeLines": 2626,
+      "fileCategory": "config"
+    },
+    {
+      "path": "RAG_eval/rag_evaluation.ipynb",
+      "language": "ipynb",
+      "sizeLines": 511,
+      "fileCategory": "code"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 591,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "requirements.txt",
+      "language": "txt",
+      "sizeLines": 7,
+      "fileCategory": "docs"
+    }
+  ],
+  "totalFiles": 340,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "large",
+  "stats": {
+    "filesScanned": 340,
+    "byCategory": {
+      "code": 233,
+      "docs": 68,
+      "config": 30,
+      "data": 7,
+      "markup": 2
+    },
+    "byLanguage": {
+      "unknown": 18,
+      "markdown": 63,
+      "config": 3,
+      "python": 151,
+      "sql": 5,
+      "json": 27,
+      "sqlite": 1,
+      "txt": 5,
+      "csv": 2,
+      "docx": 4,
+      "html": 1,
+      "javascript": 55,
+      "css": 1,
+      "pkl": 2,
+      "ipynb": 2
+    }
+  },
+  "importMap": {}
+}

@@ -1,0 +1,57 @@
+flowchart TD
+    START(["Nguoi dung gui cau hoi"])
+    PREP["<b>Tien xu ly</b><br/>Kiem soat toc do &le;20 tin/phut &nbsp;&bull;&nbsp; Dam bao ket qua ML &nbsp;&bull;&nbsp; Tao/lay session<br/>Luu tin nhan nguoi dung &rarr; PostgreSQL &nbsp;&bull;&nbsp; Tai memory hoi thoai ~2000 token<br/><i>neu hoi thoai dai &rarr; tom tat tu dong tin cu, toi da 500 token</i>"]
+    D1{{"Dang co de xuat<br/>cho xac nhan?"}}
+    BYPASS["Xu ly xac nhan /<br/>tu choi truc tiep"]
+    EARLY(["&otimes; Ket thuc som<br/>(bypass RAG)"])
+    D2{{"Yeu cau dieu chinh<br/>khoan vay?"}}
+    LAT["<b>Loan Adjustment Tool</b><br/>LLM soft-propose + luoi heuristic<br/>&rarr; merge &rarr; hard-verify ML<br/>&rarr; pending_action TTL 30 phut"]
+    CTX["<b>Dung ngu canh 4 khoi tu PostgreSQL</b><br/>Form &nbsp;&bull;&nbsp; Ket qua ML &nbsp;&bull;&nbsp; Advisory &lpar;DTI, rui ro, khuyen nghi&rpar; &nbsp;&bull;&nbsp; Data Quality"]
+
+    subgraph RAG["&nbsp;Engine RAG &lpar;_rag_invoke&rpar;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; * Khong truy cap PostgreSQL truc tiep"]
+        G1["1. Input guardrail &mdash; loc cau hoi vi pham, injection, PII, vuot do dai"]
+        G2["2. Phan loai y dinh &mdash; 6 nhan: loan_inquiry &bull; risk_explanation &bull; policy &bull; advice &bull; greeting &bull; off_topic"]
+        G3["3. Viet lai truy van &mdash; tach khoi lich su hoi thoai, tao cau hoi doc lap cho retrieval"]
+        G4["4. Tim kiem lai tren Qdrant &mdash; dense cosine &lpar;1536-d&rpar; + BM25 thua<br/>&rarr; hop nhat bang RRF &lpar;k=60&rpar;, lay top 20 ung vien"]
+        G5["5. Cross-encoder rerank &lpar;jina-reranker-v2-base-multilingual&rpar; &mdash; loc con top 12"]
+        G6["6. Mo rong ve tai lieu cha &mdash; gom theo parent_id, giu toi da 4 doan goc"]
+        G7["7. Lap rap prompt 3 lop &mdash; system &lpar;quy tac + ngu canh + KB&rpar; &bull; history &bull; question"]
+        G8["&starf; 8. Goi LLM &mdash; Gemini 2.5 Flash qua OpenRouter &lpar;temperature = 0.3&rpar;"]
+        G9["9. Output guardrail &mdash; loc ro ri noi bo, cam ket sai, cat gon dau ra"]
+        G1 --> G2 --> G3 --> G4 --> G5 --> G6 --> G7 --> G8 --> G9
+    end
+
+    SAVE["Luu phan hoi tro ly &rarr; PostgreSQL"]
+    END(["Tra loi nguoi dung"])
+
+    START --> PREP --> D1
+    D1 -->|Co| BYPASS --> EARLY
+    D1 -->|Khong| D2
+    D2 -->|Co| LAT
+    LAT -->|"gan vao ngu canh"| CTX
+    D2 -->|Khong| CTX
+    CTX --> G1
+    G9 --> SAVE --> END
+
+    classDef startEnd fill:#1565C0,stroke:#0D47A1,color:#fff
+    classDef process fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef decision fill:#FFFDE7,stroke:#F9A825,color:#333
+    classDef bypass fill:#FFEBEE,stroke:#C62828,color:#B71C1C
+    classDef early fill:#C62828,stroke:#B71C1C,color:#fff
+    classDef loan fill:#F3E5F5,stroke:#7B1FA2,color:#4A148C
+    classDef context fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ragStep fill:#DCEDC8,stroke:#AED581,color:#1B5E20
+    classDef llmStep fill:#C5E1A5,stroke:#8BC34A,color:#1B5E20,font-weight:bold
+    classDef save fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+
+    class START,END startEnd
+    class PREP,SAVE process
+    class D1,D2 decision
+    class BYPASS bypass
+    class EARLY early
+    class LAT loan
+    class CTX context
+    class G1,G2,G3,G4,G5,G6,G7,G9 ragStep
+    class G8 llmStep
+
+    style RAG fill:#F1F8E9,stroke:#33691E,stroke-width:2px,color:#33691E
