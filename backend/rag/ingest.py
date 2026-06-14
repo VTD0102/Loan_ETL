@@ -15,6 +15,7 @@ from rag.chunking import split_documents_semantically
 
 from rag.config import (
     BM25_SPARSE_MODEL, EMBEDDING_MODEL, OPENROUTER_BASE_URL,
+    FASTEMBED_CACHE_DIR,
     QDRANT_API_KEY, QDRANT_COLLECTION, QDRANT_URL,
 )
 from core.config import settings
@@ -57,7 +58,10 @@ def upsert_to_qdrant(chunks, embeddings, collection_name=QDRANT_COLLECTION, recr
     from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
     from qdrant_client import QdrantClient, models
 
-    sparse_embeddings = FastEmbedSparse(model_name=BM25_SPARSE_MODEL)
+    sparse_embeddings = FastEmbedSparse(
+        model_name=BM25_SPARSE_MODEL,
+        cache_dir=FASTEMBED_CACHE_DIR,
+    )
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     if recreate and client.collection_exists(collection_name=collection_name):

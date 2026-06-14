@@ -80,7 +80,14 @@ def test_settings_builds_bureau_url_from_bureau_db_components():
     assert config.settings.bureau_database_url == "postgresql://bureau_user:bureau_pass@bureau.local:6543/bureau_db"
 
 
+def test_fastembed_cache_defaults_to_project_cache():
+    config = load_config_with_env(base_env())
+
+    assert config.settings.rag_fastembed_cache_path.endswith("/Loan_ETL/.cache/fastembed")
+
+
 if __name__ == "__main__":
     test_settings_builds_database_urls_from_db_components()
     test_settings_builds_bureau_url_from_bureau_db_components()
+    test_fastembed_cache_defaults_to_project_cache()
     print("Backend config tests passed")

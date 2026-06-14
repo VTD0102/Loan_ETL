@@ -43,6 +43,15 @@ _STABLE_EMPLOYMENT = {"Employed", "Working", "State servant", "Commercial associ
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _effective_credit_score(app: LoanApplication) -> int | None:
+    """Điểm tín dụng để hiển thị/tư vấn: ưu tiên điểm Scorecard (fico_score) đã tính
+    lúc submission; fallback về điểm khách tự khai (credit_score) cho các đơn cũ
+    chưa có fico_score. KHÔNG dùng credit_score tự khai khi đã có điểm model."""
+    if app.fico_score is not None:
+        return app.fico_score
+    return app.credit_score
+
+
 def build_user_context(db: Session, user_id: Any) -> str:
     """Trả về text context cho RAG prompt (format section 4 của requirements doc)."""
     ctx = build_context_json(db, user_id)
@@ -84,7 +93,7 @@ def _build_form_context(app: LoanApplication) -> dict:
         "term_months":      app.term,
         "monthly_income":   _f(app.monthly_income),
         "dti":              _f(app.dti),
-        "credit_score":     app.credit_score,
+        "credit_score":     _effective_credit_score(app),
         # Employment
         "employment_status": app.employment_status,
         "occupation_type":   app.occupation_type,
@@ -130,7 +139,7 @@ def _build_advisory_context(app: LoanApplication, ml_ctx: dict) -> dict:
     rec     = ml_ctx.get("recommended_amount") or 0
     prob    = ml_ctx.get("default_probability") or 0
     dti     = _f(app.dti) or 0
-    cs      = app.credit_score or 0
+    cs      = _effective_credit_score(app) or 0
     income  = _f(app.monthly_income) or 1
 
     # Loan vs recommended
