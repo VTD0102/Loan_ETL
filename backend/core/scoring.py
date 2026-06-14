@@ -1,7 +1,7 @@
 import math
 
 _BASE   = 600
-_ODDS   = 50
+_ODDS   = 1
 _PDO    = 20
 _FACTOR = _PDO / math.log(2)
 
