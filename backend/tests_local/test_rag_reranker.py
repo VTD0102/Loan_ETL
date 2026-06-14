@@ -1,5 +1,11 @@
 """Unit tests for rag.reranker.Reranker — sort + slice via mocked encoder."""
+import sys
+from pathlib import Path
 from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "backend"))
 
 from rag.reranker import Reranker
 
@@ -37,6 +43,12 @@ def test_reranker_lazy_loads_encoder():
     assert r._encoder is None
 
 
+def test_reranker_uses_configured_cache_dir():
+    r = Reranker(cache_dir="/tmp/test-fastembed-cache")
+
+    assert r._cache_dir == "/tmp/test-fastembed-cache"
+
+
 def test_reranker_top_k_larger_than_docs_returns_all_sorted():
     docs = [
         SimpleNamespace(page_content="a"),
@@ -58,5 +70,6 @@ if __name__ == "__main__":
     test_reranker_sorts_by_score_and_slices_to_top_k()
     test_reranker_returns_empty_for_no_docs()
     test_reranker_lazy_loads_encoder()
+    test_reranker_uses_configured_cache_dir()
     test_reranker_top_k_larger_than_docs_returns_all_sorted()
     print("rag reranker tests passed")

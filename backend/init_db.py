@@ -25,6 +25,11 @@ _COLUMN_MIGRATIONS = [
     "ALTER TABLE loan_applications ALTER COLUMN dti DROP NOT NULL",
 ]
 
+_BUREAU_COLUMN_MIGRATIONS = [
+    "ALTER TABLE cic_credit_records ADD COLUMN IF NOT EXISTS cb_queries_30d INTEGER DEFAULT 0",
+    "ALTER TABLE cic_credit_records ADD COLUMN IF NOT EXISTS total_prolongations INTEGER DEFAULT 0",
+]
+
 # Idempotent index migrations — prevent race-condition duplicates
 _INDEX_MIGRATIONS = [
     # Only ONE active (non-rejected) application per user at a time.
@@ -56,6 +61,18 @@ def init_database():
                     conn.rollback()
                     print(f"  ⚠ Migration skipped ({e})")
         print("✅ Column migrations hoàn tất.")
+
+        print("⏳ Chạy bureau column migrations...")
+        with bureau_engine.connect() as conn:
+            for sql in _BUREAU_COLUMN_MIGRATIONS:
+                try:
+                    conn.execute(text(sql))
+                    conn.commit()
+                    print(f"  ✓ {sql.split()[-1]}")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"  ⚠ Bureau migration skipped ({e})")
+        print("✅ Bureau column migrations hoàn tất.")
 
         print("⏳ Chạy index migrations...")
         with engine.connect() as conn:

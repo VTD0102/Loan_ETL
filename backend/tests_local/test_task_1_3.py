@@ -16,10 +16,10 @@ try:
         "email": "user13@gmail.com",
         "username": "user13",
         "password": "123",
-        "cccd": cccd,
         "full_name": "User Thirteen",
-        "phone": "0901234567",
-        "address": "123 Test St"
+        "phone": "0987654321",
+        "cccd": "123456789012",
+        "address": "Hanoi, Vietnam"
     })
     print(resp.status_code, resp.text)
     if resp.status_code not in (201, 400): exit(1)

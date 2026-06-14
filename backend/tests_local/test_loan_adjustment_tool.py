@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "backend"))
 
 import services.loan_adjustment_tool as tool
+import services.loan_adjustment_reasoner as reasoner
 
 
 def _criterion_field(criterion):
@@ -102,15 +103,16 @@ def _rejected_app(**overrides):
     return SimpleNamespace(**data)
 
 
-def _patch_tool(predictions, validation_failures=None):
+def _patch_tool(predictions, validation_failures=None, llm_candidates=None):
     validation_failures = set(validation_failures or [])
     original_predict = tool.ml_service.predict
     original_load = tool.ml_service._load
     original_fetch_previous = tool.fetch_previous_applications
     original_validate = tool.validate_confirmed_values
+    original_propose = reasoner.propose_candidates
 
     def fake_predict(payload, db=None, user_id=None):
-        prob = predictions[(Decimal(str(payload.loan_amount)), int(payload.term))]
+        prob = predictions.get((Decimal(str(payload.loan_amount)), int(payload.term)), 0.99)
         return {
             "default_probability": prob,
             "risk_level": "High" if prob > 0.4 else "Medium",
@@ -129,12 +131,14 @@ def _patch_tool(predictions, validation_failures=None):
     tool.ml_service._load = lambda: {"thresholds": {"low": 0.2, "high": 0.4}}
     tool.fetch_previous_applications = lambda db, user_id: []
     tool.validate_confirmed_values = fake_validate
+    reasoner.propose_candidates = lambda summary: list(llm_candidates or [])
 
     def restore():
         tool.ml_service.predict = original_predict
         tool.ml_service._load = original_load
         tool.fetch_previous_applications = original_fetch_previous
         tool.validate_confirmed_values = original_validate
+        reasoner.propose_candidates = original_propose
 
     return restore
 
@@ -207,6 +211,8 @@ def test_pending_action_contains_three_proposal_options():
 
     action = tool.build_pending_action(result, now=datetime(2026, 5, 19, 10, 0, 0))
 
+    assert action["current_loan_amount"] == "50000"
+    assert action["current_term"] == 12
     assert action["proposal"]["loan_amount"] == "35000"
     assert [item["term"] for item in action["proposals"]] == [36, 48, 24]
     assert action["proposals"][1]["loan_amount"] == "35000"
@@ -236,8 +242,65 @@ def test_tool_falls_back_to_recommended_amount_when_original_amount_fails():
     assert result.status == "proposal"
     assert result.proposal is not None
     assert result.proposal.loan_amount == Decimal("35000")
-    assert result.proposal.term == 36
-    assert result.proposal.default_probability == 0.28
+    assert result.proposal.term == 60
+    assert result.proposal.default_probability == 0.35
+
+
+def test_tool_fallback_suggests_higher_term_instead_of_original_form():
+    app = _rejected_app(recommended_amount=None)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 12): 0.55,
+        (Decimal("50000"), 24): 0.53,
+        (Decimal("50000"), 36): 0.50,
+        (Decimal("50000"), 48): 0.47,
+        (Decimal("50000"), 60): 0.45,
+    }
+    restore = _patch_tool(predictions)
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "fallback_proposal"
+    assert result.proposal is not None
+    assert result.proposal.loan_amount == Decimal("50000")
+    assert result.proposal.term == 60
+    assert result.proposal.default_probability == 0.45
+    assert result.proposals is not None
+    assert [proposal.term for proposal in result.proposals] == [60, 48, 36]
+
+
+def test_tool_at_max_term_suggests_reducing_loan_amount():
+    app = _rejected_app(
+        term=60,
+        loan_amount=Decimal("50000"),
+        recommended_amount=None,
+    )
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 60): 0.55,
+        (Decimal("37500"), 60): 0.43,
+        (Decimal("25000"), 60): 0.35,
+        (Decimal("12500"), 60): 0.30,
+        (Decimal("500"), 60): 0.12,
+    }
+    restore = _patch_tool(predictions)
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert result.proposal is not None
+    assert result.proposal.loan_amount == Decimal("25000")
+    assert result.proposal.term == 60
+    assert result.proposals is not None
+    assert [proposal.loan_amount for proposal in result.proposals] == [
+        Decimal("25000"),
+        Decimal("12500"),
+        Decimal("500"),
+    ]
 
 
 def test_tool_skips_candidates_that_confirm_validation_would_reject():
@@ -330,7 +393,7 @@ def test_tool_returns_no_rejected_application_status_when_missing():
     assert result.proposal is None
 
 
-def test_tool_returns_no_passing_option_status_when_all_candidates_fail():
+def test_tool_returns_fallback_changed_form_when_all_candidates_fail():
     app = _rejected_app(recommended_amount=None)
     db = FakeDB([app])
     predictions = {
@@ -346,8 +409,10 @@ def test_tool_returns_no_passing_option_status_when_all_candidates_fail():
     finally:
         restore()
 
-    assert result.status == "no_passing_option"
-    assert result.proposal is None
+    assert result.status == "fallback_proposal"
+    assert result.proposal is not None
+    assert result.proposal.loan_amount == Decimal("50000")
+    assert result.proposal.term == 60
     assert result.best_observed is not None
 
 
@@ -404,6 +469,36 @@ def test_pending_action_expiry_helpers():
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=29)) is False
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=30)) is True
     assert tool.is_pending_action_expired(action, now=now + timedelta(minutes=31)) is True
+
+
+def test_build_pending_action_serializes_expiry_as_utc_timezone_aware():
+    app = _rejected_app()
+    proposal = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("35000"),
+        term=36,
+        default_probability=0.28,
+        risk_level="Medium",
+        risk_score=72,
+        model_version="test-model",
+    )
+    result = tool.LoanAdjustmentResult(
+        status="proposal",
+        source_application_id=str(app.id),
+        current_loan_amount=app.loan_amount,
+        current_term=app.term,
+        current_default_probability=0.55,
+        proposal=proposal,
+        best_observed=None,
+        message="proposal",
+    )
+
+    action = tool.build_pending_action(
+        result,
+        now=datetime(2026, 5, 19, 10, 0, 0),
+    )
+
+    assert action["created_at"] == "2026-05-19T10:00:00+00:00"
+    assert action["expires_at"] == "2026-05-19T10:30:00+00:00"
 
 
 def test_build_pending_action_requires_proposal():
@@ -488,20 +583,136 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
     assert payload.is_married_flag is False
 
 
+def test_change_magnitude_amount_and_term():
+    app = _rejected_app(loan_amount=Decimal("50000"), term=12)
+    # giảm 50% số tiền, cùng kỳ hạn -> 0.5
+    p_reduce = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("25000"), term=12, default_probability=0.3,
+        risk_level="Medium", risk_score=70,
+    )
+    assert tool._change_magnitude(app, p_reduce) == 0.5
+    # giữ tiền, tăng kỳ hạn 12 -> 36 = (36-12)/12 = 2.0
+    p_extend = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("50000"), term=36, default_probability=0.3,
+        risk_level="Medium", risk_score=70,
+    )
+    assert tool._change_magnitude(app, p_extend) == 2.0
+
+
+def test_unified_rank_prefers_smaller_change():
+    app = _rejected_app(loan_amount=Decimal("50000"), term=12)
+    small = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("45000"), term=12, default_probability=0.39,
+        risk_level="Medium", risk_score=61,
+    )  # magnitude 0.1
+    big_but_safer = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("10000"), term=12, default_probability=0.10,
+        risk_level="Low", risk_score=90,
+    )  # magnitude 0.8
+    ranked = sorted([big_but_safer, small], key=lambda p: tool._unified_rank(app, p))
+    assert ranked[0] is small  # thay đổi ít nhất thắng dù prob cao hơn
+
+
+def test_format_result_includes_rationale_when_present():
+    proposal = tool.LoanAdjustmentProposal(
+        loan_amount=Decimal("30000"),
+        term=36,
+        default_probability=0.30,
+        risk_level="Medium",
+        risk_score=70,
+        model_version="test-model",
+        adjustment_strategy="reduce_amount",
+        rationale="DTI cao nên giảm số tiền",
+    )
+    result = tool.LoanAdjustmentResult(
+        status="proposal",
+        source_application_id="x",
+        current_loan_amount=Decimal("50000"),
+        current_term=12,
+        current_default_probability=0.55,
+        proposal=proposal,
+        best_observed=None,
+        message="msg",
+        proposals=[proposal],
+    )
+    text = tool.format_result_for_rag(result)
+    assert "DTI cao nên giảm số tiền" in text
+    assert "giảm số tiền vay" in text
+
+
+def test_llm_candidate_can_win_top1_when_smaller_change_and_safe():
+    # Đơn gốc 50000/term12. Lưới (extend_term) có 50000/36 = 0.30 (magnitude 2.0).
+    # LLM đề xuất 45000/12 = 0.35 (magnitude 0.1) -> thay đổi nhỏ hơn nhiều -> top1.
+    app = _rejected_app(recommended_amount=None, loan_amount=Decimal("50000"), term=12)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 24): 0.45,
+        (Decimal("50000"), 36): 0.30,
+        (Decimal("50000"), 48): 0.34,
+        (Decimal("50000"), 60): 0.38,
+        (Decimal("45000"), 12): 0.35,
+    }
+    llm = [reasoner.Candidate(amount=Decimal("45000"), term=12,
+                              strategy="reduce_amount", rationale="DTI cao")]
+    restore = _patch_tool(predictions, llm_candidates=llm)
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert result.proposal.loan_amount == Decimal("45000")
+    assert result.proposal.term == 12
+    assert result.proposal.rationale == "DTI cao"
+
+
+def test_empty_llm_matches_grid_only_passing_set():
+    # LLM trả [] -> kết quả phải đúng tập passing của lưới cứng.
+    app = _rejected_app(recommended_amount=None, loan_amount=Decimal("50000"), term=12)
+    db = FakeDB([app])
+    predictions = {
+        (Decimal("50000"), 24): 0.45,
+        (Decimal("50000"), 36): 0.32,
+        (Decimal("50000"), 48): 0.34,
+        (Decimal("50000"), 60): 0.38,
+    }
+    restore = _patch_tool(predictions, llm_candidates=[])
+    try:
+        result = tool.find_best_reapplication_option(db, app.user_id)
+    finally:
+        restore()
+
+    assert result.status == "proposal"
+    assert {(p.loan_amount, p.term) for p in result.proposals} == {
+        (Decimal("50000"), 36),
+        (Decimal("50000"), 48),
+        (Decimal("50000"), 60),
+    }
+    assert result.proposal.term == 36  # thay đổi ít nhất (kỳ hạn tăng ít nhất)
+
+
 if __name__ == "__main__":
     test_tool_selects_passing_term_at_original_amount()
     test_pending_action_contains_three_proposal_options()
     test_tool_falls_back_to_recommended_amount_when_original_amount_fails()
+    test_tool_fallback_suggests_higher_term_instead_of_original_form()
+    test_tool_at_max_term_suggests_reducing_loan_amount()
     test_tool_skips_candidates_that_confirm_validation_would_reject()
     test_tool_uses_newest_same_user_auto_rejected_application()
     test_tool_returns_no_proposal_for_cic_blacklist()
     test_tool_returns_no_rejected_application_status_when_missing()
-    test_tool_returns_no_passing_option_status_when_all_candidates_fail()
+    test_tool_returns_fallback_changed_form_when_all_candidates_fail()
     test_get_source_application_returns_none_for_invalid_uuid()
     test_get_source_application_returns_none_for_wrong_user()
     test_get_source_application_requires_auto_rejected_status()
     test_pending_action_expiry_helpers()
+    test_build_pending_action_serializes_expiry_as_utc_timezone_aware()
     test_build_pending_action_requires_proposal()
     test_pending_action_expiry_accepts_timezone_aware_iso_strings()
     test_application_to_confirm_payload_defaults_legacy_nullable_fields()
+    test_format_result_includes_rationale_when_present()
+    test_change_magnitude_amount_and_term()
+    test_unified_rank_prefers_smaller_change()
+    test_llm_candidate_can_win_top1_when_smaller_change_and_safe()
+    test_empty_llm_matches_grid_only_passing_set()
     print("loan adjustment tool tests passed")

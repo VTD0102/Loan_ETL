@@ -5,6 +5,7 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE = Path(__file__).parents[1] / ".env"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _build_postgres_url(
@@ -74,12 +75,16 @@ class Settings(BaseSettings):
 
     # RAG retrieval (V1: hybrid BM25 + vector)
     rag_bm25_model: str = "Qdrant/bm25"
+    rag_fastembed_cache_path: str = str(PROJECT_ROOT / ".cache" / "fastembed")
 
     # RAG retrieval Stage 2 (reranker)
     rag_reranker_model: str = "jinaai/jina-reranker-v2-base-multilingual"
     rag_reranker_enabled: bool = True
     rag_reranker_candidate_k: int = 20
     rag_reranker_top_k: int = 12
+
+    # RAG loan adjustment reasoner (soft-propose / hard-verify)
+    rag_loan_reasoner_enabled: bool = True
 
     # RAG memory (V1: window + summary buffer)
     rag_memory_window_token_budget: int = 2000

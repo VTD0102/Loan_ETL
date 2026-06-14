@@ -50,7 +50,7 @@ const LoanAdjustmentActionCard = ({
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-gray-600">
-            Hồ sơ mới sẽ được tạo từ đơn bị từ chối trước đó nếu bạn xác nhận.
+            Hồ sơ mới chỉ thay đổi số tiền vay hoặc kỳ hạn theo phương án đang chọn.
           </p>
         </div>
       </div>
@@ -86,6 +86,7 @@ const LoanAdjustmentActionCard = ({
                 </div>
                 <div className="mt-1 text-sm font-bold text-gray-950">{option.amountLabel}</div>
                 <div className="mt-0.5 text-xs text-gray-500">{option.termLabel} • P {option.defaultProbabilityLabel}</div>
+                <div className="mt-1 text-xs leading-4 text-gray-600">{option.changeLabel}</div>
               </button>
             )
           })}

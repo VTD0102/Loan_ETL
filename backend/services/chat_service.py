@@ -529,6 +529,8 @@ def _serialize_pending_loan_adjustment_action(session: ChatSession) -> dict[str,
         "type": "loan_term_adjustment",
         "status": "pending_confirmation",
         "source_application_id": action.get("source_application_id"),
+        "current_loan_amount": action.get("current_loan_amount"),
+        "current_term": action.get("current_term"),
         "created_at": action.get("created_at"),
         "expires_at": action.get("expires_at"),
         "proposal": {
@@ -538,6 +540,7 @@ def _serialize_pending_loan_adjustment_action(session: ChatSession) -> dict[str,
             "risk_level": proposal.get("risk_level"),
             "risk_score": proposal.get("risk_score"),
             "model_version": proposal.get("model_version"),
+            "adjustment_strategy": proposal.get("adjustment_strategy"),
         },
         "proposals": [
             {
@@ -547,6 +550,7 @@ def _serialize_pending_loan_adjustment_action(session: ChatSession) -> dict[str,
                 "risk_level": item.get("risk_level"),
                 "risk_score": item.get("risk_score"),
                 "model_version": item.get("model_version"),
+                "adjustment_strategy": item.get("adjustment_strategy"),
             }
             for item in proposal_options
             if isinstance(item, dict)
@@ -658,6 +662,12 @@ def _is_loan_adjustment_request(message: str) -> bool:
     has_help_action = any(term in text for term in _ADJUSTMENT_HELP_TERMS)
     has_personal_action = any(term in text for term in _ADJUSTMENT_PERSONAL_ACTION_TERMS)
     has_resubmit = any(term in text for term in _ADJUSTMENT_RESUBMIT_TERMS)
+    is_resubmit_policy_question = (
+        has_resubmit
+        and any(term in text for term in ("có thể", "co the", "được không", "duoc khong"))
+        and not has_help_action
+        and not has_direct_action
+    )
     return (
         has_direct_action
         and (has_context or has_help_action or has_personal_action)
@@ -666,8 +676,7 @@ def _is_loan_adjustment_request(message: str) -> bool:
         and has_help_action
         and (has_direct_action or has_term_question or has_adjustment_wording)
     ) or (
-        has_resubmit
-        and (has_help_action or has_personal_action)
+        has_resubmit and not is_resubmit_policy_question
     )
 
 
@@ -700,11 +709,19 @@ def _format_loan_adjustment_context(
             f"- Mức rủi ro: {best.risk_level}",
         ])
     
-    if result.proposal is not None:
+    if result.proposal is not None and result.status == "fallback_proposal":
+        lines.append(
+            "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống KHÔNG tìm được khoản vay nào dưới ngưỡng tự động duyệt (40%). "
+            "Các phương án trên đã KHÁC form cũ: ưu tiên tăng kỳ hạn trước; khi đã tới kỳ hạn tối đa 60 tháng thì giảm số tiền vay. "
+            "Hãy trình bày đúng thay đổi của từng phương án, CẢNH BÁO rõ rằng xác suất vỡ nợ vẫn trên ngưỡng an toàn, "
+            "và khuyến nghị khách hàng chỉnh form theo hướng này hoặc cải thiện hồ sơ trước khi nộp lại."
+        )
+    elif result.proposal is not None:
         lines.append(
             "\n[HƯỚNG DẪN QUAN TRỌNG CHO AI]: Hệ thống vừa thiết lập các phương án nộp lại đang chờ xác nhận. "
-            "Bạn CÓ THỂ nộp lại khoản vay đã chọn thay khách hàng. Hãy thông báo 3 phương án đề xuất ở trên cho khách hàng "
-            "và nhấn mạnh rằng hồ sơ nộp lại chỉ thay đổi số tiền vay và kỳ hạn, không sửa các số liệu khác. "
+            "Bạn CÓ THỂ nộp lại khoản vay đã chọn thay khách hàng. Hãy thông báo các phương án đề xuất ở trên cho khách hàng, "
+            "nêu rõ phương án nào tăng kỳ hạn và phương án nào giảm số tiền vay. "
+            "Nhấn mạnh rằng hồ sơ nộp lại chỉ thay đổi số tiền vay và kỳ hạn, không sửa các số liệu khác. "
             "Hướng dẫn họ nhắn 'Đồng ý', 'Xác nhận', hoặc chọn một phương án để bạn tự động nộp đơn mới; nhắn 'Hủy' để bỏ qua. "
             "Tuyệt đối KHÔNG BẢO khách hàng tự thao tác."
         )

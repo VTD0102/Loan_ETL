@@ -1,0 +1,42 @@
+# .understandignore
+# Syntax: same as .gitignore
+#
+# --- From .gitignore ---
+
+# .env
+# backend/.env
+# frontend/.env
+# config/etl_db.env
+# frontend/.env.local
+# frontend/.env.production
+# *.py[cod]
+# *.pyo
+# *.pyd
+# .Python
+# env/
+# data/raw/*.csv
+# qdrant_storage/
+# frontend/node_modules/
+# frontend/dist/
+# frontend/build/
+# .DS_Store
+# Thumbs.db
+# data/
+# docs/_build/
+# .claude/
+# .gemini/
+# .codex/
+# .superpowers/
+# .uv-python/
+# .worktrees/
+# .python-version
+
+# --- Detected directories (uncomment to exclude) ---
+
+# docs/
+
+# --- Test file patterns ---
+
+# *.test.*
+# *.spec.*
+# *.snap
