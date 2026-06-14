@@ -102,7 +102,7 @@ def _build_consistent_cic(
             "lender": random.choice(_LENDERS),
             "amount": amt,
             "status": "active",
-            "dpd_max": random.randint(0, min(dpd, 30)) if not bad_debt else random.randint(10, dpd),
+            "dpd_max": random.randint(0, min(dpd, 30)) if not bad_debt else random.randint(min(10, dpd), max(10, dpd)),
             "opened_at": opened_at.isoformat(),
             "closed_at": None,
         })

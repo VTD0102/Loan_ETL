@@ -199,7 +199,7 @@ const RejectedRagAdvisorModal = ({
               const pct = Math.min(100, Math.max(0, ((score - 300) / 550) * 100))
               return (
                 <div className={`rounded-lg ${s.bg} p-3`}>
-                  <p className="text-xs text-gray-500 mb-1">Điểm tín dụng scorecard</p>
+                  <p className="text-xs text-gray-500 mb-1">Điểm tín dụng</p>
                   <div className="flex items-end gap-1.5">
                     <span className="text-2xl font-bold" style={{ color: s.color }}>{score}</span>
                     <span className="text-xs text-gray-400 mb-0.5">/ 850</span>

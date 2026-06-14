@@ -329,76 +329,86 @@ flowchart TD
 
 ```text
 Loan_ETL/
-├── backend/                  # FastAPI API server
-│   ├── main.py               # Entry point — mount routers, CORS
-│   ├── api/routers/          # Route handlers: auth, applications, admin, chat, credit_score
-│   ├── services/             # Business logic layer
-│   │   ├── auth_service.py           # JWT authentication + bcrypt
-│   │   ├── application_service.py    # CRUD đơn vay, submit workflow
-│   │   ├── admin_service.py          # Admin approve/reject đơn
-│   │   ├── ml_service.py             # Load LightGBM model, predict risk
-│   │   ├── credit_score_service.py   # Load scorecard, compute FICO score
-│   │   ├── chat_service.py           # Điều phối RAG chatbot & flow nộp lại
-│   │   ├── loan_adjustment_tool.py   # Tìm phương án điều chỉnh hạn mức/kỳ hạn tối ưu
-│   │   ├── model_feature_builder.py  # Map form data → ML features
-│   │   ├── loan_suggestion_service.py # Binary search optimal loan
-│   │   └── document_service.py       # Upload/manage documents
-│   ├── rag/                  # RAG chatbot engine
-│   │   ├── chain.py          # RAG pipeline execution (Guardrail -> Route -> Rewrite -> Hybrid Retrieve -> Rerank -> LLM -> Guardrail)
-│   │   ├── router.py         # Phân loại ý định (Intent Classification) bằng từ khóa + LLM JSON
-│   │   ├── query_rewriter.py # Viết lại câu truy vấn độc lập dựa trên lịch sử
-│   │   ├── retriever.py      # Qdrant Hybrid Search & Reranking retriever
-│   │   ├── reranker.py       # Cross-Encoder Reranker sử dụng fastembed
-│   │   ├── chunking.py       # Phân mảnh tài liệu hierarchical (Parent-Child)
-│   │   ├── context_builder.py # Build 4-block user context từ Database
-│   │   ├── personalizer.py   # Tự động điều chỉnh giọng điệu & chỉ dẫn dựa trên trạng thái đơn
-│   │   ├── guardrails.py     # Kiểm soát an toàn đầu vào (Prompt Injection) & đầu ra (Data leak, hứa duyệt)
-│   │   ├── memory.py         # Quản lý lịch sử hội thoại (Sliding Window + Conversation Summarization)
-│   │   ├── prompts.py        # System prompt template (Vietnamese)
-│   │   ├── ingest.py         # One-shot: nạp docs → chunk → embed → Qdrant
-│   │   ├── config.py         # Cấu hình RAG parameters (model, collections, top-k)
-│   │   ├── eval_runner.py    # Chạy kiểm thử tự động offline cho hệ thống RAG
-│   │   ├── eval_metrics.py   # Bộ chỉ số đánh giá RAG (Groundness, Faithfulness, Relevance)
-│   │   └── knowledge/        # Markdown knowledge base (faq.md, policy.md)
-│   ├── models/               # SQLAlchemy ORM models
-│   ├── schemas/              # Pydantic request/response schemas
-│   ├── core/                 # Config (env), security (JWT), scoring utils
-│   ├── db/                   # DB session, init SQL
-│   └── tests_local/          # Local integration tests
-```
-
-├── frontend/                 # React 18 + Vite + TailwindCSS
+├── backend/                              # FastAPI API server
+│   ├── main.py                           # Entry point — mount routers, CORS
+│   ├── init_db.py                        # Tạo / migrate bảng DB
+│   ├── api/
+│   │   ├── dependencies.py               # Shared deps: get_current_user, require_role
+│   │   └── routers/                      # Route handlers (thin): auth, applications,
+│   │                                     #   admin, chat, credit_score, cic
+│   ├── services/                         # Business logic layer
+│   │   ├── auth_service.py               # JWT authentication + bcrypt
+│   │   ├── application_service.py        # CRUD đơn vay, submit workflow (ngưỡng 0.4)
+│   │   ├── admin_service.py              # Admin approve/reject đơn
+│   │   ├── ml_service.py                 # Load LightGBM model, predict risk
+│   │   ├── credit_score_service.py       # Load scorecard, compute FICO + SHAP
+│   │   ├── chat_service.py               # Điều phối RAG chatbot & flow nộp lại
+│   │   ├── loan_adjustment_tool.py       # Tìm phương án điều chỉnh hạn mức/kỳ hạn tối ưu
+│   │   ├── loan_adjustment_reasoner.py   # Luật mềm xếp hạng phương án điều chỉnh
+│   │   ├── loan_suggestion_service.py    # Binary search optimal loan
+│   │   ├── model_feature_builder.py      # Map form data → ML features
+│   │   ├── cic_service.py                # Tích hợp dữ liệu CIC (credit bureau)
+│   │   └── document_service.py           # Upload / manage documents
+│   ├── rag/                              # RAG chatbot engine
+│   │   ├── chain.py                      # Pipeline: Guardrail→Route→Rewrite→Retrieve→Rerank→LLM→Guardrail
+│   │   ├── router.py                     # Phân loại ý định (từ khóa + LLM JSON)
+│   │   ├── query_rewriter.py             # Viết lại truy vấn độc lập theo lịch sử
+│   │   ├── retriever.py                  # Qdrant Hybrid Search retriever
+│   │   ├── reranker.py                   # Cross-Encoder Reranker (fastembed)
+│   │   ├── chunking.py                   # Phân mảnh hierarchical (Parent-Child)
+│   │   ├── context_builder.py            # Build 4-block user context từ DB
+│   │   ├── personalizer.py               # Điều chỉnh giọng điệu theo trạng thái đơn
+│   │   ├── guardrails.py                 # Kiểm soát input (injection) & output (data leak)
+│   │   ├── memory.py                     # Sliding window + conversation summarization
+│   │   ├── prompts.py                    # System prompt template (tiếng Việt)
+│   │   ├── ingest.py                     # Nạp docs → chunk → embed → Qdrant
+│   │   ├── config.py                     # Cấu hình RAG (model, collection, top-k)
+│   │   ├── exceptions.py                 # RAGError → fallback HTTP 503
+│   │   ├── eval_runner.py / eval_metrics.py  # Kiểm thử & chấm điểm RAG offline
+│   │   └── knowledge/                    # Markdown knowledge base (faq.md, policy.md)
+│   ├── models/                           # SQLAlchemy ORM: User, LoanApplication, PersonalInfo, Chat*, CIC
+│   ├── schemas/                          # Pydantic v2 request/response contracts
+│   ├── core/                             # config.py (env), security.py (JWT), scoring.py
+│   ├── db/                               # session.py, init_app.sql
+│   ├── scripts/                          # Maintenance: seed, backfill FICO, reset DB
+│   └── tests_local/                      # Standalone integration test scripts
+│
+├── frontend/                             # React 18 + Vite + TailwindCSS
 │   └── src/
-│       ├── App.jsx           # Router: public, customer, admin routes
+│       ├── App.jsx / main.jsx            # Router (public/customer/admin) & entrypoint
 │       ├── pages/
-│       │   ├── customer/     # Landing, Login, Register, Dashboard,
-│       │   │                 # Apply, Chat, History, ApplicationDetail
-│       │   └── admin/        # Dashboard, PendingList, ApplicationList,
-│       │                     # ApplicationDetail, PersonalInfoView
-│       ├── components/       # Reusable UI: Navbar, AdminLayout, ProtectedRoute
-│       ├── services/         # Axios API clients: api, auth, chat, applications, admin
-│       ├── store/            # Zustand state: authStore
-│       ├── hooks/            # Custom React hooks
-│       └── mocks/            # Mock data for offline dev
+│       │   ├── customer/                 # Landing, Login, Register, Dashboard, Apply,
+│       │   │                             #   Chat, History, ApplicationDetail, SubmitInfo
+│       │   └── admin/                    # Dashboard, PendingList, ApplicationList,
+│       │                                 #   ApplicationDetail, PersonalInfoView, Profile
+│       ├── components/                   # common/ · customer/ · admin/ (PascalCase)
+│       ├── services/                     # Axios API clients (api.js + JWT interceptor)
+│       ├── store/                        # Zustand state: authStore
+│       ├── hooks/ · utils/               # Custom React hooks & helpers
+│       └── mocks/                        # Mock handlers cho `npm run mock`
 │
-├── machinelearning/          # ETL + ML training (offline)
-│   ├── etl/                  # ETL scripts: load_bronze, etl_silver, etl_gold, pipeline
-│   ├── database/             # SQL transforms: silver + gold
-│   ├── ml/                   # Training: retrain_customer_model, train_scorecard
-│   │   └── models/           # Exported .pkl artifacts
-│   ├── data/                 # DuckDB + raw Parquet files (Home Credit Stability)
-│   ├── config/               # etl_db.env
-│   ├── notebooks/            # EDA / training notebooks
-│   └── utils/                # Shared DB connection helper
+├── machinelearning/                      # ETL + ML training (offline)
+│   ├── etl/                              # load_bronze, etl_silver, etl_gold, pipeline
+│   ├── database/                         # SQL transforms: silver + gold
+│   ├── ml/                               # retrain_customer_model, train_scorecard, validate_data
+│   │   ├── models/                       # Exported .pkl artifacts
+│   │   └── tests/                        # ML unit tests
+│   ├── data/                             # DuckDB + raw Parquet (Home Credit Stability)
+│   ├── config/                           # etl_db.env
+│   ├── notebooks/                        # EDA / training notebooks
+│   └── utils/                            # Shared DB connection helper
 │
-├── docs/                     # Project documentation
-│   ├── overall/              # Architecture notes, admin guide
-│   ├── ml/                   # ML documentation
-│   └── rag/                  # RAG design docs, benchmark results
+├── docs/                                 # Project documentation
+│   ├── overall/                          # Architecture notes, admin guide
+│   ├── ml/ · rag/                        # ML & RAG design docs, benchmark notes
+│   ├── data_dictionary/                  # Feature definitions, Kaggle overview
+│   └── superpowers/                      # plans/ + specs/ (lịch sử thiết kế tính năng)
 │
-├── qdrant_storage/           # Docker-mounted Qdrant persistent data
-├── AGENTS.md                 # Repository conventions
-├── requirements.txt          # Aggregate Python dependencies
+├── RAG_eval/                             # Bộ dữ liệu & kết quả benchmark RAG
+├── qdrant_storage/                       # Docker-mounted Qdrant persistent data
+├── export_eda_views.py                   # Export EDA views từ DuckDB
+├── requirements.txt                      # Aggregate Python dependencies (full-stack)
+├── AGENTS.md / CLAUDE.md                 # Repository conventions cho AI agents
 └── README.md
 ```
 
@@ -431,6 +441,8 @@ pip install -r machinelearning/requirements.txt
 ```bash
 pip install -r backend/requirements.txt
 
+python -m venv .venv
+source .venv/bin/activate
 cd backend
 python init_db.py
 uvicorn main:app --reload

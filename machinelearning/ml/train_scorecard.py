@@ -39,7 +39,7 @@ from machinelearning.ml.validate_data import validate
 
 # ── FICO PDO params ─────────────────────────────────────────────────────────
 BASE_SCORE     = 600
-BASE_ODDS_GOOD = 50
+BASE_ODDS_GOOD = 1
 PDO            = 20
 SCORE_MIN      = 300
 SCORE_MAX      = 850
@@ -162,12 +162,11 @@ def train():
         ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1),
          CATEGORICAL_FEATURES),
     ])
-    # KHÔNG dùng class_weight="balanced" — scorecard cần probability calibrated
-    # tự nhiên (mean ≈ default rate thực) để FICO score trải rộng đúng.
+    # Sử dụng class_weight="balanced" để đồng bộ với LightGBM (is_unbalance=True)
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("classifier",   LogisticRegression(
-            C=0.1, max_iter=500, random_state=42,
+            C=0.1, max_iter=500, class_weight="balanced", random_state=42,
         )),
     ])
 

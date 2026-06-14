@@ -288,7 +288,7 @@ const AdminApplicationDetailPage = () => {
           )}
 
           {app.fico_score && (
-            <SectionCard title="Điểm tín dụng scorecard">
+            <SectionCard title="Điểm tín dụng">
               <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}

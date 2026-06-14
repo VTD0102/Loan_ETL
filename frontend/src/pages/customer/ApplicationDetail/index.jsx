@@ -341,7 +341,7 @@ const ApplicationDetailPage = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {app.risk_level && (
                   <MLStat label="Mức rủi ro" value={app.risk_level}
-                    accent={app.risk_level === 'HIGH' ? 'danger' : app.risk_level === 'MEDIUM' ? 'warning' : 'success'} />
+                    accent={app.risk_level?.toUpperCase() === 'HIGH' ? 'danger' : app.risk_level?.toUpperCase() === 'MEDIUM' ? 'warning' : 'success'} />
                 )}
                 {app.default_probability != null && (
                   <MLStat label="Xác suất vỡ nợ" value={`${(app.default_probability * 100).toFixed(1)}%`}
@@ -364,7 +364,7 @@ const ApplicationDetailPage = () => {
           )}
 
           {app.fico_score && (
-            <SectionCard title="Điểm tín dụng scorecard">
+            <SectionCard title="Điểm tín dụng">
               <CreditScorePanel score={app.fico_score} />
             </SectionCard>
           )}

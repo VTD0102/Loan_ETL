@@ -22,6 +22,7 @@ env/
 data/raw/*.csv
 qdrant_storage/
 .cache/
+*.docx
 
 
 # ─── Frontend ─────────────────────────────────────────────────────────────────
@@ -43,6 +44,7 @@ docs/_build/
 .gemini/
 .codex/
 .superpowers/
+.understand-anything/
 .uv-python/
 .worktrees/
 

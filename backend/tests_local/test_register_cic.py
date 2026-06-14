@@ -1,10 +1,11 @@
-from db.session import SessionLocal
+from db.session import SessionLocal, BureauSessionLocal
 from schemas.user import UserCreate
 from services.auth_service import register
 from services.cic_service import lookup_by_cccd
 import random
 
 db = SessionLocal()
+bureau_db = BureauSessionLocal()
 try:
     for i in range(10):
         cccd = f"079099{random.randint(100000, 999999)}"
@@ -17,7 +18,7 @@ try:
             phone="0901234567",
             address="123 Test St"
         )
-        res = register(db, payload)
+        res = register(db, bureau_db, payload)
         
         cic = lookup_by_cccd(db, cccd)
         if cic:
@@ -26,3 +27,4 @@ try:
             print(f"[{i}] ERROR: No CIC profile found for new user!")
 finally:
     db.close()
+    bureau_db.close()
