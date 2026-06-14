@@ -8,6 +8,8 @@ try:
     resp = client.get("/health")
     print("Health response:", resp.status_code, resp.text)
     
+    import random
+    cccd = f"079099{random.randint(100000, 999999)}"
     # 1. Register
     print("\n--- Registering User ---")
     resp = client.post("/auth/register", json={

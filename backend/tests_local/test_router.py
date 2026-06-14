@@ -14,8 +14,8 @@ from rag.router import classify_intent, needs_retrieval, VALID_INTENTS
 
 
 def _assert(condition: bool, label: str):
-    status = "✅ PASS" if condition else "❌ FAIL"
-    print(f"  {status}: {label}")
+    status = "PASS" if condition else "FAIL"
+    print(f"  [{status}]: {label}")
     if not condition:
         raise AssertionError(label)
 
@@ -25,7 +25,7 @@ def test_greeting_fastpath():
     greetings = ["Xin chào", "Hello", "Hi", "Cảm ơn", "Tạm biệt", "Bạn là ai?"]
     for msg in greetings:
         intent = classify_intent(msg)
-        _assert(intent == "greeting", f"'{msg}' → greeting (got {intent})")
+        _assert(intent == "greeting", f"'{msg}' -> greeting (got {intent})")
 
 
 def test_off_topic_fastpath():
@@ -37,7 +37,7 @@ def test_off_topic_fastpath():
     ]
     for msg in off_topics:
         intent = classify_intent(msg)
-        _assert(intent == "off_topic", f"'{msg}' → off_topic (got {intent})")
+        _assert(intent == "off_topic", f"'{msg}' -> off_topic (got {intent})")
 
 
 def test_policy_fastpath():
@@ -50,7 +50,7 @@ def test_policy_fastpath():
     ]
     for msg in cases:
         intent = classify_intent(msg)
-        _assert(intent == "policy_question", f"'{msg}' → policy_question (got {intent})")
+        _assert(intent == "policy_question", f"'{msg}' -> policy_question (got {intent})")
 
 
 def test_personalized_fastpath():
@@ -63,13 +63,13 @@ def test_personalized_fastpath():
     ]
     for msg in cases:
         intent = classify_intent(msg)
-        _assert(intent == "risk_explanation", f"'{msg}' → risk_explanation (got {intent})")
+        _assert(intent == "risk_explanation", f"'{msg}' -> risk_explanation (got {intent})")
 
 
 def test_clarification_fastpath():
     """Vague help messages should ask for clarification, not analyze the current loan."""
     intent = classify_intent("giúp với")
-    _assert(intent == "greeting", f"'giúp với' → greeting (got {intent})")
+    _assert(intent == "greeting", f"'giúp với' -> greeting (got {intent})")
 
 
 def test_valid_intents():
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     passed = 0
     failed = 0
     for test_fn in tests:
-        print(f"\n▶ {test_fn.__name__}")
+        print(f"\n-> {test_fn.__name__}")
         try:
             test_fn()
             passed += 1
