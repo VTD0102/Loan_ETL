@@ -148,6 +148,14 @@ const ChatbotPage = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // Auto-grow the input textarea with its content (capped by max-h-32 via CSS)
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [input])
+
   const handleNewSession = async () => {
     if (loading) return
     try {
