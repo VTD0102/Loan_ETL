@@ -552,10 +552,7 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
         has_bad_debt=None,
         income_verifiable_flag=None,
         age_years=None,
-        gender_male_flag=None,
         education_ordinal=None,
-        cnt_children=None,
-        cnt_fam_members=None,
         is_married_flag=None,
     )
 
@@ -576,10 +573,7 @@ def test_application_to_confirm_payload_defaults_legacy_nullable_fields():
     assert payload.has_bad_debt is False
     assert payload.income_verifiable_flag is False
     assert payload.age_years == 30
-    assert payload.gender_male_flag is False
     assert payload.education_ordinal == 3
-    assert payload.cnt_children == 0
-    assert payload.cnt_fam_members == 1
     assert payload.is_married_flag is False
 
 

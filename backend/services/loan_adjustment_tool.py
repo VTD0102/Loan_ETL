@@ -222,10 +222,7 @@ def application_to_confirm_payload(
         has_bad_debt=app.has_bad_debt or False,
         income_verifiable_flag=app.income_verifiable_flag or False,
         age_years=app.age_years or 30,
-        gender_male_flag=getattr(app, "gender_male_flag", None) or False,
         education_ordinal=app.education_ordinal or 3,
-        cnt_children=getattr(app, "cnt_children", None) or 0,
-        cnt_fam_members=getattr(app, "cnt_fam_members", None) or 1,
         is_married_flag=app.is_married_flag or False,
     )
 

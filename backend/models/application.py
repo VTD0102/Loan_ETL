@@ -32,7 +32,6 @@ class LoanApplication(Base):
     # ── v3/v4 new fields ───────────────────────────────────────────────────
     occupation_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     years_employed: Mapped[Optional[Decimal]] = mapped_column(Numeric, nullable=True)
-    loan_purpose: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # ── Credit bureau features — nullable for backward compat with old rows ─
     num_bureau_records: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -44,10 +43,7 @@ class LoanApplication(Base):
 
     # ── Demographic features — nullable for backward compat ────────────────
     age_years: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    gender_male_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     education_ordinal: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    cnt_children: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    cnt_fam_members: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_married_flag: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # ── ML prediction results ──────────────────────────────────────────────

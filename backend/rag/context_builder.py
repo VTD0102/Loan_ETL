@@ -110,11 +110,8 @@ def _build_form_context(app: LoanApplication) -> dict:
         "income_verifiable_flag":  app.income_verifiable_flag,
         # Demographics
         "age_years":       app.age_years,
-        "gender":          ("Nam" if app.gender_male_flag else "Nữ") if app.gender_male_flag is not None else None,
         "education":       _EDUCATION.get(app.education_ordinal),
         "is_married":      app.is_married_flag,
-        "cnt_children":    app.cnt_children,
-        "cnt_fam_members": _f(app.cnt_fam_members),
     }
 
 

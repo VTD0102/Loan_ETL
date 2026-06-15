@@ -461,10 +461,7 @@ def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
         has_bad_debt=app.has_bad_debt or False,
         income_verifiable_flag=app.income_verifiable_flag or False,
         age_years=app.age_years or 30,
-        gender_male_flag=app.gender_male_flag or False,
         education_ordinal=app.education_ordinal or 3,
-        cnt_children=app.cnt_children or 0,
-        cnt_fam_members=app.cnt_fam_members or 1,
         is_married_flag=app.is_married_flag or False,
     )
 

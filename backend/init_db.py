@@ -4,7 +4,13 @@ from models import Base
 
 # Incremental column migrations (idempotent — safe to re-run)
 _COLUMN_MIGRATIONS = [
-    "ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS loan_purpose VARCHAR",
+    # Drop deprecated columns no longer collected by the form or used by model v4
+    # (gender_male_flag, cnt_children, cnt_fam_members removed in retrain v4;
+    #  loan_purpose was never populated). They only ever held NULLs on new rows.
+    "ALTER TABLE loan_applications DROP COLUMN IF EXISTS loan_purpose",
+    "ALTER TABLE loan_applications DROP COLUMN IF EXISTS gender_male_flag",
+    "ALTER TABLE loan_applications DROP COLUMN IF EXISTS cnt_children",
+    "ALTER TABLE loan_applications DROP COLUMN IF EXISTS cnt_fam_members",
     "ALTER TABLE loan_applications ALTER COLUMN credit_score DROP NOT NULL",
     "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS error BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary TEXT",
