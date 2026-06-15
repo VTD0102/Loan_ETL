@@ -51,7 +51,8 @@ def compute_suggestion(
 
     base_prob = _predict(payload, artifact, requested_amount, requested_term, prev, bureau_features)
 
-    # Build: {term: max_reviewable_amount} for every term below auto-reject.
+    # Với mỗi kỳ hạn (12/24/36/48/60 tháng): tìm số tiền tối đa giữ xác suất < 0.4
+    # Kỳ hạn bị loại nếu ngay cả mức tối thiểu 500 cũng bị từ chối
     candidates: list[tuple[int, float]] = []
     for term in _TERMS:
         if _predict(payload, artifact, _MIN_LOAN, term, prev, bureau_features) >= HIGH:
@@ -68,30 +69,29 @@ def compute_suggestion(
             "risk_level":       "High" if base_prob >= HIGH else "Medium",
         }
 
-    # Step 1: can we honour the requested amount?
-    # Among all terms where max_reviewable >= requested_amount, pick the shortest.
+    # Chọn kỳ hạn: ưu tiên kỳ hạn ngắn nhất đạt được số tiền khách yêu cầu (giảm tổng lãi)
     feasible = [(t, ms) for t, ms in candidates if ms >= requested_amount]
 
     if feasible:
         best_term, best_max = min(feasible, key=lambda x: x[0])
 
-        # Perfect fit: risk already Low AND user's term is already the shortest
-        # feasible AND amount is within tolerance of max capacity at that term.
+        # Perfect fit: xác suất gốc đã < 0.2 (Low) VÀ kỳ hạn khách chọn là ngắn nhất khả thi
+        # VÀ số tiền nằm trong dải 10% của hạn mức tối đa → hồ sơ lý tưởng, không cần gợi ý
         is_perfect_fit = (
             base_prob < LOW
             and requested_term == best_term
             and requested_amount >= best_max * (1 - _PERFECT_FIT_TOLERANCE)
         )
     else:
-        # Step 2: requested amount is out of reach everywhere.
-        # The UI label is "maximum", so prefer the highest reviewable amount.
-        # Tiebreak: shorter term, then lower monthly payment.
+        # Số tiền yêu cầu vượt hạn mức ở mọi kỳ hạn → chọn kỳ hạn có hạn mức cao nhất
+        # Tiebreak: kỳ hạn ngắn hơn, rồi khoản trả góp thấp hơn
         best_term, best_max = max(
             candidates,
             key=lambda x: (x[1], -x[0], -(x[1] / x[0])),
         )
         is_perfect_fit = False
 
+    # Làm tròn xuống bội số 100
     suggested_amount = max(_MIN_LOAN, round(best_max / 100) * 100)
     suggested_term   = best_term
 
@@ -138,6 +138,8 @@ def validate_confirmed_values(
 # ── Internal helpers ───────────────────────────────────────────────────────────
 
 def _binary_search(payload, artifact, term, threshold, prev, bureau_features=None) -> float:
+    # Tìm kiếm nhị phân 20 vòng trên khoảng [500, 150_000]
+    # Độ chính xác ≈ 150_000 / 2^20 ≈ $0.14 — đủ cho mục đích làm tròn bội số 100
     lo, hi = _MIN_LOAN, _MAX_LOAN
     for _ in range(_SEARCH_ITERATIONS):
         mid = (lo + hi) / 2
@@ -150,6 +152,8 @@ def _binary_search(payload, artifact, term, threshold, prev, bureau_features=Non
 
 
 def _predict(payload, artifact, loan_amount: float, term: int, prev: list, bureau_features=None) -> float:
+    # Mỗi lần thử trong vòng nhị phân đều chạy lại toàn bộ pipeline —
+    # bao gồm cả sàn DTI (Lớp 1) — để gợi ý phản ánh đúng ngưỡng quyết định thực tế
     from services.model_feature_builder import apply_dti_risk_floor, build_model_input
     modified = payload.model_copy(update={
         "loan_amount": Decimal(str(round(loan_amount, 2))),

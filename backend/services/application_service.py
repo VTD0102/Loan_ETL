@@ -56,6 +56,11 @@ def _apply_sanity_override(
     loan_to_income = loan_amount / monthly_income
     overdue_to_income = total_overdue / monthly_income
 
+    # [Lớp 2 — Sanity override] 5 điều kiện phải đồng thời thỏa để kích hoạt:
+    # (1) khoản vay < 5% thu nhập tháng, (2) nợ quá hạn < 10% thu nhập tháng,
+    # (3) DTI < 30%, (4) không nợ xấu, (5) số ngày quá hạn lớn nhất < 30 ngày.
+    # Lớp 2 và Lớp 1 không thể đồng thời kích hoạt: Lớp 1 bắt đầu từ DTI ≥ 40%,
+    # còn Lớp 2 yêu cầu DTI < 30%.
     conditions_met = (
         loan_to_income < _OVERRIDE_LOAN_TO_INCOME_MAX
         and overdue_to_income < _OVERRIDE_OVERDUE_TO_INCOME_MAX
@@ -77,6 +82,8 @@ def _apply_sanity_override(
         "Sanity override fired: raw_prob=%.4f → capped=%.4f | loan/income=%.4f overdue/income=%.4f dti=%.4f",
         raw_prob, _OVERRIDE_PROB_CEILING, loan_to_income, overdue_to_income, computed_dti,
     )
+    # [Lớp 2 — Sanity override] Tất cả 5 điều kiện thỏa → giới hạn xác suất xuống 0.15
+    # (dưới ngưỡng Low 0.2) để tránh từ chối sai hồ sơ ngoài phân phối huấn luyện
     return _OVERRIDE_PROB_CEILING, reason
 
 
@@ -197,7 +204,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
     cic_comparison = {}
     bureau_features: dict = {}
     if user.cccd and cic_record:
-        # Blacklist check — reject immediately without ML
+        # Danh sách đen CIC: từ chối ngay, không chạy mô hình ML
         if cic_record.blacklist_flag:
             logger.info("User %s blacklisted in CIC: %s", user.email, cic_record.blacklist_reason)
             payload.dti = computed_dti_decimal
@@ -277,14 +284,18 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
     # ── Set the exact DTI used by ML on payload for DB storage ──
     payload.dti = computed_dti_decimal
 
+    # Xác suất sau Lớp 1 (sàn DTI) — Lớp 2 có thể kéo xuống thêm
     raw_prob = prediction["default_probability"]
+    # [Lớp 2 — Sanity override] Kiểm tra 5 điều kiện; nếu thỏa, cap prob xuống 0.15
     prob, override_reason = _apply_sanity_override(
         raw_prob,
         payload,
         computed_dti=computed_dti,
         existing_monthly_debt=existing_monthly_debt,
     )
+    # Ngưỡng quyết định 0.4: vượt → AUTO_REJECTED, dưới → PENDING_REVIEW
     app_status = "AUTO_REJECTED" if prob > 0.4 else "PENDING_REVIEW"
+    # Mức rủi ro: Low < 0.2, Medium 0.2–0.4, High > 0.4 (xem thresholds trong artifact)
     risk_level = "Low" if override_reason else (prediction["risk_level"] if prob <= 0.4 else "High")
 
     # ── Always save to DB so RAG reads the exact same prediction the UI shows ──
