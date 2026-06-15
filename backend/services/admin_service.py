@@ -34,10 +34,7 @@ def _application_payload(app: LoanApplication) -> dict:
         "income_verifiable_flag": app.income_verifiable_flag,
         # Demographics
         "age_years": app.age_years,
-        "gender_male_flag": app.gender_male_flag,
         "education_ordinal": app.education_ordinal,
-        "cnt_children": app.cnt_children,
-        "cnt_fam_members": app.cnt_fam_members,
         "is_married_flag": app.is_married_flag,
         # ML results
         "default_probability": app.default_probability,

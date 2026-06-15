@@ -40,10 +40,7 @@ CREATE TABLE IF NOT EXISTS loan_applications (
     has_bad_debt        BOOLEAN,
     income_verifiable_flag BOOLEAN,
     age_years           INT,
-    gender_male_flag    BOOLEAN,
     education_ordinal   INT,
-    cnt_children        INT,
-    cnt_fam_members     INT,
     is_married_flag     BOOLEAN,
     -- ML outputs
     default_probability NUMERIC(6,4),

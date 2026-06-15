@@ -41,11 +41,6 @@ class ApplicationBase(BaseModel):
     education_ordinal: int
     is_married_flag: bool
 
-    # ── Deprecated v3 fields — accepted for backward compatibility only ───
-    gender_male_flag: Optional[bool] = None
-    cnt_children: Optional[int] = None
-    cnt_fam_members: Optional[int] = None
-
     @field_validator("term")
     @classmethod
     def validate_term(cls, v):
@@ -111,10 +106,7 @@ class ApplicationRead(BaseModel):
 
     # Demographics (nullable với row cũ)
     age_years: Optional[int] = None
-    gender_male_flag: Optional[bool] = None
     education_ordinal: Optional[int] = None
-    cnt_children: Optional[int] = None
-    cnt_fam_members: Optional[int] = None
     is_married_flag: Optional[bool] = None
 
     # ML results
