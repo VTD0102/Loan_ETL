@@ -11,7 +11,9 @@ _COLUMN_MIGRATIONS = [
     "ALTER TABLE loan_applications DROP COLUMN IF EXISTS gender_male_flag",
     "ALTER TABLE loan_applications DROP COLUMN IF EXISTS cnt_children",
     "ALTER TABLE loan_applications DROP COLUMN IF EXISTS cnt_fam_members",
-    "ALTER TABLE loan_applications ALTER COLUMN credit_score DROP NOT NULL",
+    # credit_score dropped: scorecard result lives in fico_score; this column was
+    # fed by a prediction key ml_service never produced, so it was always NULL.
+    "ALTER TABLE loan_applications DROP COLUMN IF EXISTS credit_score",
     "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS error BOOLEAN NOT NULL DEFAULT FALSE",
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary TEXT",
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS summary_covers_until_id UUID",
@@ -19,7 +21,6 @@ _COLUMN_MIGRATIONS = [
     "ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_action JSONB",
     # CIC integration: CCCD on users
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS cccd VARCHAR(12) UNIQUE",
-    "ALTER TABLE loan_applications ALTER COLUMN credit_score DROP NOT NULL",
     # Phase E: personal info on users
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR",
     "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(15)",

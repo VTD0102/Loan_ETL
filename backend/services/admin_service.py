@@ -21,7 +21,6 @@ def _application_payload(app: LoanApplication) -> dict:
         "dti": app.dti,
         "is_homeowner": app.is_homeowner,
         "listing_category": app.listing_category,
-        "credit_score": app.credit_score,
         # v3
         "occupation_type": app.occupation_type,
         "years_employed": app.years_employed,

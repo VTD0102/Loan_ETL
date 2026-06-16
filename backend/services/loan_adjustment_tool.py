@@ -212,7 +212,6 @@ def application_to_confirm_payload(
         cic_monthly_installment=Decimal(str(round(existing_monthly_debt, 2))),
         is_homeowner=app.is_homeowner,
         listing_category=app.listing_category,
-        credit_score=getattr(app, "credit_score", None),
         occupation_type=app.occupation_type or "Unknown",
         years_employed=app.years_employed or Decimal("0"),
         num_bureau_records=app.num_bureau_records or 0,

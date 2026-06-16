@@ -126,8 +126,8 @@ def _check_active_application(db: Session, user_id) -> None:
         )
 
 
-def _build_app_fields(payload, prediction: dict) -> dict:
-    """Build DB fields from user input + system-computed values from ML prediction."""
+def _build_app_fields(payload) -> dict:
+    """Build DB fields from user input."""
     return {
         # User input
         "monthly_income":          payload.monthly_income,
@@ -148,8 +148,6 @@ def _build_app_fields(payload, prediction: dict) -> dict:
         "age_years":               payload.age_years,
         "education_ordinal":       payload.education_ordinal,
         "is_married_flag":         payload.is_married_flag,
-        # System-computed by ML pipeline
-        "credit_score":            prediction.get("credit_score_computed"),
     }
 
 
@@ -201,7 +199,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
             new_app = LoanApplication(
                 user_id=user.id,
                 status="AUTO_REJECTED",
-                **_build_app_fields(payload, {"credit_score_computed": cic_record.cic_score, "hc_dti": 0}),
+                **_build_app_fields(payload),
                 default_probability=1.0,
                 risk_level="High",
                 risk_score=0,
@@ -222,7 +220,6 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
                 "default_probability": 1.0,
                 "risk_level": "High",
                 "risk_score": 0,
-                "credit_score_computed": cic_record.cic_score or 0,
                 "is_perfect_fit": False,
                 "suggested_amount": 0,
                 "suggested_term": 0,
@@ -288,7 +285,7 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
     new_app = LoanApplication(
         user_id=user.id,
         status=app_status,
-        **_build_app_fields(payload, prediction),
+        **_build_app_fields(payload),
         default_probability=prob,
         risk_level=risk_level,
         risk_score=prediction["risk_score"],
@@ -315,7 +312,6 @@ def evaluate(db: Session, bureau_db: Session, user_email: str, payload: Applicat
         "override_reason":     override_reason,
         "risk_level":          new_app.risk_level,
         "risk_score":          prediction["risk_score"],
-        "credit_score_computed": prediction.get("credit_score_computed", 0),
         "is_perfect_fit":      prediction["is_perfect_fit"],
         "suggested_amount":    prediction["suggested_amount"],
         "suggested_term":      prediction["suggested_term"],
@@ -446,7 +442,7 @@ def confirm(db: Session, bureau_db: Session, user_email: str, payload: Applicati
     new_app = LoanApplication(
         user_id=user.id,
         status=app_status,
-        **_build_app_fields(payload, prediction),
+        **_build_app_fields(payload),
         default_probability=prob,
         risk_level=risk_level,
         risk_score=prediction["risk_score"],

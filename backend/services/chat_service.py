@@ -453,7 +453,6 @@ def _application_to_payload(app: LoanApplication) -> ApplicationCreate:
         dti=app.dti,
         is_homeowner=app.is_homeowner,
         listing_category=app.listing_category,
-        credit_score=app.credit_score,
         num_bureau_records=app.num_bureau_records or 0,
         num_active_credit=app.num_active_credit or 0,
         total_overdue_amount=app.total_overdue_amount or 0,

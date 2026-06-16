@@ -44,12 +44,8 @@ _STABLE_EMPLOYMENT = {"Employed", "Working", "State servant", "Commercial associ
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def _effective_credit_score(app: LoanApplication) -> int | None:
-    """Điểm tín dụng để hiển thị/tư vấn: ưu tiên điểm Scorecard (fico_score) đã tính
-    lúc submission; fallback về điểm khách tự khai (credit_score) cho các đơn cũ
-    chưa có fico_score. KHÔNG dùng credit_score tự khai khi đã có điểm model."""
-    if app.fico_score is not None:
-        return app.fico_score
-    return app.credit_score
+    """Điểm tín dụng để hiển thị/tư vấn: điểm Scorecard (fico_score) tính lúc submission."""
+    return app.fico_score
 
 
 def build_user_context(db: Session, user_id: Any) -> str:

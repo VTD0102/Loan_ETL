@@ -22,7 +22,6 @@ class ApplicationBase(BaseModel):
     cic_monthly_installment: Decimal = Decimal("0")  # Backend-set from CIC; never user-supplied
     is_homeowner: bool
     listing_category: Union[str, int]
-    credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
 
     # ── v3: new required features ──────────────────────────────────────────
     occupation_type: str     # 18 HC categories + 'Unknown'
@@ -46,13 +45,6 @@ class ApplicationBase(BaseModel):
     def validate_term(cls, v):
         if v not in (12, 24, 36, 48, 60):
             raise ValueError("term phải là 12, 24, 36, 48 hoặc 60")
-        return v
-
-    @field_validator("credit_score")
-    @classmethod
-    def validate_credit_score(cls, v):
-        if v is not None and not (300 <= v <= 850):
-            raise ValueError("credit_score phải từ 300 đến 850")
         return v
 
     @field_validator("education_ordinal")
@@ -90,7 +82,6 @@ class ApplicationRead(BaseModel):
     dti: Optional[Decimal] = None
     is_homeowner: bool
     listing_category: Optional[Union[str, int]] = None
-    credit_score: Optional[int] = None  # Stated score only — NOT used by model v2
 
     # v3 (nullable với row cũ)
     occupation_type: Optional[str] = None

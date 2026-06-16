@@ -27,7 +27,6 @@ class LoanApplication(Base):
     dti: Mapped[Decimal] = mapped_column(Numeric)
     is_homeowner: Mapped[bool] = mapped_column(Boolean)
     listing_category: Mapped[str] = mapped_column(String)
-    credit_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # v2: stated only, not model input
 
     # ── v3/v4 new fields ───────────────────────────────────────────────────
     occupation_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)

@@ -64,16 +64,9 @@ def test_advisory_uses_fico_for_band_and_risk():
     assert any("Điểm tín dụng thấp" in r for r in adv["primary_risk_factors"]), adv["primary_risk_factors"]
 
 
-def test_falls_back_to_self_reported_when_no_fico():
-    """Đơn cũ chưa có fico_score → fallback về credit_score tự khai."""
-    app = _make_app(fico_score=None, credit_score=700)
-    form = context_builder._build_form_context(app)
-    assert form["credit_score"] == 700, f"kỳ vọng 700, nhận {form['credit_score']!r}"
-
-
-def test_none_when_both_missing():
-    """Cả hai đều None → vẫn là None (không bịa ra điểm)."""
-    app = _make_app(fico_score=None, credit_score=None)
+def test_none_when_no_fico():
+    """Không có fico_score → None (credit_score tự khai đã bị bỏ, không bịa ra điểm)."""
+    app = _make_app(fico_score=None)
     form = context_builder._build_form_context(app)
     assert form["credit_score"] is None, f"kỳ vọng None, nhận {form['credit_score']!r}"
 
@@ -81,6 +74,5 @@ def test_none_when_both_missing():
 if __name__ == "__main__":
     test_form_context_prefers_fico_score()
     test_advisory_uses_fico_for_band_and_risk()
-    test_falls_back_to_self_reported_when_no_fico()
-    test_none_when_both_missing()
+    test_none_when_no_fico()
     print("context_builder credit_score tests passed")

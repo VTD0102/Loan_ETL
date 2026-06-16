@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS loan_applications (
     dti                 NUMERIC(6,4),
     is_homeowner        BOOLEAN,
     listing_category    VARCHAR(50),
-    credit_score        NUMERIC(6,2),
     -- Optional inputs for the current customer risk model
     occupation_type     VARCHAR(100),
     years_employed      NUMERIC(5,2),
